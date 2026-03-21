@@ -1,0 +1,563 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   GhostLink — Setup Wizard Styles
+   Dark theme matching the launcher (#09090f base)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Reset & base ───────────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #09090f;
+  color: #e4e4ec;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Custom titlebar ────────────────────────────────────────────────────── */
+
+#titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 12px;
+  background: #07070c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+#titlebar-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.02em;
+}
+
+#titlebar-controls {
+  display: flex;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+#titlebar-controls button {
+  width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+#titlebar-controls button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+#btn-close:hover {
+  background: #e53935 !important;
+  color: #fff !important;
+}
+
+/* ── Step progress dots ─────────────────────────────────────────────────── */
+
+#step-progress {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 8px;
+}
+
+.step-dots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background 0.3s, box-shadow 0.3s, transform 0.3s;
+}
+
+.step-dot.active {
+  background: #7c3aed;
+  box-shadow: 0 0 8px rgba(124, 58, 237, 0.5);
+  transform: scale(1.2);
+}
+
+.step-dot.completed {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.3);
+}
+
+/* ── Wizard content area ────────────────────────────────────────────────── */
+
+#wizard-content {
+  height: calc(100% - 36px - 48px);
+  position: relative;
+  overflow: hidden;
+}
+
+.wizard-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(30px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.wizard-screen.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.wizard-screen.exit-left {
+  opacity: 0;
+  transform: translateX(-30px);
+}
+
+.screen-body {
+  flex: 1;
+  padding: 24px 32px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 58, 237, 0.3) transparent;
+}
+
+.screen-body::-webkit-scrollbar {
+  width: 6px;
+}
+.screen-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.screen-body::-webkit-scrollbar-thumb {
+  background: rgba(124, 58, 237, 0.3);
+  border-radius: 3px;
+}
+
+.screen-body.centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.screen-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(7, 7, 12, 0.6);
+}
+
+/* ── Logo ───────────────────────────────────────────────────────────────── */
+
+.wizard-logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(167, 139, 250, 0.08));
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  animation: logoPulse 3s ease-in-out infinite;
+}
+
+.wizard-logo img {
+  filter: invert(1);
+  object-fit: contain;
+}
+
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(124, 58, 237, 0.1); }
+  50%      { box-shadow: 0 0 30px rgba(124, 58, 237, 0.25); }
+}
+
+/* ── Typography ─────────────────────────────────────────────────────────── */
+
+.wizard-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #f0f0f8;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+.wizard-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 400;
+}
+
+.screen-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f0f0f8;
+  margin-bottom: 4px;
+}
+
+.screen-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 20px;
+}
+
+/* ── Radio cards ────────────────────────────────────────────────────────── */
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(18, 18, 28, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.radio-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(18, 18, 28, 0.9);
+}
+
+.radio-card.selected {
+  border-color: rgba(124, 58, 237, 0.5);
+  background: rgba(124, 58, 237, 0.06);
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.08);
+}
+
+.radio-card input[type="radio"] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.radio-card input[type="radio"]:checked {
+  border-color: #7c3aed;
+}
+
+.radio-card input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7c3aed;
+}
+
+.radio-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.radio-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e4ec;
+}
+
+.radio-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.detect-msg {
+  margin-top: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 6px 10px;
+  background: rgba(18, 18, 28, 0.5);
+  border-radius: 6px;
+  display: none;
+}
+
+.detect-msg.visible {
+  display: block;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+
+.primary-btn {
+  padding: 9px 24px;
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s, box-shadow 0.2s;
+  white-space: nowrap;
+}
+
+.primary-btn:hover {
+  filter: brightness(1.15);
+}
+
+.primary-btn:active {
+  transform: scale(0.97);
+}
+
+.primary-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.primary-btn.glow {
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.35);
+}
+
+.primary-btn.glow:hover {
+  box-shadow: 0 0 28px rgba(124, 58, 237, 0.5);
+}
+
+.secondary-btn {
+  padding: 9px 24px;
+  background: transparent;
+  color: #a78bfa;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.secondary-btn:hover {
+  background: rgba(167, 139, 250, 0.08);
+  border-color: rgba(167, 139, 250, 0.5);
+}
+
+.secondary-btn:active {
+  transform: scale(0.97);
+}
+
+/* ── Python check area ──────────────────────────────────────────────────── */
+
+.check-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: rgba(18, 18, 28, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+}
+
+.check-status.success {
+  border-color: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+}
+
+.check-status.error {
+  border-color: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.check-result {
+  padding: 10px 16px;
+  background: rgba(18, 18, 28, 0.5);
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 8px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(124, 58, 237, 0.2);
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Mini progress bar ──────────────────────────────────────────────────── */
+
+.mini-progress-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.mini-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.progress-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Workspace picker ───────────────────────────────────────────────────── */
+
+.workspace-picker {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.workspace-input {
+  flex: 1;
+  background: rgba(18, 18, 28, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  color: #e4e2f0;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.workspace-input:focus {
+  border-color: rgba(124, 58, 237, 0.4);
+}
+
+.workspace-input::placeholder {
+  color: rgba(170, 165, 188, 0.3);
+}
+
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 18, 28, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.25);
+}
+
+.folder-icon {
+  font-size: 18px;
+}
+
+/* ── Done screen ────────────────────────────────────────────────────────── */
+
+.done-check {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.15), rgba(74, 222, 128, 0.05));
+  border: 2px solid rgba(74, 222, 128, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: #4ade80;
+  margin-bottom: 20px;
+  animation: donePopIn 0.4s ease-out;
+}
+
+@keyframes donePopIn {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.settings-summary {
+  margin-top: 20px;
+  padding: 14px 20px;
+  background: rgba(18, 18, 28, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  text-align: left;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 280px;
+}
+
+.settings-summary .summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.settings-summary .summary-label {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.settings-summary .summary-value {
+  color: #e4e4ec;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* ── Animations ─────────────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

@@ -8,7 +8,6 @@ files:
   - main/**/*.js.map
   - renderer/**
   - "!**/*.ts"
-  - "!**/node_modules/**"
 extraResources:
   - from: ../backend
     to: backend

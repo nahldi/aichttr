@@ -24,6 +24,11 @@ const INVOKE_CHANNELS = [
   'app:save-settings',
   'window:minimize',
   'window:close',
+  'wizard:detect-platform',
+  'wizard:detect-python',
+  'wizard:install-deps',
+  'wizard:pick-folder',
+  'wizard:complete',
 ] as const;
 
 // Channels the renderer is allowed to listen on (main → renderer)
@@ -41,6 +46,8 @@ const LISTEN_CHANNELS = [
   'app:folder-picked',
   'action:open-chat',
   'action:check-updates',
+  'wizard:deps-progress',
+  'wizard:folder-picked',
 ] as const;
 
 contextBridge.exposeInMainWorld('api', {

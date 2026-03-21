@@ -56,6 +56,23 @@ class ServerManager {
       return { success: false, error: msg };
     }
 
+    // Ensure Python deps are installed (first-run auto-install)
+    try {
+      execSync(`${pythonPath} -c "import fastapi"`, { stdio: 'ignore', timeout: 5000 });
+    } catch {
+      log.info('Python deps not installed — running pip install...');
+      const reqFile = path.join(backendPath, 'requirements.txt');
+      if (fs.existsSync(reqFile)) {
+        try {
+          execSync(`${pythonPath} -m pip install -r "${reqFile}"`, { stdio: 'pipe', timeout: 120000 });
+          log.info('Python deps installed successfully');
+        } catch (pipErr: any) {
+          log.error('pip install failed:', pipErr.message);
+          return { success: false, error: 'Failed to install Python dependencies. Run: pip install -r requirements.txt' };
+        }
+      }
+    }
+
     log.info('Starting backend — python=%s  cwd=%s  port=%d', pythonPath, backendPath, this.port);
 
     try {
@@ -195,23 +212,31 @@ class ServerManager {
   private getPythonPath(): string | null {
     const backendPath = this.getBackendPath();
 
-    // Check for a virtual environment inside the backend dir
-    const venvCandidates = process.platform === 'win32'
-      ? [
-          path.join(backendPath, 'venv', 'Scripts', 'python.exe'),
-          path.join(backendPath, '.venv', 'Scripts', 'python.exe'),
-        ]
-      : [
-          path.join(backendPath, 'venv', 'bin', 'python'),
-          path.join(backendPath, '.venv', 'bin', 'python'),
-          path.join(backendPath, 'venv', 'bin', 'python3'),
-          path.join(backendPath, '.venv', 'bin', 'python3'),
-        ];
+    // Check for a virtual environment — inside backend dir, one level up, or workspace root
+    const searchDirs = [
+      backendPath,
+      path.resolve(backendPath, '..'),
+      path.resolve(backendPath, '..', '..'),
+    ];
 
-    for (const venvPy of venvCandidates) {
-      if (fs.existsSync(venvPy)) {
-        log.info('Found venv Python at %s', venvPy);
-        return venvPy;
+    for (const dir of searchDirs) {
+      const venvCandidates = process.platform === 'win32'
+        ? [
+            path.join(dir, '.venv', 'Scripts', 'python.exe'),
+            path.join(dir, 'venv', 'Scripts', 'python.exe'),
+          ]
+        : [
+            path.join(dir, '.venv', 'bin', 'python'),
+            path.join(dir, '.venv', 'bin', 'python3'),
+            path.join(dir, 'venv', 'bin', 'python'),
+            path.join(dir, 'venv', 'bin', 'python3'),
+          ];
+
+      for (const venvPy of venvCandidates) {
+        if (fs.existsSync(venvPy)) {
+          log.info('Found venv Python at %s', venvPy);
+          return venvPy;
+        }
       }
     }
 

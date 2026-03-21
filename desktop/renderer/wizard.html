@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self';">
+  <title>GhostLink Setup</title>
+  <link rel="stylesheet" href="wizard.css">
+</head>
+<body>
+
+  <!-- Custom titlebar (frameless window) -->
+  <div id="titlebar">
+    <div id="titlebar-text">GhostLink Setup</div>
+    <div id="titlebar-controls">
+      <button id="btn-minimize" title="Minimize">&#x2500;</button>
+      <button id="btn-close" title="Close">&#x2715;</button>
+    </div>
+  </div>
+
+  <!-- Progress indicator -->
+  <div id="step-progress">
+    <div class="step-dots">
+      <span class="step-dot active" data-step="0"></span>
+      <span class="step-dot" data-step="1"></span>
+      <span class="step-dot" data-step="2"></span>
+      <span class="step-dot" data-step="3"></span>
+      <span class="step-dot" data-step="4"></span>
+      <span class="step-dot" data-step="5"></span>
+    </div>
+  </div>
+
+  <!-- Wizard screens container -->
+  <div id="wizard-content">
+
+    <!-- Screen 0: Welcome -->
+    <div class="wizard-screen active" data-screen="0">
+      <div class="screen-body centered">
+        <div class="wizard-logo">
+          <img src="ghostlink.png" alt="GhostLink" width="64" height="64">
+        </div>
+        <h1 class="wizard-title">Welcome to GhostLink</h1>
+        <p class="wizard-subtitle">Let's get you set up</p>
+      </div>
+      <div class="screen-footer">
+        <div></div>
+        <button class="primary-btn" id="btn-welcome-next">Next</button>
+      </div>
+    </div>
+
+    <!-- Screen 1: Platform Selection -->
+    <div class="wizard-screen" data-screen="1">
+      <div class="screen-body">
+        <h2 class="screen-heading">What system are you running on?</h2>
+        <p class="screen-desc">GhostLink will configure itself for your environment.</p>
+        <div class="radio-group" id="platform-radios">
+          <label class="radio-card" data-value="windows">
+            <input type="radio" name="platform" value="windows">
+            <div class="radio-content">
+              <span class="radio-label">Windows (Native)</span>
+              <span class="radio-hint">Uses cmd.exe / PowerShell directly</span>
+            </div>
+          </label>
+          <label class="radio-card" data-value="wsl">
+            <input type="radio" name="platform" value="wsl">
+            <div class="radio-content">
+              <span class="radio-label">Windows (WSL/Ubuntu)</span>
+              <span class="radio-hint">Uses WSL bash, translates paths C:\ &rarr; /mnt/c/</span>
+            </div>
+          </label>
+          <label class="radio-card" data-value="macos">
+            <input type="radio" name="platform" value="macos">
+            <div class="radio-content">
+              <span class="radio-label">macOS</span>
+              <span class="radio-hint">Uses terminal / tmux</span>
+            </div>
+          </label>
+          <label class="radio-card" data-value="linux">
+            <input type="radio" name="platform" value="linux">
+            <div class="radio-content">
+              <span class="radio-label">Linux</span>
+              <span class="radio-hint">Uses terminal / tmux</span>
+            </div>
+          </label>
+        </div>
+        <div id="platform-detect-msg" class="detect-msg"></div>
+      </div>
+      <div class="screen-footer">
+        <button class="secondary-btn btn-back" data-back>Back</button>
+        <button class="primary-btn btn-next" id="btn-platform-next">Next</button>
+      </div>
+    </div>
+
+    <!-- Screen 2: Shell Selection (Windows only) -->
+    <div class="wizard-screen" data-screen="2">
+      <div class="screen-body">
+        <h2 class="screen-heading">Which shell should GhostLink use?</h2>
+        <p class="screen-desc">Choose the shell for running commands.</p>
+        <div class="radio-group" id="shell-radios">
+          <label class="radio-card" data-value="ubuntu">
+            <input type="radio" name="shell" value="ubuntu">
+            <div class="radio-content">
+              <span class="radio-label">Ubuntu (WSL)</span>
+              <span class="radio-hint">Recommended if WSL is available</span>
+            </div>
+          </label>
+          <label class="radio-card" data-value="powershell">
+            <input type="radio" name="shell" value="powershell">
+            <div class="radio-content">
+              <span class="radio-label">PowerShell</span>
+              <span class="radio-hint">Windows PowerShell 5.x or PowerShell 7+</span>
+            </div>
+          </label>
+          <label class="radio-card" data-value="cmd">
+            <input type="radio" name="shell" value="cmd">
+            <div class="radio-content">
+              <span class="radio-label">Command Prompt</span>
+              <span class="radio-hint">Classic cmd.exe</span>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="screen-footer">
+        <button class="secondary-btn btn-back" data-back>Back</button>
+        <button class="primary-btn btn-next" id="btn-shell-next">Next</button>
+      </div>
+    </div>
+
+    <!-- Screen 3: Python Check -->
+    <div class="wizard-screen" data-screen="3">
+      <div class="screen-body">
+        <h2 class="screen-heading">Python Environment</h2>
+        <p class="screen-desc">GhostLink needs Python 3.10+ to run the backend.</p>
+        <div id="python-check-area">
+          <div id="python-status" class="check-status">
+            <span class="spinner"></span>
+            <span>Detecting Python...</span>
+          </div>
+          <div id="python-version" class="check-result" style="display:none"></div>
+          <div id="deps-status" class="check-status" style="display:none"></div>
+          <div id="deps-progress" style="display:none">
+            <div class="mini-progress-bar"><div id="deps-progress-fill" class="mini-progress-fill"></div></div>
+            <span id="deps-progress-text" class="progress-label">Installing...</span>
+          </div>
+        </div>
+      </div>
+      <div class="screen-footer">
+        <button class="secondary-btn btn-back" data-back>Back</button>
+        <button class="primary-btn btn-next" id="btn-python-next" disabled>Next</button>
+      </div>
+    </div>
+
+    <!-- Screen 4: Default Workspace -->
+    <div class="wizard-screen" data-screen="4">
+      <div class="screen-body">
+        <h2 class="screen-heading">Default Workspace</h2>
+        <p class="screen-desc">Where are your projects? You can change this later.</p>
+        <div class="workspace-picker">
+          <input type="text" id="workspace-path" placeholder="/path/to/your/projects" class="workspace-input">
+          <button id="btn-browse" class="icon-btn" title="Browse">
+            <span class="folder-icon">&#128193;</span>
+          </button>
+        </div>
+      </div>
+      <div class="screen-footer">
+        <button class="secondary-btn btn-back" data-back>Back</button>
+        <button class="primary-btn btn-next" id="btn-workspace-next">Next</button>
+      </div>
+    </div>
+
+    <!-- Screen 5: Done -->
+    <div class="wizard-screen" data-screen="5">
+      <div class="screen-body centered">
+        <div class="done-check">&#10003;</div>
+        <h1 class="wizard-title">You're all set!</h1>
+        <p class="wizard-subtitle">GhostLink is ready to launch.</p>
+        <div class="settings-summary" id="settings-summary"></div>
+      </div>
+      <div class="screen-footer">
+        <button class="secondary-btn btn-back" data-back>Back</button>
+        <button class="primary-btn glow" id="btn-finish">Start GhostLink</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="wizard.js"></script>
+</body>
+</html>
