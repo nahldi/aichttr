@@ -174,6 +174,12 @@ export function SettingsPanel() {
         {/* Divider */}
         <div className="h-px bg-outline-variant/8" />
 
+        {/* Maintenance */}
+        <CleanupSection />
+
+        {/* Divider */}
+        <div className="h-px bg-outline-variant/8" />
+
         {/* Persistent Agents */}
         <PersistentAgentsSection />
 
@@ -183,6 +189,48 @@ export function SettingsPanel() {
         {/* Supported Agents */}
         <SupportedAgentsSection />
       </div>
+    </div>
+  );
+}
+
+function CleanupSection() {
+  const [cleaning, setCleaning] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const handleCleanup = async () => {
+    setCleaning(true);
+    setResult(null);
+    try {
+      const r = await api.cleanup();
+      setResult(r.count > 0 ? `Cleaned ${r.count} stale session${r.count > 1 ? 's' : ''}` : 'Nothing to clean');
+    } catch {
+      setResult('Cleanup failed');
+    }
+    setCleaning(false);
+    setTimeout(() => setResult(null), 3000);
+  };
+
+  return (
+    <div>
+      <div className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider mb-2">
+        Maintenance
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleCleanup}
+          disabled={cleaning}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-container/40 border border-outline-variant/8 text-xs font-medium text-on-surface-variant/60 hover:text-on-surface hover:bg-surface-container/60 transition-all disabled:opacity-50"
+        >
+          <span className="material-symbols-outlined text-[16px]">{cleaning ? 'hourglass_empty' : 'cleaning_services'}</span>
+          {cleaning ? 'Cleaning...' : 'Clean Stale Sessions'}
+        </button>
+        {result && (
+          <span className="text-[11px] text-green-400/70">{result}</span>
+        )}
+      </div>
+      <p className="text-[9px] text-on-surface-variant/30 mt-1.5">
+        Kills orphaned tmux sessions and dead processes to free up resources
+      </p>
     </div>
   );
 }

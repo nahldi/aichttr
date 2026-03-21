@@ -106,6 +106,9 @@ export const api = {
   killAgent: (name: string) =>
     request<{ ok: boolean }>('/api/kill-agent/' + name, { method: 'POST' }),
 
+  cleanup: () =>
+    request<{ ok: boolean; cleaned: string[]; count: number }>('/api/cleanup', { method: 'POST' }),
+
   pauseAgent: (name: string) =>
     request<{ ok: boolean }>('/api/agents/' + name + '/pause', { method: 'POST' }),
 

@@ -688,6 +688,42 @@ async def kill_agent(name: str):
     return {"ok": ok or proc is not None}
 
 
+@app.post("/api/cleanup")
+async def cleanup_stale():
+    """Kill stale tmux sessions, clear orphaned processes, free resources."""
+    cleaned = []
+
+    # Find all aichttr tmux sessions
+    try:
+        result = subprocess.run(["tmux", "list-sessions", "-F", "#{session_name}"],
+                                capture_output=True, text=True, timeout=5)
+        sessions = [s.strip() for s in result.stdout.strip().split("\n") if s.strip().startswith("aichttr-")]
+    except Exception:
+        sessions = []
+
+    # Check which sessions have no registered agent
+    live_names = {inst.name for inst in registry.get_all()}
+    for session in sessions:
+        agent_name = session.replace("aichttr-", "")
+        if agent_name not in live_names:
+            try:
+                subprocess.run(["tmux", "kill-session", "-t", session], capture_output=True, timeout=5)
+                cleaned.append(session)
+            except Exception:
+                pass
+
+    # Kill orphaned wrapper processes
+    for key, proc in list(_agent_processes.items()):
+        try:
+            if proc.poll() is not None:  # Process already exited
+                _agent_processes.pop(key, None)
+                cleaned.append(f"process:{key}")
+        except Exception:
+            pass
+
+    return {"ok": True, "cleaned": cleaned, "count": len(cleaned)}
+
+
 # ── Skills ──────────────────────────────────────────────────────────
 
 @app.get("/api/skills")
