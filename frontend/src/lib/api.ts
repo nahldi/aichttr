@@ -115,10 +115,37 @@ export const api = {
   resumeAgent: (name: string) =>
     request<{ ok: boolean }>('/api/agents/' + name + '/resume', { method: 'POST' }),
 
+  editMessage: (msgId: number, text: string) =>
+    request('/api/messages/' + msgId, {
+      method: 'PATCH',
+      body: JSON.stringify({ text }),
+    }),
+
+  bookmarkMessage: (msgId: number, bookmarked: boolean) =>
+    request('/api/messages/' + msgId + '/bookmark', {
+      method: 'POST',
+      body: JSON.stringify({ bookmarked }),
+    }),
+
   searchMessages: (q: string, channel?: string, sender?: string) =>
     request<{ results: import('../types').Message[]; query: string }>(
       '/api/search?q=' + encodeURIComponent(q) +
       (channel ? '&channel=' + encodeURIComponent(channel) : '') +
       (sender ? '&sender=' + encodeURIComponent(sender) : '')
     ),
+
+  getActivity: () =>
+    request<{ events: import('../types').ActivityEvent[] }>('/api/activity'),
+
+  reportUsage: (data: { agent: string; tokens: number; model?: string }) =>
+    request('/api/usage', { method: 'POST', body: JSON.stringify(data) }),
+
+  getUsage: () =>
+    request<{ total_tokens: number; by_agent: Record<string, number>; estimated_cost: number }>('/api/usage'),
+
+  exportChannel: (channel: string) =>
+    request<{ markdown: string; filename: string }>('/api/export?channel=' + encodeURIComponent(channel)),
+
+  getHierarchy: () =>
+    request<{ agents: import('../types').Agent[]; tree: Record<string, string[]> }>('/api/hierarchy'),
 };

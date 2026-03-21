@@ -11,6 +11,9 @@ export interface Message {
   reply_to?: number;
   metadata?: Record<string, unknown>;
   pinned?: boolean;
+  bookmarked?: boolean;
+  edited?: boolean;
+  thread_count?: number;
   reactions?: Record<string, string[]>;
 }
 
@@ -28,7 +31,8 @@ export interface Agent {
   color: string;
   state: 'active' | 'idle' | 'pending' | 'offline' | 'thinking' | 'paused';
   slot: number;
-  role?: string;
+  role?: 'manager' | 'worker' | 'peer';
+  parent?: string;
   workspace?: string;
   command?: string;
   args?: string[];
@@ -38,6 +42,10 @@ export interface Agent {
 export interface Channel {
   name: string;
   unread: number;
+  description?: string;
+  category?: string;
+  pinned?: boolean;
+  order?: number;
 }
 
 export interface Job {
@@ -78,6 +86,13 @@ export interface PersistentAgent {
   color: string;
 }
 
+export interface StatsSections {
+  session: boolean;
+  tokens: boolean;
+  agents: boolean;
+  activity: boolean;
+}
+
 export interface Settings {
   username: string;
   title: string;
@@ -85,6 +100,12 @@ export interface Settings {
   fontSize: number;
   loopGuard: number;
   notificationSounds: boolean;
+  desktopNotifications: boolean;
+  quietHoursStart: number;
+  quietHoursEnd: number;
+  debugMode: boolean;
+  showStatsPanel: boolean;
+  statsSections: StatsSections;
   channels?: string[];
   persistentAgents?: PersistentAgent[];
 }
@@ -100,6 +121,33 @@ export interface AgentTemplate {
   provider?: string;
 }
 
+export interface ActivityEvent {
+  id: string;
+  type: 'message' | 'agent_join' | 'agent_leave' | 'job_created' | 'job_done' | 'rule_proposed' | 'channel_created' | 'error';
+  text: string;
+  agent?: string;
+  channel?: string;
+  timestamp: number;
+}
+
+export interface Schedule {
+  id: string;
+  name: string;
+  cron: string;
+  action: string;
+  enabled: boolean;
+  last_run?: number;
+  next_run?: number;
+}
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  created_at: number;
+}
+
 export type WSEvent =
   | { type: 'message'; data: Message }
   | { type: 'typing'; data: { sender: string; channel: string } }
@@ -109,4 +157,5 @@ export type WSEvent =
   | { type: 'channel_update'; data: { channels: Channel[] } }
   | { type: 'pin'; data: { message_id: number; pinned: boolean } }
   | { type: 'delete'; data: { message_ids: number[] } }
-  | { type: 'reaction'; data: { message_id: number; reactions: Record<string, string[]> } };
+  | { type: 'reaction'; data: { message_id: number; reactions: Record<string, string[]> } }
+  | { type: 'activity'; data: ActivityEvent };

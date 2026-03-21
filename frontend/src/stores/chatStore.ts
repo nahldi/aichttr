@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { Message, Agent, Channel, Job, Rule, Settings } from '../types';
+import type { Message, Agent, Channel, Job, Rule, Settings, ActivityEvent } from '../types';
+
+interface FailedMessage {
+  text: string;
+  channel: string;
+  timestamp: number;
+}
 
 interface ChatState {
   // Messages
@@ -7,6 +13,8 @@ interface ChatState {
   addMessage: (msg: Message) => void;
   setMessages: (msgs: Message[]) => void;
   pinMessage: (id: number, pinned: boolean) => void;
+  bookmarkMessage: (id: number, bookmarked: boolean) => void;
+  editMessage: (id: number, text: string) => void;
   deleteMessages: (ids: number[]) => void;
   reactMessage: (id: number, reactions: Record<string, string[]>) => void;
 
@@ -32,6 +40,23 @@ interface ChatState {
   // Rules
   rules: Rule[];
   setRules: (rules: Rule[]) => void;
+
+  // Activities
+  activities: ActivityEvent[];
+  addActivity: (event: ActivityEvent) => void;
+  setActivities: (events: ActivityEvent[]) => void;
+
+  // WebSocket state
+  wsState: 'connected' | 'connecting' | 'disconnected';
+  setWsState: (state: 'connected' | 'connecting' | 'disconnected') => void;
+
+  // Failed messages
+  failedMessages: FailedMessage[];
+  addFailedMessage: (msg: FailedMessage) => void;
+  clearFailedMessages: () => void;
+
+  // Session
+  sessionStart: number;
 
   // Settings
   settings: Settings;
@@ -59,6 +84,18 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       messages: s.messages.map((m) =>
         m.id === id ? { ...m, pinned } : m
+      ),
+    })),
+  bookmarkMessage: (id, bookmarked) =>
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === id ? { ...m, bookmarked } : m
+      ),
+    })),
+  editMessage: (id, text) =>
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === id ? { ...m, text, edited: true } : m
       ),
     })),
   deleteMessages: (ids) =>
@@ -107,6 +144,27 @@ export const useChatStore = create<ChatState>((set) => ({
   rules: [],
   setRules: (rules) => set({ rules }),
 
+  // Activities
+  activities: [],
+  addActivity: (event) =>
+    set((s) => ({
+      activities: [...s.activities.slice(-99), event],
+    })),
+  setActivities: (activities) => set({ activities }),
+
+  // WS state
+  wsState: 'disconnected',
+  setWsState: (wsState) => set({ wsState }),
+
+  // Failed messages
+  failedMessages: [],
+  addFailedMessage: (msg) =>
+    set((s) => ({ failedMessages: [...s.failedMessages, msg] })),
+  clearFailedMessages: () => set({ failedMessages: [] }),
+
+  // Session
+  sessionStart: Date.now(),
+
   settings: {
     username: 'You',
     title: 'AI Chattr',
@@ -114,6 +172,12 @@ export const useChatStore = create<ChatState>((set) => ({
     fontSize: 14,
     loopGuard: 4,
     notificationSounds: true,
+    desktopNotifications: false,
+    quietHoursStart: 22,
+    quietHoursEnd: 8,
+    debugMode: false,
+    showStatsPanel: true,
+    statsSections: { session: true, tokens: true, agents: true, activity: true },
   },
   updateSettings: (updates) =>
     set((s) => ({ settings: { ...s.settings, ...updates } })),

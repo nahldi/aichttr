@@ -1,84 +1,60 @@
-import { useEffect } from 'react';
-import { useChatStore } from '../stores/chatStore';
-import { api } from '../lib/api';
+import type { ActivityEvent } from '../types';
 import { timeAgo } from '../lib/timeago';
 
-const ACTION_ICONS: Record<string, string> = {
+interface ActivityTimelineProps {
+  events: ActivityEvent[];
+  maxItems?: number;
+}
+
+const ICONS: Record<string, string> = {
   message: 'chat_bubble',
-  thinking: 'psychology',
-  tool_use: 'build',
-  handoff: 'swap_horiz',
+  agent_join: 'login',
+  agent_leave: 'logout',
+  job_created: 'add_task',
+  job_done: 'task_alt',
+  rule_proposed: 'shield',
+  channel_created: 'tag',
   error: 'error',
-  spawn: 'rocket_launch',
-  kill: 'power_settings_new',
-  job: 'task_alt',
-  decision: 'gavel',
-  rule: 'policy',
 };
 
-export function ActivityTimeline() {
-  const activities = useChatStore((s) => s.activities);
-  const setActivities = useChatStore((s) => s.setActivities);
-  const agents = useChatStore((s) => s.agents);
+const COLORS: Record<string, string> = {
+  message: '#a78bfa',
+  agent_join: '#4ade80',
+  agent_leave: '#f87171',
+  job_created: '#fb923c',
+  job_done: '#4ade80',
+  rule_proposed: '#38bdf8',
+  channel_created: '#c084fc',
+  error: '#f87171',
+};
 
-  useEffect(() => {
-    api.getActivity().then((r) => setActivities(r.events)).catch(() => {});
-  }, [setActivities]);
+export function ActivityTimeline({ events, maxItems = 20 }: ActivityTimelineProps) {
+  const displayed = events.slice(-maxItems).reverse();
+
+  if (displayed.length === 0) {
+    return (
+      <div className="text-center py-6 text-[11px] text-on-surface-variant/30">
+        No recent activity
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="rounded-xl p-3"
-      style={{
-        background: 'rgba(17, 17, 25, 0.5)',
-        border: '1px solid rgba(255, 255, 255, 0.03)',
-      }}
-    >
-      <div className="text-[9px] font-semibold text-on-surface-variant/30 uppercase tracking-wider mb-2.5">
-        Activity
-      </div>
-
-      <div className="space-y-0.5 max-h-64 overflow-y-auto">
-        {activities.length === 0 && (
-          <div className="text-[10px] text-on-surface-variant/20 py-2 text-center">
-            No recent activity
+    <div className="space-y-1">
+      {displayed.map((event) => (
+        <div key={event.id} className="flex items-start gap-2.5 py-1.5 px-2 rounded-lg hover:bg-surface-container/20 transition-colors">
+          <span
+            className="material-symbols-outlined text-[14px] mt-0.5 shrink-0"
+            style={{ color: COLORS[event.type] || '#888' }}
+          >
+            {ICONS[event.type] || 'info'}
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-on-surface-variant/60 leading-relaxed">{event.text}</div>
+            <div className="text-[9px] text-on-surface-variant/25 mt-0.5">{timeAgo(event.timestamp)}</div>
           </div>
-        )}
-        {activities
-          .slice()
-          .reverse()
-          .slice(0, 30)
-          .map((event, i) => {
-            const agent = agents.find((a) => a.name === event.agent);
-            const color = agent?.color || '#a78bfa';
-            const icon = ACTION_ICONS[event.action_type] || 'circle';
-            return (
-              <div key={`${event.timestamp}-${i}`} className="flex items-start gap-2 py-1.5">
-                <span
-                  className="material-symbols-outlined text-[14px] mt-px shrink-0"
-                  style={{ color: color + '80' }}
-                >
-                  {icon}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className="text-[10px] font-semibold truncate"
-                      style={{ color }}
-                    >
-                      {agent?.label || event.agent}
-                    </span>
-                    <span className="text-[9px] text-on-surface-variant/20 ml-auto shrink-0">
-                      {timeAgo(event.timestamp)}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-on-surface-variant/45 truncate leading-snug">
-                    {event.description}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }

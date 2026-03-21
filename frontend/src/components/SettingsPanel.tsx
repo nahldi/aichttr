@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { AgentIcon } from './AgentIcon';
-import type { Settings, PersistentAgent } from '../types';
+import type { Settings, PersistentAgent, StatsSections } from '../types';
 
 const AGENT_PRESETS: { base: string; label: string; command: string; color: string; defaultArgs: string[] }[] = [
   { base: 'claude', label: 'Claude', command: 'claude', color: '#e8734a', defaultArgs: ['--dangerously-skip-permissions'] },
@@ -170,6 +170,123 @@ export function SettingsPanel() {
             />
           </button>
         </div>
+
+        {/* Desktop Notifications */}
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <div className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider">
+              Desktop Notifications
+            </div>
+            <p className="text-[9px] text-on-surface-variant/30 mt-0.5">Show browser notifications for new messages</p>
+          </div>
+          <button
+            onClick={() => {
+              if (!settings.desktopNotifications && 'Notification' in window && Notification.permission !== 'granted') {
+                Notification.requestPermission().then(p => {
+                  if (p === 'granted') applyInstant({ desktopNotifications: true });
+                });
+              } else {
+                applyInstant({ desktopNotifications: !settings.desktopNotifications });
+              }
+            }}
+            className={`w-10 h-5 rounded-full relative transition-all ${
+              display.desktopNotifications
+                ? 'bg-green-500/80'
+                : 'bg-outline-variant/45'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all shadow-sm ${
+                display.desktopNotifications ? 'right-0.5' : 'left-0.5'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Quiet Hours */}
+        <SettingField label={`Quiet Hours: ${display.quietHoursStart}:00 – ${display.quietHoursEnd}:00`}>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <label className="text-[9px] text-on-surface-variant/40 block mb-1">Start</label>
+              <input
+                type="range"
+                min={0}
+                max={23}
+                value={display.quietHoursStart}
+                onChange={(e) => updateDraft({ quietHoursStart: Number(e.target.value) })}
+                className="w-full accent-primary"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-[9px] text-on-surface-variant/40 block mb-1">End</label>
+              <input
+                type="range"
+                min={0}
+                max={23}
+                value={display.quietHoursEnd}
+                onChange={(e) => updateDraft({ quietHoursEnd: Number(e.target.value) })}
+                className="w-full accent-primary"
+              />
+            </div>
+          </div>
+          <p className="text-[9px] text-on-surface-variant/30 mt-1">Mute sounds and desktop notifications during these hours</p>
+        </SettingField>
+
+        {/* Debug Mode */}
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <div className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider">
+              Debug Mode
+            </div>
+            <p className="text-[9px] text-on-surface-variant/30 mt-0.5">Show raw message data and WebSocket events</p>
+          </div>
+          <button
+            onClick={() => applyInstant({ debugMode: !settings.debugMode })}
+            className={`w-10 h-5 rounded-full relative transition-all ${
+              display.debugMode
+                ? 'bg-yellow-500/80'
+                : 'bg-outline-variant/45'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all shadow-sm ${
+                display.debugMode ? 'right-0.5' : 'left-0.5'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Stats Panel Toggle */}
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <div className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider">
+              Stats Panel
+            </div>
+            <p className="text-[9px] text-on-surface-variant/30 mt-0.5">Show the right-side info panel on wide screens</p>
+          </div>
+          <button
+            onClick={() => applyInstant({ showStatsPanel: !settings.showStatsPanel })}
+            className={`w-10 h-5 rounded-full relative transition-all ${
+              display.showStatsPanel !== false
+                ? 'bg-green-500/80'
+                : 'bg-outline-variant/45'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all shadow-sm ${
+                display.showStatsPanel !== false ? 'right-0.5' : 'left-0.5'
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Info Panel Sections */}
+        {display.showStatsPanel !== false && (
+          <InfoPanelSectionsToggle
+            sections={display.statsSections || { session: true, tokens: true, agents: true, activity: true }}
+            onChange={(sections: StatsSections) => applyInstant({ statsSections: sections })}
+          />
+        )}
 
         {/* Divider */}
         <div className="h-px bg-outline-variant/8" />
@@ -439,6 +556,39 @@ function SupportedAgentsSection() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function InfoPanelSectionsToggle({ sections, onChange }: { sections: StatsSections; onChange: (s: StatsSections) => void }) {
+  const items: { key: keyof StatsSections; label: string }[] = [
+    { key: 'session', label: 'Session Stats' },
+    { key: 'tokens', label: 'Token Usage' },
+    { key: 'agents', label: 'Agent Status' },
+    { key: 'activity', label: 'Channel Activity' },
+  ];
+  return (
+    <div className="pl-1">
+      <div className="text-[9px] font-semibold text-on-surface-variant/40 uppercase tracking-wider mb-2">
+        Info Panel Sections
+      </div>
+      <div className="space-y-1.5">
+        {items.map(({ key, label }) => (
+          <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
+            <div
+              onClick={() => onChange({ ...sections, [key]: !sections[key] })}
+              className={`w-4 h-4 rounded flex items-center justify-center transition-all border ${
+                sections[key]
+                  ? 'bg-primary/20 border-primary/40 text-primary'
+                  : 'bg-surface-container/40 border-outline-variant/15 text-transparent'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[12px]">check</span>
+            </div>
+            <span className="text-[11px] text-on-surface-variant/50 group-hover:text-on-surface-variant/70 transition-colors">{label}</span>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }

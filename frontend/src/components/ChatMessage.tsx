@@ -5,6 +5,7 @@ import { CodeBlock } from './CodeBlock';
 import { DecisionCard } from './DecisionCard';
 import { JobProposal } from './JobProposal';
 import { ProgressCard } from './ProgressCard';
+import { HandoffCard } from './HandoffCard';
 import { AgentIcon } from './AgentIcon';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
@@ -84,12 +85,19 @@ function ReactionBar({ reactions, messageId, username }: { reactions: Record<str
 
 interface ChatMessageProps { message: Message; }
 
+const COLLAPSE_THRESHOLD = 600; // characters
+
 export function ChatMessage({ message }: ChatMessageProps) {
   const [showPicker, setShowPicker] = useState(false);
+  const [collapsed, setCollapsed] = useState(message.text.length > COLLAPSE_THRESHOLD);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(message.text);
   const agents = useChatStore((s) => s.agents);
   const settings = useChatStore((s) => s.settings);
   const setReplyTo = useChatStore((s) => s.setReplyTo);
   const pinMessage = useChatStore((s) => s.pinMessage);
+  const bookmarkMessage = useChatStore((s) => s.bookmarkMessage);
+  const editMessageInStore = useChatStore((s) => s.editMessage);
   const agent = agents.find((a) => a.name === message.sender);
   const agentNames = new Set(agents.map(a => a.name));
   // Update color map for @mention highlighting
@@ -112,8 +120,6 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const reactions = parseReactions(message.reactions);
   const agentColor = agent?.color || '#a78bfa';
 
-  const highlightedText = message.text;
-
   const handleReact = (emoji: string) => {
     api.reactToMessage(message.id, emoji, settings.username).catch(() => {});
   };
@@ -121,10 +127,31 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const decision = metadata.decision as { title: string; description: string; choices: { label: string; value: string }[]; resolved?: string } | undefined;
   const proposal = metadata.proposal as { title: string; assignee: string; description: string; accepted?: boolean } | undefined;
   const progress = metadata.progress as { steps: { label: string; status: 'done' | 'active' | 'pending' }[]; current: number; total: number; title?: string } | undefined;
+  const handoff = metadata.handoff as { from: string; to: string; reason?: string; context?: string } | undefined;
 
   const handlePin = async () => {
     try { await api.pinMessage(message.id, !message.pinned); pinMessage(message.id, !message.pinned); } catch {}
   };
+
+  const handleBookmark = async () => {
+    try { await api.bookmarkMessage(message.id, !message.bookmarked); bookmarkMessage(message.id, !message.bookmarked); } catch {}
+  };
+
+  const handleEdit = async () => {
+    const trimmed = editText.trim();
+    if (!trimmed || trimmed === message.text) { setEditing(false); return; }
+    try { await api.editMessage(message.id, trimmed); editMessageInStore(message.id, trimmed); } catch {}
+    setEditing(false);
+  };
+
+  const handleDoubleClick = () => {
+    if (isUser) {
+      setEditing(true);
+      setEditText(message.text);
+    }
+  };
+
+  const displayText = collapsed ? message.text.slice(0, COLLAPSE_THRESHOLD) + '...' : message.text;
 
   if (isUser) {
     // ── USER MESSAGE (right side) ──
@@ -134,6 +161,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <MsgAction icon="add_reaction" title="React" onClick={() => setShowPicker(!showPicker)} />
           <MsgAction icon="content_copy" title="Copy" onClick={() => navigator.clipboard.writeText(message.text).catch(() => {})} />
           <MsgAction icon="reply" title="Reply" onClick={() => setReplyTo(message)} />
+          <MsgAction icon="bookmark" title={message.bookmarked ? 'Remove bookmark' : 'Bookmark'} active={message.bookmarked} onClick={handleBookmark} />
           <MsgAction icon="delete" title="Delete" danger onClick={async () => { try { await api.deleteMessage(message.id); } catch {} }} />
           {showPicker && <ReactionPicker onPick={handleReact} onClose={() => setShowPicker(false)} />}
         </div>
@@ -148,13 +176,45 @@ export function ChatMessage({ message }: ChatMessageProps) {
               background: 'rgba(56, 189, 248, 0.08)',
               border: '1px solid rgba(56, 189, 248, 0.12)',
             }}
+            onDoubleClick={handleDoubleClick}
           >
-            <div className="prose">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: MdCode, p: MdParagraph }}>{highlightedText}</ReactMarkdown>
-            </div>
+            {editing ? (
+              <div className="space-y-2">
+                <textarea
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEdit(); }
+                    if (e.key === 'Escape') setEditing(false);
+                  }}
+                  autoFocus
+                  className="w-full bg-surface-container/60 rounded-lg px-3 py-2 text-sm text-on-surface outline-none border border-secondary/20 resize-none"
+                  rows={3}
+                />
+                <div className="flex gap-1 justify-end">
+                  <button onClick={() => setEditing(false)} className="text-[10px] px-2 py-1 rounded text-on-surface-variant/50 hover:bg-surface-container-high">Cancel</button>
+                  <button onClick={handleEdit} className="text-[10px] px-2 py-1 rounded bg-primary/15 text-primary font-medium">Save</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="prose">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: MdCode, p: MdParagraph }}>{displayText}</ReactMarkdown>
+                </div>
+                {message.text.length > COLLAPSE_THRESHOLD && (
+                  <button
+                    onClick={() => setCollapsed(!collapsed)}
+                    className="text-[10px] text-secondary/70 hover:text-secondary mt-1 font-medium"
+                  >
+                    {collapsed ? 'Show more' : 'Show less'}
+                  </button>
+                )}
+              </>
+            )}
             <Attachments attachments={attachments} />
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end items-center gap-1">
+            {message.bookmarked && <span className="material-symbols-outlined text-[12px] text-tertiary">bookmark</span>}
             <ReactionBar reactions={reactions} messageId={message.id} username={settings.username} />
           </div>
         </div>
@@ -191,16 +251,28 @@ export function ChatMessage({ message }: ChatMessageProps) {
           }}
         >
           <div className="prose">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: MdCode, p: MdParagraph }}>{highlightedText}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: MdCode, p: MdParagraph }}>{displayText}</ReactMarkdown>
           </div>
+          {message.text.length > COLLAPSE_THRESHOLD && (
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="text-[10px] text-secondary/70 hover:text-secondary mt-1 font-medium"
+            >
+              {collapsed ? 'Show more' : 'Show less'}
+            </button>
+          )}
           <Attachments attachments={attachments} />
           {progress && <ProgressCard steps={progress.steps} current={progress.current} total={progress.total} title={progress.title} />}
           {decision && <DecisionCard title={decision.title} description={decision.description} choices={decision.choices} resolved={decision.resolved} onChoose={() => {}} />}
           {proposal && <JobProposal title={proposal.title} assignee={proposal.assignee} description={proposal.description} accepted={proposal.accepted} onAccept={() => {}} onDismiss={() => {}} />}
+          {handoff && <HandoffCard from={handoff.from} to={handoff.to} reason={handoff.reason} context={handoff.context} fromColor={agents.find(a => a.name === handoff.from)?.color} toColor={agents.find(a => a.name === handoff.to)?.color} />}
         </div>
 
         {/* Reactions display */}
-        <ReactionBar reactions={reactions} messageId={message.id} username={settings.username} />
+        <div className="flex items-center gap-1">
+          {message.bookmarked && <span className="material-symbols-outlined text-[12px] text-tertiary">bookmark</span>}
+          <ReactionBar reactions={reactions} messageId={message.id} username={settings.username} />
+        </div>
 
         {/* Actions */}
         <div className="relative opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 mt-0.5">
@@ -208,6 +280,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <MsgAction icon="reply" title="Reply" onClick={() => setReplyTo(message)} />
           <MsgAction icon="content_copy" title="Copy" onClick={() => navigator.clipboard.writeText(message.text).catch(() => {})} />
           <MsgAction icon="push_pin" title={message.pinned ? 'Unpin' : 'Pin'} active={message.pinned} onClick={handlePin} />
+          <MsgAction icon="bookmark" title={message.bookmarked ? 'Remove bookmark' : 'Bookmark'} active={message.bookmarked} onClick={handleBookmark} />
           <MsgAction icon="delete" title="Delete" danger onClick={async () => { try { await api.deleteMessage(message.id); } catch {} }} />
           {showPicker && <ReactionPicker onPick={handleReact} onClose={() => setShowPicker(false)} />}
         </div>

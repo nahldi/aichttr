@@ -146,6 +146,10 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
               <InfoRow icon="hub" label="Provider" value={providerName(agent.base)} color={agent.color} />
               <InfoRow icon="schedule" label="Connected" value={agent.registered_at ? timeAgo(agent.registered_at) : 'N/A'} color={agent.color} />
               <InfoRow icon="tag" label="Status" value={isActive ? 'Online & Ready' : isPaused ? 'Paused' : agent.state === 'pending' ? 'Connecting...' : 'Offline'} color={isActive ? '#4ade80' : isPaused ? '#fb923c' : '#6b7280'} />
+              {agent.role && (
+                <InfoRow icon="account_tree" label="Role" value={agent.role.charAt(0).toUpperCase() + agent.role.slice(1)} color={agent.role === 'manager' ? '#facc15' : agent.role === 'worker' ? '#38bdf8' : '#a78bfa'} />
+              )}
+              <HierarchySection agent={agent} />
             </div>
           ) : (
             <div>
@@ -225,6 +229,51 @@ function InfoRow({ icon, label, value, color, mono }: { icon: string; label: str
       </div>
     </div>
   );
+}
+
+function HierarchySection({ agent }: { agent: Agent }) {
+  const agents = useChatStore((s) => s.agents);
+
+  if (agent.role === 'worker' && agent.parent) {
+    const parent = agents.find(a => a.name === agent.parent);
+    return (
+      <div className="py-2 px-3 rounded-xl bg-surface-container/30 border border-outline-variant/4">
+        <div className="text-[9px] font-semibold text-on-surface-variant/40 uppercase tracking-wider mb-1.5">Reports To</div>
+        <div className="flex items-center gap-2">
+          <AgentIcon base={parent?.base || 'unknown'} color={parent?.color || '#888'} size={20} />
+          <span className="text-xs font-semibold" style={{ color: parent?.color || '#888' }}>{parent?.label || agent.parent}</span>
+          <span className="text-[8px] font-bold px-1 py-px rounded bg-yellow-500/20 text-yellow-400 leading-none uppercase">MGR</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (agent.role === 'manager') {
+    const workers = agents.filter(a => a.parent === agent.name);
+    if (workers.length === 0) return null;
+    return (
+      <div className="py-2 px-3 rounded-xl bg-surface-container/30 border border-outline-variant/4">
+        <div className="text-[9px] font-semibold text-on-surface-variant/40 uppercase tracking-wider mb-1.5">
+          Workers ({workers.length})
+        </div>
+        <div className="space-y-1.5">
+          {workers.map(w => (
+            <div key={w.name} className="flex items-center gap-2">
+              <AgentIcon base={w.base} color={w.color} size={20} />
+              <span className="text-xs font-medium" style={{ color: w.color }}>{w.label}</span>
+              <span className={`text-[9px] ml-auto ${
+                w.state === 'active' || w.state === 'thinking' ? 'text-green-400/60' : 'text-on-surface-variant/30'
+              }`}>
+                {w.state === 'thinking' ? 'Active' : w.state === 'active' || w.state === 'idle' ? 'Ready' : 'Off'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function providerName(base: string): string {

@@ -49,9 +49,10 @@ On app start, show a launcher window (not the chat):
 - Store token in OS keychain (keytar)
 
 ### OpenAI (ChatGPT/Codex)
-- API key entry (no OAuth available for CLI)
-- Store in OS keychain
-- Validate with test API call
+- Run `codex auth login` for ChatGPT subscription auth (same flow as Claude)
+- Detect auth status via `codex auth status`
+- API key entry as fallback
+- Store token in OS keychain (keytar)
 
 ### Google (Gemini)
 - Google OAuth2 flow via browser

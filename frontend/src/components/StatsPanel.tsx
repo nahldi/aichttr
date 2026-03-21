@@ -6,10 +6,24 @@ export function StatsPanel() {
   const channels = useChatStore((s) => s.channels);
   const activeChannel = useChatStore((s) => s.activeChannel);
   const jobs = useChatStore((s) => s.jobs);
+  const sessionStart = useChatStore((s) => s.sessionStart);
+  const sections = useChatStore((s) => s.settings.statsSections) || { session: true, tokens: true, agents: true, activity: true };
 
   const onlineAgents = agents.filter(a => a.state === 'active' || a.state === 'thinking');
   const channelMsgs = messages.filter(m => m.channel === activeChannel);
   const openJobs = jobs.filter(j => j.status === 'open');
+
+  // Quick metrics
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const messagesToday = messages.filter(m => m.timestamp * 1000 >= todayStart.getTime()).length;
+  const sessionMinutes = Math.floor((Date.now() - sessionStart) / 60000);
+  const sessionDisplay = sessionMinutes < 60 ? `${sessionMinutes}m` : `${Math.floor(sessionMinutes / 60)}h ${sessionMinutes % 60}m`;
+
+  // Estimated token usage (rough: ~4 chars per token)
+  const totalChars = messages.reduce((sum, m) => sum + m.text.length, 0);
+  const estimatedTokens = Math.round(totalChars / 4);
+  const estimatedCost = (estimatedTokens / 1000000) * 3; // rough $3/MTok avg
 
   // Message counts per sender
   const senderCounts: Record<string, number> = {};
@@ -22,37 +36,58 @@ export function StatsPanel() {
 
   return (
     <div className="w-56 shrink-0 hidden xl:flex flex-col gap-4 py-4 px-3 overflow-y-auto border-l border-outline-variant/8">
-      {/* Status overview */}
-      <StatCard title="Session">
-        <StatRow label="Agents Online" value={`${onlineAgents.length}/${agents.length}`} color="#4ade80" />
-        <StatRow label="Messages" value={String(channelMsgs.length)} color="#a78bfa" />
-        <StatRow label="Channels" value={String(channels.length)} color="#38bdf8" />
-        <StatRow label="Open Jobs" value={String(openJobs.length)} color="#fb923c" />
-      </StatCard>
+      {/* Session overview */}
+      {sections.session && (
+        <StatCard title="Session">
+          <StatRow label="Agents Online" value={`${onlineAgents.length}/${agents.length}`} color="#4ade80" />
+          <StatRow label="Messages" value={String(channelMsgs.length)} color="#a78bfa" />
+          <StatRow label="Channels" value={String(channels.length)} color="#38bdf8" />
+          <StatRow label="Open Jobs" value={String(openJobs.length)} color="#fb923c" />
+        </StatCard>
+      )}
+
+      {/* Token usage */}
+      {sections.tokens && (
+        <StatCard title="Token Usage">
+          <StatRow label="Est. Tokens" value={estimatedTokens > 1000 ? `${(estimatedTokens / 1000).toFixed(1)}K` : String(estimatedTokens)} color="#c084fc" />
+          <StatRow label="Est. Cost" value={`$${estimatedCost.toFixed(4)}`} color="#f0abfc" />
+          <StatRow label="Msgs Today" value={String(messagesToday)} color="#38bdf8" />
+          <StatRow label="Session" value={sessionDisplay} color="#4ade80" />
+        </StatCard>
+      )}
 
       {/* Agent status */}
-      <StatCard title="Agents">
-        {agents.map(a => {
-          const isOn = a.state === 'active' || a.state === 'thinking';
-          return (
-            <div key={a.name} className="flex items-center gap-2 py-1">
-              <div
-                className={`w-2 h-2 rounded-full shrink-0 ${isOn ? 'shadow-[0_0_4px]' : ''}`}
-                style={{ backgroundColor: isOn ? a.color : '#3a3548', boxShadow: isOn ? `0 0 6px ${a.color}50` : 'none' }}
-              />
-              <span className="text-[11px] text-on-surface-variant/60 flex-1 truncate">{a.label}</span>
-              <span className={`text-[9px] font-medium ${
-                a.state === 'thinking' ? 'text-yellow-400' : isOn ? 'text-green-400/60' : 'text-on-surface-variant/20'
-              }`}>
-                {a.state === 'thinking' ? 'ACTIVE' : isOn ? 'READY' : 'OFF'}
-              </span>
-            </div>
-          );
-        })}
-      </StatCard>
+      {sections.agents && (
+        <StatCard title="Agents">
+          {agents.map(a => {
+            const isOn = a.state === 'active' || a.state === 'thinking';
+            return (
+              <div key={a.name} className="flex items-center gap-2 py-1">
+                <div
+                  className={`w-2 h-2 rounded-full shrink-0 ${isOn ? 'shadow-[0_0_4px]' : ''}`}
+                  style={{ backgroundColor: isOn ? a.color : '#3a3548', boxShadow: isOn ? `0 0 6px ${a.color}50` : 'none' }}
+                />
+                <span className="text-[11px] text-on-surface-variant/60 flex-1 truncate">{a.label}</span>
+                {a.role && (
+                  <span className={`text-[7px] font-bold px-1 py-px rounded leading-none uppercase ${
+                    a.role === 'manager' ? 'text-yellow-400 bg-yellow-500/15' : a.role === 'worker' ? 'text-blue-400 bg-blue-500/15' : 'text-purple-400 bg-purple-500/15'
+                  }`}>
+                    {a.role === 'manager' ? 'MGR' : a.role === 'worker' ? 'WKR' : 'PEER'}
+                  </span>
+                )}
+                <span className={`text-[9px] font-medium ${
+                  a.state === 'thinking' ? 'text-yellow-400' : isOn ? 'text-green-400/60' : 'text-on-surface-variant/40'
+                }`}>
+                  {a.state === 'thinking' ? 'ACTIVE' : isOn ? 'READY' : 'OFF'}
+                </span>
+              </div>
+            );
+          })}
+        </StatCard>
+      )}
 
       {/* Activity in this channel */}
-      {topSenders.length > 0 && (
+      {sections.activity && topSenders.length > 0 && (
         <StatCard title={`#${activeChannel} Activity`}>
           {topSenders.map(([sender, count]) => {
             const agent = agents.find(a => a.name === sender);

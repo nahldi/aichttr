@@ -65,12 +65,21 @@ function AgentChip({ agent }: { agent: Agent }) {
         </div>
 
         <div className="min-w-0">
-          <div className="text-[12px] font-bold leading-tight truncate" style={{
+          <div className="text-[12px] font-bold leading-tight truncate flex items-center gap-1" style={{
             color: isOffline ? undefined : agent.color,
           }}>
             <span className={isOffline ? 'text-on-surface-variant' : undefined}>
               {agent.label}
             </span>
+            {agent.role === 'manager' && (
+              <span className="text-[8px] font-bold px-1 py-px rounded bg-yellow-500/20 text-yellow-400 leading-none uppercase">MGR</span>
+            )}
+            {agent.role === 'worker' && (
+              <span className="text-[8px] font-bold px-1 py-px rounded bg-blue-500/20 text-blue-400 leading-none uppercase">WKR</span>
+            )}
+            {agent.role === 'peer' && (
+              <span className="text-[8px] font-bold px-1 py-px rounded bg-purple-500/20 text-purple-400 leading-none uppercase">PEER</span>
+            )}
           </div>
           <div className={`text-[10px] leading-tight truncate font-medium ${
             isPaused ? 'text-orange-400' : isOnline && !isThinking ? 'text-green-400/70' : isOffline ? 'text-on-surface-variant/60' : ''

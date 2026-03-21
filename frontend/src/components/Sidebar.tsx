@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
+import type { Agent } from '../types';
 
 type PanelId = 'jobs' | 'rules' | 'settings';
 
@@ -13,6 +14,32 @@ export function Sidebar() {
   const setActiveChannel = useChatStore((s) => s.setActiveChannel);
   const clearUnread = useChatStore((s) => s.clearUnread);
   const settings = useChatStore((s) => s.settings);
+  const agents = useChatStore((s) => s.agents);
+
+  // Build hierarchy tree: managers -> workers, plus standalone agents
+  const { managers, standalone } = useMemo(() => {
+    const mgrs: (Agent & { workers: Agent[] })[] = [];
+    const solo: Agent[] = [];
+    const workerNames = new Set<string>();
+
+    // First pass: find managers and their workers
+    agents.forEach(a => {
+      if (a.role === 'manager') {
+        const workers = agents.filter(w => w.parent === a.name);
+        workers.forEach(w => workerNames.add(w.name));
+        mgrs.push({ ...a, workers });
+      }
+    });
+
+    // Second pass: standalone agents (not managers, not workers)
+    agents.forEach(a => {
+      if (a.role !== 'manager' && !workerNames.has(a.name)) {
+        solo.push(a);
+      }
+    });
+
+    return { managers: mgrs, standalone: solo };
+  }, [agents]);
 
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
@@ -139,9 +166,14 @@ export function Sidebar() {
           }} onClick={e => e.stopPropagation()}>
             <div className="px-4 mb-3 flex items-center justify-between">
               <span className="text-[11px] font-bold text-white/45 uppercase tracking-wider">Channels</span>
-              <button onClick={() => setAdding(!adding)} className="text-white/45 hover:text-white/50 transition-colors">
-                <span className="material-symbols-outlined text-[16px]">{adding ? 'close' : 'add'}</span>
-              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setAdding(!adding)} className="text-white/45 hover:text-white/50 transition-colors">
+                  <span className="material-symbols-outlined text-[16px]">{adding ? 'close' : 'add'}</span>
+                </button>
+                <button onClick={() => setExpanded(false)} className="text-white/45 hover:text-white/60 transition-colors" title="Close panel">
+                  <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                </button>
+              </div>
             </div>
 
             {adding && (
@@ -182,9 +214,68 @@ export function Sidebar() {
                 </div>
               ))}
             </div>
+
+            {/* Agent hierarchy */}
+            {agents.length > 0 && (
+              <div className="mt-4">
+                <div className="px-4 mb-2">
+                  <span className="text-[11px] font-bold text-white/45 uppercase tracking-wider">Agents</span>
+                </div>
+                <div className="px-2 space-y-0.5">
+                  {/* Managers with their workers */}
+                  {managers.map(mgr => (
+                    <div key={mgr.name}>
+                      <SidebarAgentRow agent={mgr} badge="MGR" badgeColor="text-yellow-400 bg-yellow-500/20" extra={mgr.workers.length > 0 ? `${mgr.workers.length} worker${mgr.workers.length > 1 ? 's' : ''}` : undefined} />
+                      {mgr.workers.map(w => (
+                        <div key={w.name} className="pl-4">
+                          <SidebarAgentRow agent={w} badge="WKR" badgeColor="text-blue-400 bg-blue-500/20" />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {/* Standalone agents */}
+                  {standalone.map(a => (
+                    <SidebarAgentRow key={a.name} agent={a} badge={a.role === 'peer' ? 'PEER' : undefined} badgeColor="text-purple-400 bg-purple-500/20" />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
     </>
+  );
+}
+
+function SidebarAgentRow({ agent, badge, badgeColor, extra }: { agent: Agent; badge?: string; badgeColor?: string; extra?: string }) {
+  const isOn = agent.state === 'active' || agent.state === 'thinking' || agent.state === 'idle';
+  const isPaused = agent.state === 'paused';
+  const isThinking = agent.state === 'thinking';
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[12px] hover:bg-white/4 transition-all group">
+      <div
+        className={`w-2 h-2 rounded-full shrink-0 ${isThinking ? 'animate-pulse' : ''}`}
+        style={{
+          backgroundColor: isThinking ? agent.color : isOn ? '#4ade80' : isPaused ? '#fb923c' : '#3a3548',
+          boxShadow: isOn ? `0 0 6px ${isThinking ? agent.color : '#4ade80'}50` : 'none',
+        }}
+      />
+      <span className="flex-1 truncate" style={{ color: isOn ? agent.color : 'rgba(255,255,255,0.35)' }}>
+        {agent.label}
+      </span>
+      {badge && (
+        <span className={`text-[7px] font-bold px-1 py-px rounded leading-none uppercase ${badgeColor || ''}`}>
+          {badge}
+        </span>
+      )}
+      {extra && (
+        <span className="text-[9px] text-white/25">{extra}</span>
+      )}
+      <span className={`text-[9px] font-medium ${
+        isThinking ? 'text-yellow-400' : isOn ? 'text-green-400/50' : isPaused ? 'text-orange-400/50' : 'text-white/20'
+      }`}>
+        {isThinking ? 'Thinking' : isOn ? 'Online' : isPaused ? 'Paused' : 'Offline'}
+      </span>
+    </div>
   );
 }

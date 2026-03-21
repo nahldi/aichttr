@@ -15,6 +15,8 @@ import { RulesPanel } from './components/RulesPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { StatsPanel } from './components/StatsPanel';
 import { SearchModal } from './components/SearchModal';
+import { ConnectionBanner } from './components/ConnectionBanner';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 
 function ChatFeed() {
   const messages = useChatStore((s) => s.messages);
@@ -126,13 +128,26 @@ function ScrollArrow() {
 
 function RightPanel() {
   const panel = useChatStore((s) => s.sidebarPanel);
+  const setSidebarPanel = useChatStore((s) => s.setSidebarPanel);
   if (!panel) return null;
   return (
-    <aside className="w-80 h-screen glass-strong fixed right-0 top-0 z-30 max-lg:hidden">
-      {panel === 'jobs' && <JobsPanel />}
-      {panel === 'rules' && <RulesPanel />}
-      {panel === 'settings' && <SettingsPanel />}
-    </aside>
+    <>
+      {/* Click-away backdrop */}
+      <div className="fixed inset-0 z-[29] max-lg:hidden" onClick={() => setSidebarPanel(null)} />
+      <aside className="w-80 h-screen glass-strong fixed right-0 top-0 z-30 max-lg:hidden flex flex-col">
+        {/* Close button */}
+        <button
+          onClick={() => setSidebarPanel(null)}
+          className="absolute top-3 right-3 z-10 p-1.5 rounded-lg hover:bg-surface-container-high text-on-surface-variant/40 hover:text-on-surface-variant/70 transition-colors"
+          title="Close panel"
+        >
+          <span className="material-symbols-outlined text-[18px]">close</span>
+        </button>
+        {panel === 'jobs' && <JobsPanel />}
+        {panel === 'rules' && <RulesPanel />}
+        {panel === 'settings' && <SettingsPanel />}
+      </aside>
+    </>
   );
 }
 
@@ -187,22 +202,79 @@ function AppInner() {
   const fontSize = useChatStore((s) => s.settings.fontSize);
   const title = useChatStore((s) => s.settings.title);
   const theme = useChatStore((s) => s.settings.theme);
+  const showStatsPanel = useChatStore((s) => s.settings.showStatsPanel);
 
   const [showSearch, setShowSearch] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   useWebSocket();
 
-  // Ctrl+K to open search
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      const ctrl = e.ctrlKey || e.metaKey;
+
+      // Ctrl+K — command palette / search
+      if (ctrl && e.key === 'k') {
         e.preventDefault();
         setShowSearch(true);
+        return;
+      }
+      // Ctrl+/ — keyboard shortcuts help
+      if (ctrl && e.key === '/') {
+        e.preventDefault();
+        setShowShortcuts((v) => !v);
+        return;
+      }
+      // Ctrl+N — new channel (open sidebar with channel adding)
+      if (ctrl && e.key === 'n' && !e.shiftKey) {
+        e.preventDefault();
+        // Dispatch custom event that Sidebar can listen to
+        window.dispatchEvent(new CustomEvent('aichttr:new-channel'));
+        return;
+      }
+      // Ctrl+1-9 — switch channel by number
+      if (ctrl && e.key >= '1' && e.key <= '9') {
+        e.preventDefault();
+        const idx = parseInt(e.key) - 1;
+        const channels = useChatStore.getState().channels;
+        if (idx < channels.length) {
+          useChatStore.getState().setActiveChannel(channels[idx].name);
+          useChatStore.getState().clearUnread(channels[idx].name);
+        }
+        return;
+      }
+      // Alt+Up/Down — prev/next channel
+      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        const state = useChatStore.getState();
+        const idx = state.channels.findIndex(c => c.name === state.activeChannel);
+        const next = e.key === 'ArrowDown'
+          ? (idx + 1) % state.channels.length
+          : (idx - 1 + state.channels.length) % state.channels.length;
+        state.setActiveChannel(state.channels[next].name);
+        state.clearUnread(state.channels[next].name);
+        return;
+      }
+      // Ctrl+Shift+M — toggle mute
+      if (ctrl && e.shiftKey && e.key === 'M') {
+        e.preventDefault();
+        const current = useChatStore.getState().settings.notificationSounds;
+        useChatStore.getState().updateSettings({ notificationSounds: !current });
+        api.saveSettings({ notificationSounds: !current }).catch(() => {});
+        return;
+      }
+      // Escape — close panels
+      if (e.key === 'Escape') {
+        if (showSearch) { setShowSearch(false); return; }
+        if (showShortcuts) { setShowShortcuts(false); return; }
+        const panel = useChatStore.getState().sidebarPanel;
+        if (panel) { useChatStore.getState().setSidebarPanel(null); return; }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [showSearch, showShortcuts]);
 
   // Apply font size to root
   useEffect(() => {
@@ -279,13 +351,15 @@ function AppInner() {
             </div>
           </div>
           {/* Stats sidebar — only on wide screens when no right panel open */}
-          {!sidebarPanel && <StatsPanel />}
+          {!sidebarPanel && showStatsPanel !== false && <StatsPanel />}
         </div>
       </main>
 
       <RightPanel />
       <MobilePanel />
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
+      {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      <ConnectionBanner />
     </div>
   );
 }

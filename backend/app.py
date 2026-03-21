@@ -912,6 +912,201 @@ async def update_rule(rule_id: int, request: Request):
     return JSONResponse({"error": "not found"}, 404)
 
 
+# ── Activity ──────────────────────────────────────────────────────────
+
+_activity_log: list[dict] = []
+
+@app.get("/api/activity")
+async def get_activity(limit: int = 50):
+    return {"events": _activity_log[-limit:]}
+
+
+# ── Usage tracking ───────────────────────────────────────────────────
+
+_usage: dict[str, int] = {}  # agent -> token count
+
+@app.get("/api/usage")
+async def get_usage():
+    total = sum(_usage.values())
+    # Rough cost estimate: $3 per 1M tokens average
+    return {"total_tokens": total, "by_agent": dict(_usage), "estimated_cost": (total / 1_000_000) * 3}
+
+
+@app.post("/api/usage")
+async def report_usage(request: Request):
+    body = await request.json()
+    agent = body.get("agent", "unknown")
+    tokens = body.get("tokens", 0)
+    _usage[agent] = _usage.get(agent, 0) + tokens
+    return {"ok": True, "agent": agent, "total": _usage[agent]}
+
+
+# ── Webhooks ─────────────────────────────────────────────────────────
+
+_webhooks: list[dict] = []
+
+@app.get("/api/webhooks")
+async def list_webhooks():
+    return {"webhooks": _webhooks}
+
+
+@app.post("/api/webhooks")
+async def create_webhook(request: Request):
+    body = await request.json()
+    wh = {
+        "id": f"wh-{int(time.time())}",
+        "url": body.get("url", ""),
+        "events": body.get("events", []),
+        "active": True,
+        "created_at": time.time(),
+    }
+    _webhooks.append(wh)
+    return wh
+
+
+@app.post("/api/webhook/{wh_id}")
+async def update_webhook(wh_id: str, request: Request):
+    body = await request.json()
+    for wh in _webhooks:
+        if wh["id"] == wh_id:
+            wh.update(body)
+            return wh
+    return JSONResponse({"error": "not found"}, 404)
+
+
+@app.delete("/api/webhook/{wh_id}")
+async def delete_webhook(wh_id: str):
+    global _webhooks
+    before = len(_webhooks)
+    _webhooks = [w for w in _webhooks if w["id"] != wh_id]
+    return {"ok": len(_webhooks) < before}
+
+
+# ── Export ───────────────────────────────────────────────────────────
+
+@app.get("/api/export")
+async def export_channel(channel: str = "general"):
+    assert store._db is not None
+    cursor = await store._db.execute(
+        "SELECT * FROM messages WHERE channel = ? ORDER BY id ASC",
+        [channel],
+    )
+    rows = await cursor.fetchall()
+    msgs = [store._row_to_dict(r) for r in rows]
+    md_lines = [f"# #{channel}\n"]
+    for m in msgs:
+        md_lines.append(f"**{m['sender']}** ({m.get('time', '')})\n{m['text']}\n---")
+    md = "\n\n".join(md_lines)
+    return {"markdown": md, "filename": f"{channel}-export.md"}
+
+
+# ── Hierarchy ────────────────────────────────────────────────────────
+
+@app.get("/api/hierarchy")
+async def get_hierarchy():
+    agents = _get_full_agent_list()
+    tree: dict[str, list[str]] = {}
+    for a in agents:
+        role = a.get("role")
+        parent = a.get("parent")
+        if role == "manager":
+            tree.setdefault(a["name"], [])
+        if parent:
+            tree.setdefault(parent, []).append(a["name"])
+    return {"agents": agents, "tree": tree}
+
+
+# ── Agent soul, notes, health, config, memories ──────────────────────
+
+from agent_memory import AgentMemory, get_soul, set_soul, get_notes, set_notes
+
+_agent_memory = AgentMemory(DATA_DIR / "agent_memories")
+_agent_dir = DATA_DIR / "agents"
+
+
+@app.get("/api/agents/{name}/soul")
+async def api_get_soul(name: str):
+    return {"soul": get_soul(_agent_dir, name)}
+
+
+@app.post("/api/agents/{name}/soul")
+async def api_set_soul(name: str, request: Request):
+    body = await request.json()
+    set_soul(_agent_dir, name, body.get("content", ""))
+    return {"ok": True}
+
+
+@app.get("/api/agents/{name}/notes")
+async def api_get_notes(name: str):
+    return {"notes": get_notes(_agent_dir, name)}
+
+
+@app.post("/api/agents/{name}/notes")
+async def api_set_notes(name: str, request: Request):
+    body = await request.json()
+    set_notes(_agent_dir, name, body.get("content", ""))
+    return {"ok": True}
+
+
+@app.get("/api/agents/{name}/health")
+async def agent_health(name: str):
+    inst = registry.get(name)
+    if not inst:
+        return JSONResponse({"error": "not found", "healthy": False}, 404)
+    is_alive = inst.state in ("active", "thinking", "idle", "paused")
+    return {"name": name, "healthy": is_alive, "state": inst.state}
+
+
+@app.get("/api/agents/{name}/config")
+async def get_agent_config(name: str):
+    inst = registry.get(name)
+    if not inst:
+        return JSONResponse({"error": "not found"}, 404)
+    return {
+        "name": inst.name,
+        "base": inst.base,
+        "label": inst.label,
+        "color": inst.color,
+        "workspace": getattr(inst, "workspace", None),
+        "command": getattr(inst, "command", None),
+        "args": getattr(inst, "args", []),
+        "role": getattr(inst, "role", None),
+    }
+
+
+@app.post("/api/agents/{name}/config")
+async def set_agent_config(name: str, request: Request):
+    inst = registry.get(name)
+    if not inst:
+        return JSONResponse({"error": "not found"}, 404)
+    body = await request.json()
+    for key in ("label", "color", "role", "workspace"):
+        if key in body:
+            setattr(inst, key, body[key])
+    if "role" in body:
+        await broadcast("status", {"agents": _get_full_agent_list()})
+    return {"ok": True}
+
+
+@app.get("/api/agents/{name}/memories")
+async def list_agent_memories(name: str):
+    return {"memories": _agent_memory.get_all(name)}
+
+
+@app.get("/api/agents/{name}/memories/{key}")
+async def get_agent_memory(name: str, key: str):
+    val = _agent_memory.get(name, key)
+    if val is None:
+        return JSONResponse({"error": "not found"}, 404)
+    return {"key": key, "value": val}
+
+
+@app.delete("/api/agents/{name}/memories/{key}")
+async def delete_agent_memory(name: str, key: str):
+    ok = _agent_memory.delete(name, key)
+    return {"ok": ok}
+
+
 # ── Serve uploads ───────────────────────────────────────────────────
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
