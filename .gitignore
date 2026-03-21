@@ -30,5 +30,8 @@ memory/
 # Build artifacts
 *.tsbuildinfo
 
-# Distributable project copy
-aichttrr/
+# Claude Code
+.claude/
+
+# Status/handoff (internal only)
+STATUS.md

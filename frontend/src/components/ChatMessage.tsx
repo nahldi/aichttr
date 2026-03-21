@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
@@ -10,6 +10,8 @@ import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { timeAgo } from '../lib/timeago';
 import type { Message, Attachment } from '../types';
+
+const COLLAPSE_THRESHOLD = 500;
 
 const REACTION_EMOJIS = ['👍', '❤️', '🎉', '👀', '🔥', '✅'];
 
@@ -86,14 +88,58 @@ interface ChatMessageProps { message: Message; }
 
 export function ChatMessage({ message }: ChatMessageProps) {
   const [showPicker, setShowPicker] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(message.text);
+  const [collapsed, setCollapsed] = useState(message.text.length > COLLAPSE_THRESHOLD);
+  const editRef = useRef<HTMLTextAreaElement>(null);
   const agents = useChatStore((s) => s.agents);
   const settings = useChatStore((s) => s.settings);
   const setReplyTo = useChatStore((s) => s.setReplyTo);
   const pinMessage = useChatStore((s) => s.pinMessage);
+  const editMessage = useChatStore((s) => s.editMessage);
+  const bookmarkMessage = useChatStore((s) => s.bookmarkMessage);
   const agent = agents.find((a) => a.name === message.sender);
   const agentNames = new Set(agents.map(a => a.name));
   const isUser = message.sender === settings.username || message.sender === 'You' || (!agentNames.has(message.sender) && message.type === 'chat');
   const isSystem = message.type === 'system' || message.type === 'join';
+  const isLong = message.text.length > COLLAPSE_THRESHOLD;
+  const displayText = isLong && collapsed ? message.text.slice(0, COLLAPSE_THRESHOLD) + '...' : message.text;
+
+  useEffect(() => {
+    if (isEditing && editRef.current) {
+      editRef.current.focus();
+      editRef.current.selectionStart = editRef.current.value.length;
+    }
+  }, [isEditing]);
+
+  const handleEditSave = () => {
+    const trimmed = editText.trim();
+    if (trimmed && trimmed !== message.text) {
+      editMessage(message.id, trimmed);
+    }
+    setIsEditing(false);
+  };
+
+  const handleEditCancel = () => {
+    setEditText(message.text);
+    setIsEditing(false);
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditSave(); }
+    if (e.key === 'Escape') { handleEditCancel(); }
+  };
+
+  const handleDoubleClick = () => {
+    if (isUser) {
+      setEditText(message.text);
+      setIsEditing(true);
+    }
+  };
+
+  const handleBookmark = () => {
+    bookmarkMessage(message.id, !message.bookmarked);
+  };
 
   if (isSystem) {
     return (
@@ -109,8 +155,6 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const attachments = parseAttachments(message.attachments);
   const reactions = parseReactions(message.reactions);
   const agentColor = agent?.color || '#a78bfa';
-
-  const highlightedText = message.text;
 
   const handleReact = (emoji: string) => {
     api.reactToMessage(message.id, emoji, settings.username).catch(() => {});
@@ -129,6 +173,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
     return (
       <div className="group flex justify-end gap-2 py-1.5 msg-enter">
         <div className="relative opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 shrink-0">
+          <MsgAction icon="star" title={message.bookmarked ? 'Unbookmark' : 'Bookmark'} active={message.bookmarked} onClick={handleBookmark} />
           <MsgAction icon="add_reaction" title="React" onClick={() => setShowPicker(!showPicker)} />
           <MsgAction icon="content_copy" title="Copy" onClick={() => navigator.clipboard.writeText(message.text).catch(() => {})} />
           <MsgAction icon="reply" title="Reply" onClick={() => setReplyTo(message)} />
@@ -137,6 +182,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
         </div>
         <div className="max-w-[70%] lg:max-w-[55%]">
           <div className="flex items-center justify-end gap-2 mb-0.5">
+            {message.edited && <span className="text-[9px] text-on-surface-variant/25 italic">(edited)</span>}
             <span className="text-[10px] text-on-surface-variant/30" title={message.time}>{timeAgo(message.timestamp)}</span>
             <span className="text-[11px] font-semibold text-[#38bdf8]">{settings.username}</span>
           </div>
@@ -146,10 +192,32 @@ export function ChatMessage({ message }: ChatMessageProps) {
               background: 'rgba(56, 189, 248, 0.08)',
               border: '1px solid rgba(56, 189, 248, 0.12)',
             }}
+            onDoubleClick={handleDoubleClick}
           >
-            <div className="prose">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: MdCode, p: MdParagraph }}>{highlightedText}</ReactMarkdown>
-            </div>
+            {isEditing ? (
+              <textarea
+                ref={editRef}
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={handleEditKeyDown}
+                onBlur={handleEditCancel}
+                className="w-full bg-transparent text-sm text-on-surface outline-none resize-none min-h-[2em]"
+              />
+            ) : (
+              <>
+                <div className="prose">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: MdCode, p: MdParagraph }}>{displayText}</ReactMarkdown>
+                </div>
+                {isLong && (
+                  <button
+                    onClick={() => setCollapsed(!collapsed)}
+                    className="text-[10px] text-primary/70 hover:text-primary mt-1 font-medium"
+                  >
+                    {collapsed ? 'Show more' : 'Show less'}
+                  </button>
+                )}
+              </>
+            )}
             <Attachments attachments={attachments} />
           </div>
           <div className="flex justify-end">
@@ -172,6 +240,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
             {agent?.label || message.sender}
           </span>
           <span className="text-[10px] text-on-surface-variant/30" title={message.time}>{timeAgo(message.timestamp)}</span>
+          {message.edited && <span className="text-[9px] text-on-surface-variant/25 italic">(edited)</span>}
+          {message.bookmarked && <span className="material-symbols-outlined text-[10px] text-yellow-400/70">star</span>}
           {message.pinned && <span className="material-symbols-outlined text-[10px] text-tertiary">push_pin</span>}
         </div>
 
@@ -189,8 +259,16 @@ export function ChatMessage({ message }: ChatMessageProps) {
           }}
         >
           <div className="prose">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: MdCode, p: MdParagraph }}>{highlightedText}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: MdCode, p: MdParagraph }}>{displayText}</ReactMarkdown>
           </div>
+          {isLong && (
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="text-[10px] text-primary/70 hover:text-primary mt-1 font-medium"
+            >
+              {collapsed ? 'Show more' : 'Show less'}
+            </button>
+          )}
           <Attachments attachments={attachments} />
           {progress && <ProgressCard steps={progress.steps} current={progress.current} total={progress.total} title={progress.title} />}
           {decision && <DecisionCard title={decision.title} description={decision.description} choices={decision.choices} resolved={decision.resolved} onChoose={() => {}} />}
@@ -202,6 +280,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
         {/* Actions */}
         <div className="relative opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 mt-0.5">
+          <MsgAction icon="star" title={message.bookmarked ? 'Unbookmark' : 'Bookmark'} active={message.bookmarked} onClick={handleBookmark} />
           <MsgAction icon="add_reaction" title="React" onClick={() => setShowPicker(!showPicker)} />
           <MsgAction icon="reply" title="Reply" onClick={() => setReplyTo(message)} />
           <MsgAction icon="content_copy" title="Copy" onClick={() => navigator.clipboard.writeText(message.text).catch(() => {})} />

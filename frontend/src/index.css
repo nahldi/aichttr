@@ -106,12 +106,14 @@ body { margin: 0; min-height: 100vh; }
 }
 
 [data-theme="light"] .agent-chip {
-  background: color-mix(in srgb, var(--agent-color, #7c3aed) 8%, rgba(255, 255, 255, 0.9));
-  border: 1px solid color-mix(in srgb, var(--agent-color, #7c3aed) 18%, transparent);
+  background: color-mix(in srgb, var(--agent-color, #7c3aed) 12%, rgba(255, 255, 255, 0.95));
+  border: 1px solid color-mix(in srgb, var(--agent-color, #7c3aed) 25%, transparent);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 [data-theme="light"] .agent-chip:hover {
-  background: color-mix(in srgb, var(--agent-color, #7c3aed) 12%, rgba(255, 255, 255, 0.95));
-  border-color: color-mix(in srgb, var(--agent-color, #7c3aed) 28%, transparent);
+  background: color-mix(in srgb, var(--agent-color, #7c3aed) 18%, rgba(255, 255, 255, 0.98));
+  border-color: color-mix(in srgb, var(--agent-color, #7c3aed) 35%, transparent);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
 
 .agent-pill-active {
