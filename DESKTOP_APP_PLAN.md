@@ -81,10 +81,37 @@ On app start, show a launcher window (not the chat):
 - .deb for Debian/Ubuntu
 - .rpm for Fedora/RHEL
 
-## Auto-Update
-- electron-updater with GitHub Releases as update source
-- Check on startup, show notification badge
-- User clicks "Update" → downloads + restarts
+## Auto-Update (In Launcher Window)
+The launcher screen has a prominent **"Check for Updates"** button. Flow:
+
+1. On app launch, auto-check GitHub Releases for new version (background, non-blocking)
+2. If update available → show **"Update Available (v1.x.x)"** button with green badge in launcher
+3. User clicks → progress bar shows download (delta update, not full re-download)
+4. Download completes → **"Restart to Apply"** button appears
+5. Click → app quits, installs update, relaunches to launcher
+6. User clicks Start Server as normal
+
+**Implementation:**
+- `electron-updater` with `autoUpdater` API
+- Update source: GitHub Releases (each release = a tagged commit with built artifacts)
+- Differential updates via `electron-updater`'s built-in blockmap (only downloads changed bytes)
+- Windows: NSIS web installer with delta support
+- macOS: DMG with Sparkle-style differential
+- Linux: AppImage auto-update protocol
+- Update channel: `latest` (stable), `beta` (pre-release) — configurable in settings
+- **No forced updates** — user always chooses when to update
+- Version shown in launcher footer: "v1.0.2 — Up to date" or "v1.0.2 — Update available"
+- Release notes shown in expandable panel before updating
+
+**For us (publishing updates):**
+```bash
+# Bump version in package.json
+# Build all platforms
+npm run build:all
+# Create GitHub Release with tag + upload artifacts
+gh release create v1.0.3 dist/*.exe dist/*.dmg dist/*.AppImage --notes "changelog"
+# electron-updater auto-detects the new release via GitHub API
+```
 
 ## System Tray
 - Tray icon shows server status (green/red dot)
