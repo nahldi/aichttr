@@ -27,6 +27,7 @@ jobs:
         working-directory: desktop
         run: |
           npm ci
+          npx tsc
           npx electron-builder --win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -58,6 +59,7 @@ jobs:
         working-directory: desktop
         run: |
           npm ci
+          npx tsc
           npx electron-builder --linux AppImage deb
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -89,6 +91,7 @@ jobs:
         working-directory: desktop
         run: |
           npm ci
+          npx tsc
           npx electron-builder --mac dmg
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
