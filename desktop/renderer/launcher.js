@@ -157,9 +157,55 @@ function truncate(str, maxLen) {
  */
 function renderProviders(statuses) {
   providerStatuses = statuses;
-  $providers.innerHTML = '';
+  while ($providers.firstChild) $providers.removeChild($providers.firstChild);
 
-  statuses.forEach((s) => {
+  // Split: connected/installed go in Connections, rest go in Supported Agents
+  const connected = statuses.filter(s => s.authenticated || s.installed);
+  const notInstalled = statuses.filter(s => !s.authenticated && !s.installed);
+
+  // Populate Supported Agents section with not-installed ones
+  const $agentsBody = document.getElementById('agents-body');
+  if ($agentsBody) {
+    while ($agentsBody.firstChild) $agentsBody.removeChild($agentsBody.firstChild);
+    notInstalled.forEach(s => {
+      const row = document.createElement('div');
+      row.className = 'agent-row';
+      const dot = document.createElement('span');
+      dot.className = 'agent-dot';
+      dot.style.background = s.color;
+      const nameEl = document.createElement('span');
+      nameEl.className = 'agent-name';
+      nameEl.textContent = s.name;
+      const provEl = document.createElement('span');
+      provEl.className = 'agent-provider';
+      provEl.textContent = 'Not installed';
+      const btn = document.createElement('button');
+      btn.className = 'connect-btn install-btn';
+      btn.textContent = 'Install';
+      btn.title = s.installCommand || 'Install the CLI';
+      btn.style.cssText = 'background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);font-size:10px;padding:3px 10px';
+      btn.addEventListener('click', async () => {
+        btn.textContent = '...';
+        btn.disabled = true;
+        await api.invoke('auth:install', s.provider);
+        setTimeout(() => refreshAuth(), 10000);
+      });
+      row.appendChild(dot);
+      row.appendChild(nameEl);
+      row.appendChild(provEl);
+      row.appendChild(btn);
+      $agentsBody.appendChild(row);
+    });
+    if (notInstalled.length === 0) {
+      const hint = document.createElement('div');
+      hint.className = 'agents-hint';
+      hint.textContent = 'All supported agents are installed!';
+      $agentsBody.appendChild(hint);
+    }
+  }
+
+  // Only show connected/installed in Connections
+  connected.forEach((s) => {
     const card = document.createElement('div');
     card.className = 'provider-card';
     card.dataset.provider = s.provider;

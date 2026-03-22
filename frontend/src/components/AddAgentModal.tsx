@@ -195,11 +195,8 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
                 <button
                   key={preset.label}
                   onClick={() => {
-                    // Fill the form with preset — don't auto-spawn
-                    setSelected(preset.base);
+                    // Fill only the name — let user pick which agent to use
                     setLabel(preset.label);
-                    setPermPreset(0);
-                    setSelectedModel(0);
                   }}
                   className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all text-left ${
                     label === preset.label && selected === preset.base
@@ -217,29 +214,32 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
             </div>
           </Section>
 
-          {/* Agent Selection — show all agents, highlight available */}
+          {/* Agent Selection — only show installed/available agents */}
           <Section label="Agent">
             <div className="grid grid-cols-3 gap-2">
-              {templates.map((t) => (
+              {templates.filter(t => t.available).map((t) => (
                 <button
                   key={t.base}
                   onClick={() => { setSelected(t.base); setPermPreset(0); setSelectedModel(0); }}
                   className={`flex flex-col items-center gap-2 py-3 px-2 rounded-xl transition-all ${
                     selected === t.base
                       ? 'ring-1 ring-primary/30 bg-primary/8'
-                      : t.available
-                        ? 'bg-surface-container/30 hover:bg-surface-container/50'
-                        : 'bg-surface-container/20 opacity-50 hover:opacity-70'
+                      : 'bg-surface-container/30 hover:bg-surface-container/50'
                   }`}
                 >
                   <AgentIcon base={t.base} color={t.color} size={32} />
                   <div className="text-center">
                     <div className="text-[10px] font-semibold text-on-surface">{t.label}</div>
-                    <div className="text-[8px] text-on-surface-variant/30">{t.available ? (t.provider || 'Ready') : 'Not installed'}</div>
+                    <div className="text-[8px] text-on-surface-variant/30">{t.provider || 'Ready'}</div>
                   </div>
                 </button>
               ))}
             </div>
+            {templates.filter(t => t.available).length === 0 && (
+              <div className="text-center text-[11px] text-on-surface-variant/40 py-4">
+                No agents installed. Install a CLI from the launcher to get started.
+              </div>
+            )}
           </Section>
 
           {/* Display Name */}
