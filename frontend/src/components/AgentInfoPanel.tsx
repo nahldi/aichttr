@@ -155,7 +155,7 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
               <ResponseModeSelector agent={agent} />
             </div>
           ) : tab === 'context' ? (
-            <ContextPanel agent={agent} onClose={onClose} />
+            <ContextPanel agent={agent} />
           ) : (
             <div>
               {/* Search + filter */}
@@ -343,7 +343,7 @@ const MODEL_CONTEXT: Record<string, { tokens: number; label: string }> = {
   ollama: { tokens: 32768, label: '32K tokens' },
 };
 
-function ContextPanel({ agent, onClose }: { agent: Agent; onClose: () => void }) {
+function ContextPanel({ agent }: { agent: Agent }) {
   const messages = useChatStore(s => s.messages);
   const setAgents = useChatStore(s => s.setAgents);
   const [soul, setSoul] = useState('');
