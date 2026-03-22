@@ -1,14 +1,25 @@
 # GhostLink -- Project Status & Handoff
-**Last updated:** 2026-03-21
-**Owner:** Finn (FinnTheDogg / nahlidify / skullmen7272@gmail.com)
+**Last updated:** 2026-03-22
+**Owner:** Finn (FinnTheDogg / nahldi)
 **GitHub:** https://github.com/nahldi/aichttr (repo name is still `aichttr`, contents are GhostLink)
 **License:** MIT
 
 
-## RECENT FIXES (2026-03-22)
+## RECENT FIXES (2026-03-22) — v1.0.0 Bug Fix Pass
+
+### 0. v1.0.0 Bug Fix Pass (latest)
+- **Version sync**: All version references unified to v1.0.0 across package.json, launcher.html, STATUS.md
+- **MCP identity spoofing fixed**: `_resolve_identity()` now requires bearer token for agent names; only human names accepted without token
+- **Assert crashes fixed**: Replaced `assert store._db is not None` in search/export endpoints with proper `RuntimeError`
+- **Auth detection regex fixed**: anthropic.ts and google.ts regex now uses word boundaries and rejects "not authenticated" false positives
+- **Bash OR logic fixed**: openai.ts and google.ts WSL directory checks now use proper parentheses
+- **Updater error handling improved**: Suppresses network errors, DNS failures, missing releases — shows "Up to date" instead of error
+- **Launcher hiding fixed**: Chat window now hides both launcher AND wizard in all code paths
+- **Silent exceptions logged**: 10+ bare `except: pass` blocks now log warnings for debugging
+- **Google auth comment fixed**: Removed incorrect Anthropic install references from google.ts
 
 ### 1. Architectural Cleanup & Git Repository Migration
-- **Distributable Consolidation**: Completely removed the redundant top-level `backend/` and `frontend/` folders from the local workspace. All active development and source code was correctly relocated and isolated into the `aichttrr/` clean distributable directory.
+- **Distributable Consolidation**: Completely removed the redundant top-level `backend/` and `frontend/` folders from the local workspace. All active development and source code was correctly relocated and isolated into the `ghostlink/` clean distributable directory.
 - **Git Repository Optimization**: Pushed the entire updated source code to the private GitHub repository (`https://github.com/nahldi/aichttr`).
 - **Data Privacy & Ignored Files**: Reconfigured `.gitignore` to explicitly exclude all local databases (`backend/data/`), uploaded files (`backend/uploads/`), Python caches (`__pycache__`), and desktop build artifacts (`desktop/dist/`). Restored `config.toml` to a safe boilerplate template with all personal paths removed.
 
@@ -23,7 +34,7 @@
 - **Memory Persistence Scoping (BUG-003)**: Fixed a bug in `backend/app.py` where a global `AgentMemory` instance was incorrectly instantiated without a target agent name. Transitioned all memory-related endpoints to use the dynamic `get_agent_memory(_agent_dir, name)` function to correctly isolate memories to their respective agent subdirectories.
 
 ### 4. Build Artifact Deletion (Accident)
-- **Installer Cleanup Mistake**: During the cleanup of the root directory, mistakenly executed `rm -rf aichttrr/desktop/dist`, inadvertently deleting the pre-built `GhostLink Setup 1.0.3.exe` file. Rebuilding requires execution of `npm run build:win` directly from a Windows shell since cross-compilation within WSL with `wine` fails.
+- **Installer Cleanup Mistake**: During the cleanup of the root directory, mistakenly executed `rm -rf ghostlink/desktop/dist`, inadvertently deleting the pre-built `GhostLink Setup 1.0.3.exe` file. Rebuilding requires execution of `npm run build:win` directly from a Windows shell since cross-compilation within WSL with `wine` fails.
 
 ---
 ---
@@ -35,8 +46,8 @@ You are picking up GhostLink (formerly AI Chattr / aichttr) -- a multi-agent AI 
 The backend is solid and working. The desktop Electron app has auth detection for 4 providers and full server lifecycle management. The frontend is functional with 29 components, 21 slash commands, 9 themes, and extensive keyboard shortcuts.
 
 **Critical rules:**
-- Never push personal data to GitHub. The distributable copy is at `aichttrr/` inside the workspace. The parent `aichttr/` has Finn's personal config (SOUL.md, config.toml with local paths, etc.).
-- Private GitHub repo: `https://github.com/nahldi/aichttr` -- push `aichttrr/` contents only.
+- Never push personal data to GitHub. The distributable copy is at `ghostlink/` inside the workspace. The parent `aichttr/` has Finn's personal config (SOUL.md, config.toml with local paths, etc.).
+- Private GitHub repo: `https://github.com/nahldi/aichttr` -- push `ghostlink/` contents only.
 - Don't rewrite the backend -- it works. Focus on new features and polish.
 - Finn is very particular about visual quality. No generic UIs. Reference: Linear, Raycast, Arc Browser, Warp terminal for aesthetic feel.
 - Test everything: fail test -> fix test -> smoke test -> stress test before shipping.
@@ -49,10 +60,10 @@ The backend is solid and working. The desktop Electron app has auth detection fo
 | Field | Value |
 |-------|-------|
 | Name | GhostLink (formerly AI Chattr / aichttr) |
-| Owner | Finn (FinnTheDogg / nahlidify / skullmen7272@gmail.com) |
+| Owner | Finn (FinnTheDogg / nahldi) |
 | GitHub | https://github.com/nahldi/aichttr |
 | Purpose | Multi-agent AI chat platform -- unified command center for ALL AI agents (Claude, Codex, Gemini, Copilot, Grok, etc.) |
-| Version | v0.2.1+ |
+| Version | v1.0.0 |
 | Port | 8300 (HTTP/WS), 8200 (MCP HTTP), 8201 (MCP SSE) |
 
 ---
@@ -60,14 +71,18 @@ The backend is solid and working. The desktop Electron app has auth detection fo
 ## DIRECTORY STRUCTURE
 
 ```
-C:\Users\skull\Openclaw\MainBot\projects\aichttr\          <-- Finn's personal workspace
-|   STATUS.md               <-- This file
-|   FEATURES.md             <-- Full feature roadmap (Phases 1-7)
-|   SOUL.md                 <-- Personal agent soul file (NEVER push)
+workspace_root/                                            <-- Workspace root (local, not pushed)
+|   SOUL.md / AGENTS.md / IDENTITY.md  <-- Agent personality files (NEVER push)
+|   update_status.py                   <-- Utility script
 |
-+-- backend/                <-- Workspace backend (has personal config.toml -- NEVER push)
-+-- frontend/               <-- Workspace frontend
-+-- aichttrr/               <-- CLEAN DISTRIBUTABLE (this is what goes to GitHub)
++-- ghostlink/               <-- ENTIRE GHOSTLINK PROJECT (this is what goes to GitHub)
+|   |   STATUS.md            <-- This file
+|   |   FEATURES.md          <-- Feature reference
+|   |   ROADMAP.md           <-- Development roadmap (bugs, fixes, features, phases)
+|   |   FeaturesRDM.md       <-- New feature ideas & skills
+|   |   BUGS.md              <-- Known bugs
+|   |   README.md            <-- Public-facing docs
+|   |   DESKTOP_APP_PLAN.md  <-- Electron app architecture
     +-- backend/            <-- Python FastAPI backend
     |   |   app.py          <-- FastAPI server, 55+ endpoints, WebSocket hub, SPA serving
     |   |   mcp_bridge.py   <-- MCP server, 10 chat tools (extensible to 29+)
@@ -76,7 +91,7 @@ C:\Users\skull\Openclaw\MainBot\projects\aichttr\          <-- Finn's personal w
     |   |   store.py        <-- SQLite message store with FTS5 full-text search
     |   |   registry.py     <-- Agent instance registry (hierarchy, health, uptime)
     |   |   router.py       <-- @mention routing + loop guard
-    |   |   skills.py       <-- 23 built-in skills, per-agent enable/disable
+    |   |   skills.py       <-- 16 built-in skills, per-agent enable/disable
     |   |   jobs.py         <-- Job tracking CRUD
     |   |   rules.py        <-- Shared rules CRUD
     |   |   schedules.py    <-- Cron-style scheduled tasks
@@ -151,7 +166,7 @@ C:\Users\skull\Openclaw\MainBot\projects\aichttr\          <-- Finn's personal w
 
 ## BACKEND -- 55+ API ENDPOINTS
 
-All endpoints are defined in `aichttrr/backend/app.py`. Backend runs on port 8300.
+All endpoints are defined in `ghostlink/backend/app.py`. Backend runs on port 8300.
 
 ### Messages
 | Method | Path | Description |
@@ -207,7 +222,7 @@ All endpoints are defined in `aichttrr/backend/app.py`. Backend runs on port 830
 ### Skills
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/skills` | List all 23 built-in skills with metadata |
+| GET | `/api/skills` | List all 16 built-in skills with metadata |
 | GET | `/api/skills/agent/{name}` | Get skill enable/disable state for an agent |
 | POST | `/api/skills/agent/{name}/toggle` | Toggle a skill on/off for an agent |
 
@@ -285,7 +300,7 @@ All endpoints are defined in `aichttrr/backend/app.py`. Backend runs on port 830
 
 ## MCP BRIDGE -- 10 TOOLS (CURRENTLY SHIPPED)
 
-All tools are defined in `aichttrr/backend/mcp_bridge.py`. MCP runs on ports 8200 (HTTP) and 8201 (SSE).
+All tools are defined in `ghostlink/backend/mcp_bridge.py`. MCP runs on ports 8200 (HTTP) and 8201 (SSE).
 
 ### Chat Tools (10 -- all shipped)
 | Tool | Description |
@@ -301,7 +316,7 @@ All tools are defined in `aichttrr/backend/mcp_bridge.py`. MCP runs on ports 820
 | `chat_react` | React to a message with an emoji |
 | `chat_claim` | Claim an agent identity (confirm name/label/base) |
 
-### Planned Tools (19 more -- documented in FEATURES.md, not yet in aichttrr/)
+### Planned Tools (19 more -- documented in FEATURES.md, not yet in ghostlink/)
 | Tool | Description |
 |------|-------------|
 | `web_search` | DuckDuckGo web search (no API key needed) |
@@ -329,7 +344,7 @@ All tools are defined in `aichttrr/backend/mcp_bridge.py`. MCP runs on ports 820
 
 ## FRONTEND -- 29 COMPONENTS
 
-All components are in `aichttrr/frontend/src/components/`.
+All components are in `ghostlink/frontend/src/components/`.
 
 | Component | File | Description |
 |-----------|------|-------------|
@@ -462,7 +477,7 @@ All components are in `aichttrr/frontend/src/components/`.
 
 ## DESKTOP APP (ELECTRON)
 
-Located at `aichttrr/desktop/`. Built with Electron 33 + electron-builder.
+Located at `ghostlink/desktop/`. Built with Electron 33 + electron-builder.
 
 ### Main Process Files
 | File | Description |
@@ -528,7 +543,7 @@ Located at `aichttrr/desktop/`. Built with Electron 33 + electron-builder.
 
 ### Build the Desktop App
 ```bash
-cd aichttrr/desktop
+cd ghostlink/desktop
 npm install
 npx tsc                        # Compile TypeScript
 npx electron-builder --win     # Build Windows .exe
@@ -541,33 +556,26 @@ npx electron-builder --win     # Build Windows .exe
 ## BACKEND INTERNALS
 
 ### Skills Registry (skills.py)
-23 built-in skills, all enabled by default for every agent:
+16 built-in skills, all enabled by default for every agent:
 
 | Skill | Category |
 |-------|----------|
 | web-search | Research |
 | web-fetch | Research |
-| file-read | Files |
-| file-write | Files |
-| file-list | Files |
+| file-browser | Development |
+| git-ops | Development |
 | shell-exec | System |
-| git-status | Development |
-| git-diff | Development |
-| git-log | Development |
-| code-review | Development |
-| test-runner | Development |
-| dependency-scan | Development |
-| performance-audit | Development |
-| docker-manage | DevOps |
-| system-monitor | System |
-| system-info | System |
-| memory-save | Memory |
-| memory-load | Memory |
-| memory-list | Memory |
-| memory-search | Memory |
-| memory-delete | Memory |
-| notes-save | Notes |
-| notes-load | Notes |
+| code-analysis | Development |
+| screenshot | Creative |
+| image-analysis | Creative |
+| pdf-reader | Data |
+| calculator | System |
+| notes | System |
+| github-issues | Development |
+| web-perf | Development |
+| accessibility | Development |
+| weather | Data |
+| timer | System |
 
 ### Agent Templates (12 Known CLIs)
 The backend detects these AI CLIs and offers them as spawn templates:
@@ -612,7 +620,7 @@ Each provider has tailored CLI flags:
 
 1. **WebSocket `/ws` vs SPA catch-all conflict:** The `/{path}` catch-all route for SPA serving conflicts with the WebSocket `/ws` endpoint. Currently using exception-based SPA fallback that checks Accept headers. Browser WebSocket connections work (curl test confirmed connection accepted), but Python `websockets` library v15 returns HTTP 404 in automated tests.
 
-2. **OneDrive paths inaccessible from WSL:** Windows OneDrive-synced paths (e.g., `C:\Users\skull\OneDrive\...`) cannot be accessed from WSL. The desktop app's `server.ts` works around this by copying backend files to `/tmp/ghostlink-backend/` before launching.
+2. **OneDrive paths inaccessible from WSL:** Windows OneDrive-synced paths cannot be accessed from WSL. The desktop app's `server.ts` works around this by copying backend files to `/tmp/ghostlink-backend/` before launching.
 
 3. **WSL Python 3.12+ requires venv (PEP 668):** System pip is restricted on newer Python. The desktop app's `server.ts` automatically creates a venv and installs dependencies there.
 
@@ -633,23 +641,23 @@ Each provider has tailored CLI flags:
 ### Web App (Development)
 ```bash
 # Start the backend
-cd aichttrr/backend
+cd ghostlink/backend
 source ../.venv/bin/activate   # Or create venv: python3 -m venv ../.venv && source ../.venv/bin/activate && pip install -r requirements.txt
 python app.py                  # Runs on http://127.0.0.1:8300
 
 # Build the frontend (one-time or after changes)
-cd aichttrr/frontend
+cd ghostlink/frontend
 npm install
 npm run build                  # Output goes to dist/, served by backend
 
 # Launch an agent manually
-cd aichttrr/backend
+cd ghostlink/backend
 python wrapper.py claude --headless
 ```
 
 ### Desktop App
 ```bash
-cd aichttrr/desktop
+cd ghostlink/desktop
 npm install
 npx tsc                        # Compile TypeScript -> JavaScript
 npx electron-builder --win     # Build Windows installer (.exe)
@@ -658,10 +666,10 @@ npx electron-builder --win     # Build Windows installer (.exe)
 ### Deploy to GitHub
 ```bash
 # Verify no personal data leaked
-grep -rn "skull\|Finn\|nahlidify" aichttrr/backend/*.py
+grep -rn "personal_data_patterns" ghostlink/backend/*.py
 
 # Push
-cd aichttrr
+cd ghostlink
 git add -A
 git commit -m "description of changes"
 git push
@@ -690,7 +698,7 @@ git push
 - **Model selector per provider** -- Correct model aliases for each provider (Claude: opus, sonnet, haiku; Codex: o4-mini, o3; etc.).
 - **Native OS file picker** -- PowerShell-based folder picker (WSL), not an in-app file browser.
 - **User messages always right-aligned** -- Non-negotiable UI rule.
-- **No personal data in distributed code** -- Workspace (`aichttr/`) has personal config; distributable (`aichttrr/`) is clean.
+- **No personal data in distributed code** -- Workspace root has personal config; distributable (`ghostlink/`) is clean.
 - **Config.toml never overwritten** -- UI operations never clobber the agent config file.
 - **MCP dual transport** -- HTTP (port 8200) for agents that support streamable-http, SSE (port 8201) for agents that need SSE.
 

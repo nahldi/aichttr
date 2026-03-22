@@ -57,7 +57,7 @@ export async function checkOpenAI(): Promise<AuthStatus> {
       });
 
       const checkDirs = await execAsync(
-        `wsl bash -c "test -d '${wslHome}/.codex' || test -d '${wslHome}/.config/codex' && echo found"`,
+        `wsl bash -c "(test -d '${wslHome}/.codex' || test -d '${wslHome}/.config/codex') && echo found"`,
         { encoding: 'utf-8', timeout: 5_000, stdio: ['pipe', 'pipe', 'pipe'] }
       );
       if (String(checkDirs).includes('found')) {

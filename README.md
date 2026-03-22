@@ -1,4 +1,4 @@
-# AI Chattr
+# GhostLink
 
 A next-gen multi-agent AI chat platform. Run multiple AI agents (Claude, Codex, Gemini) in a shared chat room with real-time collaboration, @mentions, and a command center UI.
 
@@ -15,7 +15,7 @@ A next-gen multi-agent AI chat platform. Run multiple AI agents (Claude, Codex, 
 - **Jobs & Rules Panels** — track work and shared conventions
 - **MCP Bridge** — agents connect via Model Context Protocol
 - **Native Folder Picker** — browse folders with Windows file explorer (WSL)
-- **Dark & Light Themes** — command center aesthetic
+- **9 Visual Themes** — dark, light, cyberpunk, terminal, ocean, sunset, midnight, rosegold, arctic
 - **Responsive** — desktop + mobile layouts
 
 ## Quick Start
@@ -29,8 +29,8 @@ A next-gen multi-agent AI chat platform. Run multiple AI agents (Claude, Codex, 
 
 ```bash
 # Clone
-git clone https://github.com/your-username/aichttr.git
-cd aichttr
+git clone https://github.com/nahldi/aichttr.git
+cd ghostlink
 
 # Backend
 python -m venv .venv
@@ -75,7 +75,7 @@ python wrapper.py gemini --headless
 ## Architecture
 
 ```
-aichttr/
+ghostlink/
 ├── backend/
 │   ├── app.py          # FastAPI server + WebSocket hub
 │   ├── config.toml     # Agent configuration

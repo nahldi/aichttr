@@ -3,7 +3,7 @@ export interface Message {
   uid: string;
   sender: string;
   text: string;
-  type: 'chat' | 'system' | 'proposal' | 'join' | 'decision' | 'rule_proposal' | 'job_proposal';
+  type: 'chat' | 'system' | 'proposal' | 'join' | 'decision' | 'rule_proposal' | 'job_proposal' | 'approval_request' | 'progress';
   timestamp: number;
   time: string;
   channel: string;
@@ -32,6 +32,7 @@ export interface Agent {
   state: 'active' | 'idle' | 'pending' | 'offline' | 'thinking' | 'paused';
   slot: number;
   role?: 'manager' | 'worker' | 'peer';
+  responseMode?: 'mentioned' | 'always' | 'listen' | 'silent';
   parent?: string;
   workspace?: string;
   command?: string;
@@ -106,6 +107,7 @@ export interface Settings {
   debugMode: boolean;
   showStatsPanel: boolean;
   statsSections: StatsSections;
+  autoRoute?: boolean;
   channels?: string[];
   persistentAgents?: PersistentAgent[];
 }
@@ -158,4 +160,6 @@ export type WSEvent =
   | { type: 'pin'; data: { message_id: number; pinned: boolean } }
   | { type: 'delete'; data: { message_ids: number[] } }
   | { type: 'reaction'; data: { message_id: number; reactions: Record<string, string[]> } }
-  | { type: 'activity'; data: ActivityEvent };
+  | { type: 'activity'; data: ActivityEvent }
+  | { type: 'approval_response'; data: { agent: string; response: string; message_id: number } }
+  | { type: 'system'; data: Record<string, unknown> };

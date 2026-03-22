@@ -160,4 +160,113 @@ export const api = {
 
   getTunnelStatus: () =>
     request<{ active: boolean; url: string | null }>('/api/tunnel/status'),
+
+  // Skills
+  getSkills: (category?: string, search?: string) => {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (search) params.set('search', search);
+    return request<{ skills: any[]; categories: string[] }>('/api/skills?' + params);
+  },
+
+  getAgentSkills: (agentName: string) =>
+    request<{ skills: any[]; agent: string }>('/api/skills/agent/' + encodeURIComponent(agentName)),
+
+  toggleAgentSkill: (agentName: string, skillId: string, enabled: boolean) =>
+    request('/api/skills/agent/' + encodeURIComponent(agentName) + '/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ skillId, enabled }),
+    }),
+
+  // URL preview
+  getUrlPreview: (url: string) =>
+    request<{ url: string; title: string; description: string; image: string; site_name: string }>(
+      '/api/preview?url=' + encodeURIComponent(url)
+    ),
+
+  // Approval prompts
+  respondApproval: (agent: string, response: string, messageId: number) =>
+    request<{ ok: boolean }>('/api/approval/respond', {
+      method: 'POST',
+      body: JSON.stringify({ agent, response, message_id: messageId }),
+    }),
+
+  // Dashboard
+  getDashboard: () =>
+    request<{
+      total_messages: number;
+      messages_by_channel: Record<string, number>;
+      messages_by_sender: Record<string, number>;
+      hourly_messages: Record<string, number>;
+      agents_total: number;
+      agents_online: number;
+      total_tokens: number;
+      usage_by_agent: Record<string, number>;
+      estimated_cost: number;
+      channels: number;
+      uptime_seconds: number;
+    }>('/api/dashboard'),
+
+  // Agent feedback
+  sendFeedback: (agentName: string, messageId: number, rating: 'up' | 'down') =>
+    request<{ ok: boolean }>('/api/agents/' + encodeURIComponent(agentName) + '/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ message_id: messageId, rating }),
+    }),
+
+  // Session snapshots
+  exportSnapshot: () =>
+    request<{ version: string; settings: any; agents: any[]; channels: string[]; messages: any[]; jobs: any[]; rules: any[] }>('/api/snapshot'),
+
+  importSnapshot: (snapshot: Record<string, unknown>) =>
+    request<{ ok: boolean; imported_messages: number; channels: string[] }>('/api/snapshot/import', {
+      method: 'POST',
+      body: JSON.stringify(snapshot),
+    }),
+
+  // Message templates
+  getTemplates: () =>
+    request<{ templates: { id: string; name: string; text: string; category: string; created_at: number }[] }>('/api/templates'),
+
+  createTemplate: (name: string, text: string, category?: string) =>
+    request<{ id: string; name: string; text: string }>('/api/templates', {
+      method: 'POST',
+      body: JSON.stringify({ name, text, category }),
+    }),
+
+  deleteTemplate: (id: string) =>
+    request<{ ok: boolean }>('/api/templates/' + id, { method: 'DELETE' }),
+
+  // DM channels
+  createDmChannel: (agent1: string, agent2: string) =>
+    request<{ channel: string; agents: string[] }>('/api/dm-channel', {
+      method: 'POST',
+      body: JSON.stringify({ agent1, agent2 }),
+    }),
+
+  // Terminal peek
+  peekTerminal: (agentName: string, lines?: number) =>
+    request<{ name: string; output: string; active: boolean }>(
+      `/api/agents/${encodeURIComponent(agentName)}/terminal?lines=${lines || 30}`
+    ),
+
+  // Schedules
+  getSchedules: () =>
+    request<{ schedules: any[] }>('/api/schedules'),
+
+  createSchedule: (cronExpr: string, agent: string, command: string, channel?: string) =>
+    request('/api/schedules', {
+      method: 'POST',
+      body: JSON.stringify({ cron_expr: cronExpr, agent, command, channel }),
+    }),
+
+  deleteSchedule: (id: number) =>
+    request<{ ok: boolean }>('/api/schedules/' + id, { method: 'DELETE' }),
+
+  // Agent config
+  setAgentConfig: (name: string, config: Record<string, any>) =>
+    request('/api/agents/' + encodeURIComponent(name) + '/config', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    }),
 };

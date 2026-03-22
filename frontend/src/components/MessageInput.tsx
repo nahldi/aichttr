@@ -9,10 +9,29 @@ interface SlashCommand {
   execute: () => void;
 }
 
+// Command history stored in localStorage
+const HISTORY_KEY = 'ghostlink_cmd_history';
+const MAX_HISTORY = 100;
+
+function getHistory(): string[] {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+}
+function pushHistory(msg: string) {
+  try {
+    const h = getHistory().filter(m => m !== msg);
+    h.push(msg);
+    if (h.length > MAX_HISTORY) h.shift();
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+  } catch { /* localStorage full or unavailable — ignore */ }
+}
+
 export function MessageInput() {
   const [text, setText] = useState('');
   const [cursorPos, setCursorPos] = useState(0);
   const [slashIndex, setSlashIndex] = useState(0);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [savedDraft, setSavedDraft] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeChannel = useChatStore((s) => s.activeChannel);
   const settings = useChatStore((s) => s.settings);
@@ -226,6 +245,20 @@ export function MessageInput() {
       },
     },
     {
+      name: '/consensus',
+      description: 'Ask all agents a question',
+      execute: () => {
+        addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: 'Usage: /consensus [question]\nAsks all online agents the same question independently.', type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
+      },
+    },
+    {
+      name: '/debate',
+      description: 'Start a debate between two agents',
+      execute: () => {
+        addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: 'Usage: /debate [agent1] [agent2] [topic]\nStarts a structured debate between two agents.', type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
+      },
+    },
+    {
       name: '/spawn',
       description: 'Launch agent: /spawn [base] [label]',
       execute: () => {
@@ -341,9 +374,11 @@ export function MessageInput() {
         const agentName = parts[1];
         const role = parts[2] as 'manager' | 'worker' | 'peer';
         if (['manager', 'worker', 'peer'].includes(role)) {
-          sysMsg(`Setting ${agentName} role to ${role}`);
-          // Send as a chat message so the backend can process it
-          api.sendMessage(settings.username, trimmed, activeChannel).catch(() => {});
+          sysMsg(`Setting ${agentName} role to ${role}...`);
+          api.setAgentConfig(agentName, { role }).then(() => {
+            sysMsg(`${agentName} is now a ${role}`);
+            api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch(() => {});
+          }).catch(() => sysMsg(`Failed to set role — agent "${agentName}" may not be registered`));
         } else {
           sysMsg('Invalid role. Use: manager, worker, or peer');
         }
@@ -376,6 +411,36 @@ export function MessageInput() {
         return;
       }
 
+      if (cmdName === '/consensus' && parts.length >= 2) {
+        const question = parts.slice(1).join(' ');
+        const onlineAgents = agents.filter(a => a.state === 'active' || a.state === 'thinking');
+        if (onlineAgents.length === 0) {
+          sysMsg('No agents online. Start an agent first.');
+        } else {
+          sysMsg(`Consensus: asking ${onlineAgents.length} agents — "${question}"`);
+          // Send the question @all so every agent gets it
+          api.sendMessage(settings.username, `@all ${question}`, activeChannel).catch(() => {});
+        }
+        setText('');
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+        return;
+      }
+
+      if (cmdName === '/debate' && parts.length >= 4) {
+        const agent1 = parts[1];
+        const agent2 = parts[2];
+        const topic = parts.slice(3).join(' ');
+        sysMsg(`Debate started: @${agent1} (FOR) vs @${agent2} (AGAINST)\nTopic: ${topic}`);
+        // Send initial prompts to both agents
+        api.sendMessage(settings.username, `@${agent1} You are arguing FOR the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch(() => {});
+        setTimeout(() => {
+          api.sendMessage(settings.username, `@${agent2} You are arguing AGAINST the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch(() => {});
+        }, 1000);
+        setText('');
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+        return;
+      }
+
       if (cmdName === '/ping' && parts.length >= 2) {
         const agentName = parts[1];
         const agent = agents.find(a => a.name === agentName);
@@ -400,6 +465,9 @@ export function MessageInput() {
     }
 
     try {
+      pushHistory(trimmed);
+      setHistoryIndex(-1);
+      setSavedDraft('');
       await api.sendMessage(settings.username, trimmed, activeChannel, replyTo?.id);
       setText('');
       setReplyTo(null);
@@ -466,6 +534,35 @@ export function MessageInput() {
         return;
       }
     }
+    // Command history: Up/Down when input is empty or already browsing history
+    if (e.key === 'ArrowUp' && !showSlash && !isOpen) {
+      const ta = textareaRef.current;
+      // Only activate if cursor is at start of input (or input is empty)
+      if (ta && (ta.selectionStart === 0 || text === '')) {
+        const history = getHistory();
+        if (history.length > 0) {
+          e.preventDefault();
+          if (historyIndex === -1) setSavedDraft(text);
+          const newIdx = historyIndex === -1 ? history.length - 1 : Math.max(0, historyIndex - 1);
+          setHistoryIndex(newIdx);
+          setText(history[newIdx]);
+        }
+        return;
+      }
+    }
+    if (e.key === 'ArrowDown' && !showSlash && !isOpen && historyIndex >= 0) {
+      e.preventDefault();
+      const history = getHistory();
+      const newIdx = historyIndex + 1;
+      if (newIdx >= history.length) {
+        setHistoryIndex(-1);
+        setText(savedDraft);
+      } else {
+        setHistoryIndex(newIdx);
+        setText(history[newIdx]);
+      }
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -520,8 +617,41 @@ export function MessageInput() {
     input.click();
   };
 
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        try {
+          const result = await api.uploadImage(file);
+          if (result.url) {
+            setText((prev) => prev + `![${file.name}](${result.url})`);
+          }
+        } catch (err) {
+          console.error('Upload failed:', err);
+        }
+      }
+    }
+  };
+
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+    >
+      {/* Drop zone overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary/40 rounded-xl backdrop-blur-sm">
+          <div className="flex items-center gap-2 text-primary text-sm font-medium">
+            <span className="material-symbols-outlined">cloud_upload</span>
+            Drop files to upload
+          </div>
+        </div>
+      )}
+
       {/* Reply indicator */}
       {replyTo && (
         <div className="w-full flex items-center gap-2 px-4 py-2 bg-surface-container border-t border-outline-variant/10 text-xs text-on-surface-variant">

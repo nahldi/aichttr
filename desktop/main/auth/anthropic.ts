@@ -53,7 +53,7 @@ export async function checkAnthropic(): Promise<AuthStatus> {
   // Check auth status via CLI
   try {
     const output = await execCmd('claude auth status');
-    if (/logged in|authenticated|active/i.test(output)) {
+    if (/\b(logged in|authenticated|active)\b/i.test(output) && !/not (logged in|authenticated|active)/i.test(output)) {
       const userMatch = output.match(/(?:as|user|email|account)\s+(\S+)/i);
       return { ...base, authenticated: true, user: userMatch ? userMatch[1] : '(session)' };
     }

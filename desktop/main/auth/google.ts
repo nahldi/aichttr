@@ -1,10 +1,8 @@
 /**
  * Google / Gemini CLI authentication provider.
  *
- * Install: `npm install -g @anthropic-ai/claude-code` style install
- *          Gemini CLI: `npm install -g @anthropic-ai/claude-code` (placeholder)
- *          Or use Google AI Studio API key: GOOGLE_API_KEY / GEMINI_API_KEY
- * Auth:    `gemini auth login` or API key env var
+ * Install: `pip install google-genai` or use Google AI Studio API key
+ * Auth:    `gemini auth login`, `gcloud auth login`, or GOOGLE_API_KEY / GEMINI_API_KEY env var
  */
 
 import { exec } from 'child_process';
@@ -60,7 +58,7 @@ export async function checkGoogle(): Promise<AuthStatus> {
   if (geminiInstalled) {
     try {
       const output = await execCmd('gemini auth status');
-      if (/logged in|authenticated|active/i.test(output) || output.length > 0) {
+      if ((/\b(logged in|authenticated|active)\b/i.test(output) && !/not (logged in|authenticated|active)/i.test(output)) || output.length > 0) {
         const userMatch = output.match(/(?:as|user|email|account)\s+(\S+)/i);
         return { ...base, authenticated: true, user: userMatch ? userMatch[1] : undefined };
       }
@@ -78,7 +76,7 @@ export async function checkGoogle(): Promise<AuthStatus> {
         encoding: 'utf-8', timeout: 5_000, stdio: ['pipe', 'pipe', 'pipe'],
       });
       const checkDirs = await execAsync(
-        `wsl bash -c "test -d '${wslHome}/.config/gemini' || test -d '${wslHome}/.gemini' && echo found"`,
+        `wsl bash -c "(test -d '${wslHome}/.config/gemini' || test -d '${wslHome}/.gemini') && echo found"`,
         { encoding: 'utf-8', timeout: 5_000, stdio: ['pipe', 'pipe', 'pipe'] }
       );
       if (String(checkDirs).includes('found')) {

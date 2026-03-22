@@ -17,7 +17,9 @@ How it works:
 
 import json
 import os
+import re
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -86,8 +88,8 @@ def _read_project_mcp_servers(project_dir: Path) -> dict:
             servers = data.get("mcpServers", {})
             servers.pop(SERVER_NAME, None)
             return servers
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  Warning: failed to read .mcp.json: {e}")
     return {}
 
 
@@ -229,6 +231,175 @@ def _auth_headers(token: str, *, include_json: bool = False) -> dict[str, str]:
     return headers
 
 
+# ── Approval prompt detection ──────────────────────────────────────
+
+# Patterns that match permission/approval prompts in CLI output.
+# Checked against the last 15 lines of tmux pane output.
+_APPROVAL_PATTERNS = [
+    # Claude Code: "Allow tool_name? (y/n)" or "(y)es, (n)o, (a)lways"
+    re.compile(r'(?:Allow|Approve|Permit).*\?\s*\(([yYnNaA/\s,]+)\)\s*$', re.MULTILINE | re.IGNORECASE),
+    # Numbered options: "1) Allow once  2) Allow all  3) Deny"
+    re.compile(
+        r'(?:^|\n)\s*1[.\)]\s*(?:Allow|Yes|Accept|Approve).*'
+        r'(?:\n\s*2[.\)]\s*(?:Allow|Yes|Accept|Approve|Session).*)?'
+        r'\n\s*(?:2|3)[.\)]\s*(?:Deny|No|Reject|Cancel)',
+        re.MULTILINE | re.IGNORECASE,
+    ),
+    # Generic y/n with question: "Do you want to allow...? [y/N]"
+    re.compile(
+        r'(?:Do you want to|Would you like to|Should I)\s+'
+        r'(?:allow|approve|permit|run|execute|proceed).*\?\s*'
+        r'[\[\(]([yYnNaA/]+)[\]\)]',
+        re.MULTILINE | re.IGNORECASE,
+    ),
+    # Approve plan / sandbox prompt: "Approve? (y/n)"
+    re.compile(r'(?:Approve|Confirm|Continue)\??\s*[\[\(]([yYnNaA/]+)[\]\)]', re.MULTILINE | re.IGNORECASE),
+]
+
+# Key mappings: what key to inject for each response, per agent base
+_APPROVAL_KEYMAPS: dict[str, dict[str, str]] = {
+    "claude":   {"allow_once": "y", "allow_session": "a", "deny": "n"},
+    "codex":    {"allow_once": "y", "allow_session": "a", "deny": "n"},
+    "gemini":   {"allow_once": "y", "allow_session": "a", "deny": "n"},
+    "_default": {"allow_once": "y", "allow_session": "a", "deny": "n"},
+}
+
+
+def _approval_watcher(
+    session_name: str,
+    get_identity_fn,
+    agent_base: str,
+    *,
+    server_port: int = 8300,
+    data_dir: Path,
+):
+    """Watch tmux pane for permission prompts, post to chat UI, wait for response, inject."""
+    import urllib.request
+
+    last_prompt_hash: int | None = None
+    waiting = False
+    waiting_since = 0.0
+    APPROVAL_TIMEOUT = 120  # seconds before auto-deny
+
+    while True:
+        try:
+            current_name, _ = get_identity_fn()
+            response_file = data_dir / f"{current_name}_approval.json"
+
+            if waiting:
+                # Check for response file
+                if response_file.exists():
+                    try:
+                        resp_data = json.loads(response_file.read_text("utf-8"))
+                        response_file.unlink(missing_ok=True)
+                    except Exception:
+                        response_file.unlink(missing_ok=True)
+                        waiting = False
+                        last_prompt_hash = None
+                        time.sleep(1)
+                        continue
+
+                    response = resp_data.get("response", "deny")
+                    keymap = _APPROVAL_KEYMAPS.get(agent_base, _APPROVAL_KEYMAPS["_default"])
+                    key = keymap.get(response, "n")
+
+                    # Inject the key into tmux
+                    subprocess.run(
+                        ["tmux", "send-keys", "-t", session_name, key],
+                        capture_output=True, timeout=3,
+                    )
+                    time.sleep(0.1)
+                    subprocess.run(
+                        ["tmux", "send-keys", "-t", session_name, "Enter"],
+                        capture_output=True, timeout=3,
+                    )
+
+                    waiting = False
+                    last_prompt_hash = None
+                    time.sleep(1)
+                    continue
+
+                # Check for timeout
+                if time.time() - waiting_since > APPROVAL_TIMEOUT:
+                    # Auto-deny after timeout
+                    keymap = _APPROVAL_KEYMAPS.get(agent_base, _APPROVAL_KEYMAPS["_default"])
+                    subprocess.run(
+                        ["tmux", "send-keys", "-t", session_name, keymap["deny"]],
+                        capture_output=True, timeout=3,
+                    )
+                    time.sleep(0.1)
+                    subprocess.run(
+                        ["tmux", "send-keys", "-t", session_name, "Enter"],
+                        capture_output=True, timeout=3,
+                    )
+                    response_file.unlink(missing_ok=True)
+                    waiting = False
+                    last_prompt_hash = None
+
+                time.sleep(0.5)
+                continue
+
+            # Capture last 15 lines of tmux pane
+            result = subprocess.run(
+                ["tmux", "capture-pane", "-t", session_name, "-p", "-S", "-15"],
+                capture_output=True, timeout=3,
+            )
+            if result.returncode != 0:
+                time.sleep(2)
+                continue
+
+            pane_text = result.stdout.decode("utf-8", errors="replace")
+            if not pane_text.strip():
+                time.sleep(1)
+                continue
+
+            # Check for approval patterns
+            for pattern in _APPROVAL_PATTERNS:
+                match = pattern.search(pane_text)
+                if match:
+                    prompt_hash = hash(match.group(0).strip())
+                    if prompt_hash == last_prompt_hash:
+                        break  # Already sent this prompt
+
+                    # Extract context: last 10 non-empty lines
+                    lines = [l for l in pane_text.strip().split('\n') if l.strip()]
+                    context = '\n'.join(lines[-10:])
+
+                    # Post to chat as approval_request message
+                    try:
+                        body = json.dumps({
+                            "sender": current_name,
+                            "text": f"Permission prompt from {current_name}",
+                            "type": "approval_request",
+                            "channel": "general",
+                            "metadata": json.dumps({
+                                "agent": current_name,
+                                "prompt": context,
+                                "options": ["allow_once", "allow_session", "deny"],
+                            }),
+                        }).encode()
+                        req = urllib.request.Request(
+                            f"http://127.0.0.1:{server_port}/api/send",
+                            data=body,
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        )
+                        urllib.request.urlopen(req, timeout=5)
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).debug("Failed to post approval request: %s", e)
+
+                    last_prompt_hash = prompt_hash
+                    waiting = True
+                    waiting_since = time.time()
+                    break
+
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug("Approval watcher error: %s", e)
+        time.sleep(1)
+
+
 # ── Queue watcher ───────────────────────────────────────────────────
 
 def _queue_watcher(get_identity_fn, inject_fn, *, server_port: int = 8300,
@@ -271,8 +442,9 @@ def _queue_watcher(get_identity_fn, inject_fn, *, server_port: int = 8300,
                         prompt = f"mcp read #{channel} - you were mentioned, take appropriate action"
 
                     inject_fn(prompt.replace("\n", " "))
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug("Queue watcher error: %s", e)
         time.sleep(1)
 
 
@@ -524,10 +696,21 @@ def main():
 
     threading.Thread(target=_activity_monitor, daemon=True).start()
 
+    # Approval prompt watcher — detects CLI permission prompts in tmux
+    session_name = f"ghostlink-{assigned_name}"
+    threading.Thread(
+        target=_approval_watcher,
+        args=(session_name, get_identity, agent),
+        kwargs={
+            "server_port": server_port,
+            "data_dir": data_dir,
+        },
+        daemon=True,
+    ).start()
+
     # Run agent
     from wrapper_unix import get_activity_checker, run_agent
 
-    session_name = f"ghostlink-{assigned_name}"
     _activity_checker = get_activity_checker(session_name, trigger_flag=_trigger_flag)
 
     try:

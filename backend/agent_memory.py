@@ -7,17 +7,29 @@ with individual JSON files for each memory key.
 from __future__ import annotations
 
 import json
+import re
+import threading
 import time
 from pathlib import Path
+
+_SAFE_NAME = re.compile(r'^[a-zA-Z0-9_-]{1,50}$')
+
+
+def _sanitize_agent_name(name: str) -> str:
+    """Ensure agent name is safe for filesystem use."""
+    if not _SAFE_NAME.match(name):
+        raise ValueError(f"Invalid agent name: {name!r}")
+    return name
 
 
 class AgentMemory:
     """Persistent memory store for a single agent."""
 
     def __init__(self, data_dir: Path, agent_name: str):
-        self.agent_name = agent_name
-        self.memory_dir = data_dir / agent_name / "memory"
+        self.agent_name = _sanitize_agent_name(agent_name)
+        self.memory_dir = data_dir / self.agent_name / "memory"
         self.memory_dir.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
 
     def _key_path(self, key: str) -> Path:
         """Get the file path for a memory key (sanitized)."""
@@ -36,73 +48,77 @@ class AgentMemory:
             "created_at": time.time(),
             "updated_at": time.time(),
         }
-        # Preserve created_at if updating
-        if path.exists():
-            try:
-                existing = json.loads(path.read_text("utf-8"))
-                entry["created_at"] = existing.get("created_at", entry["created_at"])
-            except Exception:
-                pass
-        path.write_text(json.dumps(entry, indent=2, ensure_ascii=False), "utf-8")
+        with self._lock:
+            # Preserve created_at if updating
+            if path.exists():
+                try:
+                    existing = json.loads(path.read_text("utf-8"))
+                    entry["created_at"] = existing.get("created_at", entry["created_at"])
+                except Exception:
+                    pass
+            path.write_text(json.dumps(entry, indent=2, ensure_ascii=False), "utf-8")
         return {"key": key, "status": "saved", "path": str(path)}
 
     def load(self, key: str) -> dict | None:
         """Load a memory entry by key. Returns None if not found."""
         path = self._key_path(key)
-        if not path.exists():
-            return None
-        try:
-            return json.loads(path.read_text("utf-8"))
-        except Exception:
-            return None
+        with self._lock:
+            if not path.exists():
+                return None
+            try:
+                return json.loads(path.read_text("utf-8"))
+            except Exception:
+                return None
 
     def list_all(self) -> list[dict]:
         """List all memory keys with metadata (no content)."""
         entries = []
-        if not self.memory_dir.exists():
-            return entries
-        for f in sorted(self.memory_dir.glob("*.json")):
-            try:
-                data = json.loads(f.read_text("utf-8"))
-                entries.append({
-                    "key": data.get("key", f.stem),
-                    "updated_at": data.get("updated_at", 0),
-                    "created_at": data.get("created_at", 0),
-                    "size": len(data.get("content", "")),
-                })
-            except Exception:
-                entries.append({"key": f.stem, "error": "corrupt"})
+        with self._lock:
+            if not self.memory_dir.exists():
+                return entries
+            for f in sorted(self.memory_dir.glob("*.json")):
+                try:
+                    data = json.loads(f.read_text("utf-8"))
+                    entries.append({
+                        "key": data.get("key", f.stem),
+                        "updated_at": data.get("updated_at", 0),
+                        "created_at": data.get("created_at", 0),
+                        "size": len(data.get("content", "")),
+                    })
+                except Exception:
+                    entries.append({"key": f.stem, "error": "corrupt"})
         return entries
 
     def search(self, query: str) -> list[dict]:
         """Search memories by keyword (case-insensitive substring match)."""
         query_lower = query.lower()
         results = []
-        if not self.memory_dir.exists():
-            return results
-        for f in sorted(self.memory_dir.glob("*.json")):
-            try:
-                data = json.loads(f.read_text("utf-8"))
-                key = data.get("key", f.stem)
-                content = data.get("content", "")
-                if query_lower in key.lower() or query_lower in content.lower():
-                    # Return a preview, not the full content
-                    preview = content[:200] + ("..." if len(content) > 200 else "")
-                    results.append({
-                        "key": key,
-                        "preview": preview,
-                        "updated_at": data.get("updated_at", 0),
-                    })
-            except Exception:
-                pass
+        with self._lock:
+            if not self.memory_dir.exists():
+                return results
+            for f in sorted(self.memory_dir.glob("*.json")):
+                try:
+                    data = json.loads(f.read_text("utf-8"))
+                    key = data.get("key", f.stem)
+                    content = data.get("content", "")
+                    if query_lower in key.lower() or query_lower in content.lower():
+                        preview = content[:200] + ("..." if len(content) > 200 else "")
+                        results.append({
+                            "key": key,
+                            "preview": preview,
+                            "updated_at": data.get("updated_at", 0),
+                        })
+                except Exception:
+                    pass
         return results
 
     def delete(self, key: str) -> bool:
         """Delete a memory entry. Returns True if deleted."""
         path = self._key_path(key)
-        if path.exists():
-            path.unlink()
-            return True
+        with self._lock:
+            if path.exists():
+                path.unlink()
+                return True
         return False
 
 
@@ -130,6 +146,7 @@ _DEFAULT_SOUL = (
 
 def get_soul(data_dir: Path, agent_name: str) -> str:
     """Load the agent's soul/identity prompt."""
+    agent_name = _sanitize_agent_name(agent_name)
     soul_path = data_dir / agent_name / "soul.txt"
     if soul_path.exists():
         try:
@@ -141,6 +158,7 @@ def get_soul(data_dir: Path, agent_name: str) -> str:
 
 def set_soul(data_dir: Path, agent_name: str, soul: str) -> str:
     """Save the agent's soul/identity prompt."""
+    agent_name = _sanitize_agent_name(agent_name)
     agent_dir = data_dir / agent_name
     agent_dir.mkdir(parents=True, exist_ok=True)
     soul_path = agent_dir / "soul.txt"
@@ -152,6 +170,7 @@ def set_soul(data_dir: Path, agent_name: str, soul: str) -> str:
 
 def get_notes(data_dir: Path, agent_name: str) -> str:
     """Load the agent's working notes."""
+    agent_name = _sanitize_agent_name(agent_name)
     notes_path = data_dir / agent_name / "notes.txt"
     if notes_path.exists():
         try:
@@ -163,6 +182,7 @@ def get_notes(data_dir: Path, agent_name: str) -> str:
 
 def set_notes(data_dir: Path, agent_name: str, content: str) -> str:
     """Save the agent's working notes."""
+    agent_name = _sanitize_agent_name(agent_name)
     agent_dir = data_dir / agent_name
     agent_dir.mkdir(parents=True, exist_ok=True)
     notes_path = agent_dir / "notes.txt"

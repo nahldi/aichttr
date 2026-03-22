@@ -435,6 +435,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     $portDisplay.textContent = 'Port: ' + status.port;
   }
 
+  // Show loading state while checking auth
+  const loadingDiv = document.createElement('div');
+  loadingDiv.style.cssText = 'text-align:center;padding:12px;color:rgba(255,255,255,0.3);font-size:11px;display:flex;align-items:center;justify-content:center;gap:8px';
+  const spinner = document.createElement('div');
+  spinner.className = 'spinner';
+  spinner.style.cssText = 'width:14px;height:14px;border:2px solid rgba(255,255,255,0.1);border-top-color:rgba(167,139,250,0.6);border-radius:50%;animation:spin 0.8s linear infinite';
+  loadingDiv.appendChild(spinner);
+  loadingDiv.appendChild(document.createTextNode('Checking connections...'));
+  $providers.appendChild(loadingDiv);
   // Fetch auth statuses
   api.invoke('auth:check-all');
 

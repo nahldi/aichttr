@@ -18,6 +18,47 @@ import { SearchModal } from './components/SearchModal';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { RemoteSession } from './components/RemoteSession';
+import { OnboardingTour } from './components/OnboardingTour';
+import { HelpPanel } from './components/HelpPanel';
+
+const CONVERSATION_STARTERS = [
+  { text: 'Ask @claude to review your code', icon: 'code' },
+  { text: 'Brainstorm with @all agents', icon: 'psychology' },
+  { text: 'Start a new task with @codex', icon: 'task_alt' },
+  { text: 'Research a topic with @gemini', icon: 'search' },
+  { text: 'Check /status of all agents', icon: 'monitoring' },
+  { text: 'Type /help for commands', icon: 'help' },
+];
+
+function ConversationStarters({ channel }: { channel: string }) {
+  const settings = useChatStore((s) => s.settings);
+  const sendMessage = (text: string) => {
+    api.sendMessage(settings.username, text, channel).catch(() => {});
+  };
+  return (
+    <div className="flex flex-col items-center justify-center h-full text-center py-12">
+      <img src="/ghostlink.png" alt="GhostLink" className="w-14 h-14 mb-4 opacity-40" style={{ filter: 'invert(1)' }} />
+      <div className="text-sm font-semibold text-on-surface/40 mb-1">
+        #{channel}
+      </div>
+      <div className="text-xs text-on-surface-variant/30 mb-6">
+        Start a conversation or try one of these:
+      </div>
+      <div className="flex flex-wrap justify-center gap-2 max-w-md">
+        {CONVERSATION_STARTERS.map((s) => (
+          <button
+            key={s.text}
+            onClick={() => sendMessage(s.text)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container/60 border border-outline-variant/10 text-xs text-on-surface-variant/60 hover:text-on-surface hover:bg-surface-container-high hover:border-primary/20 transition-all active:scale-95"
+          >
+            <span className="material-symbols-outlined text-[14px]">{s.icon}</span>
+            {s.text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ChatFeed() {
   const messages = useChatStore((s) => s.messages);
@@ -78,12 +119,7 @@ function ChatFeed() {
     <div ref={feedRef} onScroll={handleScroll} onWheel={handleScroll} data-chat-feed className="flex-1 overflow-y-auto overflow-x-hidden py-3 relative min-h-0">
       <div className="px-4 lg:px-6">
       {channelMessages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-full text-center opacity-30">
-          <img src="/ghostlink.png" alt="GhostLink" className="w-12 h-12 mb-3 opacity-50" style={{ filter: 'invert(1)' }} />
-          <div className="text-xs text-on-surface-variant/40">
-            #{activeChannel} — waiting for messages
-          </div>
-        </div>
+        <ConversationStarters channel={activeChannel} />
       ) : (
         channelMessages.map((msg) => <ChatMessage key={msg.id} message={msg} />)
       )}
@@ -205,6 +241,7 @@ function AppInner() {
 
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   useWebSocket();
 
@@ -340,6 +377,10 @@ function AppInner() {
             <ChannelTabs />
           </div>
         </header>
+        {/* Remote session — mobile */}
+        <div className="lg:hidden flex items-center justify-end px-4 py-1 border-b border-outline-variant/6">
+          <RemoteSession />
+        </div>
         {/* Mobile spacer for fixed header */}
         <div className="lg:hidden h-14" />
 
@@ -362,6 +403,16 @@ function AppInner() {
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
       {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
       <ConnectionBanner />
+      <OnboardingTour />
+      {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
+      {/* Help button — fixed bottom-right */}
+      <button
+        onClick={() => setShowHelp(true)}
+        className="fixed bottom-6 right-6 z-40 w-10 h-10 rounded-full bg-primary/15 border border-primary/20 text-primary flex items-center justify-center hover:bg-primary/25 transition-all active:scale-95 shadow-lg backdrop-blur-sm"
+        title="Help & FAQ"
+      >
+        <span className="material-symbols-outlined text-lg">help</span>
+      </button>
     </div>
   );
 }

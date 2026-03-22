@@ -17,6 +17,7 @@ interface ChatState {
   editMessage: (id: number, text: string) => void;
   deleteMessages: (ids: number[]) => void;
   reactMessage: (id: number, reactions: Record<string, string[]>) => void;
+  updateMessageMeta: (id: number, metaUpdate: Record<string, unknown>) => void;
 
   // Channels
   channels: Channel[];
@@ -101,6 +102,15 @@ export const useChatStore = create<ChatState>((set) => ({
   deleteMessages: (ids) =>
     set((s) => ({
       messages: s.messages.filter((m) => !ids.includes(m.id)),
+    })),
+  updateMessageMeta: (id, metaUpdate) =>
+    set((s) => ({
+      messages: s.messages.map((m) => {
+        if (m.id !== id) return m;
+        const existing = typeof m.metadata === 'string' ? (() => { try { return JSON.parse(m.metadata as string); } catch { return {} as Record<string, unknown>; } })() : (m.metadata || {});
+        const merged: Record<string, unknown> = { ...existing, ...metaUpdate };
+        return { ...m, metadata: merged };
+      }),
     })),
   reactMessage: (id, reactions) =>
     set((s) => ({

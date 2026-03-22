@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useChatStore } from '../stores/chatStore';
+import { api } from '../lib/api';
 import type { Job } from '../types';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -49,8 +51,23 @@ function JobCard({ job }: { job: Job }) {
 
 export function JobsPanel() {
   const jobs = useChatStore((s) => s.jobs);
+  const activeChannel = useChatStore((s) => s.activeChannel);
+  const settings = useChatStore((s) => s.settings);
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState('');
 
   const columns = ['open', 'done', 'archived'] as const;
+
+  const handleCreate = async () => {
+    if (!title.trim()) return;
+    try {
+      await api.createJob(title.trim(), activeChannel, settings.username);
+      const res = await api.getJobs();
+      useChatStore.getState().setJobs(res.jobs);
+      setTitle('');
+      setShowForm(false);
+    } catch {}
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -58,10 +75,32 @@ export function JobsPanel() {
         <h2 className="text-sm font-bold text-on-surface uppercase tracking-widest">
           Jobs
         </h2>
-        <button className="p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors">
-          <span className="material-symbols-outlined text-lg">add</span>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors"
+        >
+          <span className="material-symbols-outlined text-lg">{showForm ? 'close' : 'add'}</span>
         </button>
       </div>
+
+      {showForm && (
+        <div className="px-4 py-3 border-b border-outline-variant/10 flex gap-2">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+            placeholder="Job title..."
+            className="flex-1 bg-surface-container rounded-lg px-3 py-1.5 text-xs text-on-surface outline-none border border-outline-variant/10 focus:border-primary/50"
+            autoFocus
+          />
+          <button
+            onClick={handleCreate}
+            className="px-3 py-1.5 bg-primary-container text-on-primary-container rounded-lg text-xs font-medium hover:brightness-110 transition-all"
+          >
+            Create
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {columns.map((status) => {

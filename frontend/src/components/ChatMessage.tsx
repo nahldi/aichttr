@@ -6,6 +6,9 @@ import { DecisionCard } from './DecisionCard';
 import { JobProposal } from './JobProposal';
 import { ProgressCard } from './ProgressCard';
 import { HandoffCard } from './HandoffCard';
+import { ApprovalCard } from './ApprovalCard';
+import { UrlPreviews } from './UrlPreview';
+import { GenerativeCard } from './GenerativeCard';
 import { AgentIcon } from './AgentIcon';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
@@ -128,6 +131,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const proposal = metadata.proposal as { title: string; assignee: string; description: string; accepted?: boolean } | undefined;
   const progress = metadata.progress as { steps: { label: string; status: 'done' | 'active' | 'pending' }[]; current: number; total: number; title?: string } | undefined;
   const handoff = metadata.handoff as { from: string; to: string; reason?: string; context?: string } | undefined;
+  const approval = message.type === 'approval_request' ? metadata as { agent?: string; prompt?: string; responded?: string } : undefined;
+  const card = metadata.card as { type: string; title?: string; [key: string]: unknown } | undefined;
 
   const handlePin = async () => {
     try { await api.pinMessage(message.id, !message.pinned); pinMessage(message.id, !message.pinned); } catch {}
@@ -211,6 +216,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
                 )}
               </>
             )}
+            <UrlPreviews text={message.text} />
             <Attachments attachments={attachments} />
           </div>
           <div className="flex justify-end items-center gap-1">
@@ -261,11 +267,14 @@ export function ChatMessage({ message }: ChatMessageProps) {
               {collapsed ? 'Show more' : 'Show less'}
             </button>
           )}
+          <UrlPreviews text={message.text} />
           <Attachments attachments={attachments} />
           {progress && <ProgressCard steps={progress.steps} current={progress.current} total={progress.total} title={progress.title} />}
           {decision && <DecisionCard title={decision.title} description={decision.description} choices={decision.choices} resolved={decision.resolved} onChoose={() => {}} />}
           {proposal && <JobProposal title={proposal.title} assignee={proposal.assignee} description={proposal.description} accepted={proposal.accepted} onAccept={() => {}} onDismiss={() => {}} />}
           {handoff && <HandoffCard from={handoff.from} to={handoff.to} reason={handoff.reason} context={handoff.context} fromColor={agents.find(a => a.name === handoff.from)?.color} toColor={agents.find(a => a.name === handoff.to)?.color} />}
+          {approval && <ApprovalCard messageId={message.id} agent={approval.agent || message.sender} agentColor={agentColor} agentBase={agent?.base} prompt={approval.prompt || message.text} responded={approval.responded} />}
+          {card && <GenerativeCard card={card as any} agentColor={agentColor} />}
         </div>
 
         {/* Reactions display */}

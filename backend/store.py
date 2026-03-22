@@ -26,6 +26,32 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender);
+CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to);
+"""
+
+FTS_SCHEMA = """
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    text, sender, channel,
+    content='messages', content_rowid='id'
+);
+"""
+
+FTS_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, text, sender, channel)
+    VALUES (new.id, new.text, new.sender, new.channel);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, text, sender, channel)
+    VALUES ('delete', old.id, old.text, old.sender, old.channel);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, text, sender, channel)
+    VALUES ('delete', old.id, old.text, old.sender, old.channel);
+    INSERT INTO messages_fts(rowid, text, sender, channel)
+    VALUES (new.id, new.text, new.sender, new.channel);
+END;
 """
 
 MIGRATION_REACTIONS = """
@@ -50,6 +76,21 @@ class MessageStore:
             await self._db.commit()
         except Exception:
             pass  # Column already exists
+        # FTS5 full-text search index
+        try:
+            await self._db.executescript(FTS_SCHEMA)
+            await self._db.executescript(FTS_TRIGGERS)
+            await self._db.commit()
+            # Rebuild FTS index from existing messages (first time only)
+            cursor = await self._db.execute("SELECT COUNT(*) FROM messages_fts")
+            fts_count = (await cursor.fetchone())[0]
+            cursor = await self._db.execute("SELECT COUNT(*) FROM messages")
+            msg_count = (await cursor.fetchone())[0]
+            if fts_count == 0 and msg_count > 0:
+                await self._db.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
+                await self._db.commit()
+        except Exception:
+            pass  # FTS not available on this SQLite build
 
     async def close(self):
         if self._db:
@@ -75,7 +116,8 @@ class MessageStore:
         now = time.time()
         time_str = time.strftime("%H:%M:%S", time.localtime(now))
 
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("MessageStore not initialized — call await store.init() first")
         cursor = await self._db.execute(
             """INSERT INTO messages
                (uid, sender, text, type, timestamp, time, channel, reply_to, attachments, metadata)
@@ -103,7 +145,8 @@ class MessageStore:
         return msg
 
     async def get_recent(self, count: int = 50, channel: str = "general") -> list[dict]:
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("MessageStore not initialized — call await store.init() first")
         cursor = await self._db.execute(
             "SELECT * FROM messages WHERE channel = ? ORDER BY id DESC LIMIT ?",
             (channel, count),
@@ -112,7 +155,8 @@ class MessageStore:
         return [self._row_to_dict(r) for r in reversed(rows)]
 
     async def get_since(self, since_id: int, channel: str = "general") -> list[dict]:
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("MessageStore not initialized — call await store.init() first")
         cursor = await self._db.execute(
             "SELECT * FROM messages WHERE channel = ? AND id > ? ORDER BY id",
             (channel, since_id),
@@ -121,7 +165,8 @@ class MessageStore:
         return [self._row_to_dict(r) for r in rows]
 
     async def pin(self, msg_id: int, pinned: bool) -> dict | None:
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("MessageStore not initialized — call await store.init() first")
         await self._db.execute(
             "UPDATE messages SET pinned = ? WHERE id = ?",
             (1 if pinned else 0, msg_id),
@@ -132,7 +177,8 @@ class MessageStore:
         return self._row_to_dict(row) if row else None
 
     async def delete(self, msg_ids: list[int]) -> list[int]:
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("MessageStore not initialized — call await store.init() first")
         deleted = []
         for mid in msg_ids:
             cursor = await self._db.execute("DELETE FROM messages WHERE id = ?", (mid,))
@@ -144,7 +190,8 @@ class MessageStore:
     async def react(self, msg_id: int, emoji: str, sender: str) -> dict | None:
         """Toggle a reaction on a message. Returns updated reactions dict."""
         import json
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("MessageStore not initialized — call await store.init() first")
         cursor = await self._db.execute("SELECT reactions FROM messages WHERE id = ?", (msg_id,))
         row = await cursor.fetchone()
         if not row:

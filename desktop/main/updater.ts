@@ -9,8 +9,59 @@
 import { app, BrowserWindow } from 'electron';
 import { autoUpdater, UpdateInfo } from 'electron-updater';
 import log from 'electron-log';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { execFileSync } from 'child_process';
 
 let launcherRef: BrowserWindow | null = null;
+
+/**
+ * Read a GitHub token for private repo update checks.
+ * Checks: GH_TOKEN env, GITHUB_TOKEN env, gh CLI config file, WSL gh CLI.
+ */
+function getGitHubToken(): string {
+  if (process.env.GH_TOKEN) return process.env.GH_TOKEN;
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
+
+  // Try gh CLI config files (Windows-side)
+  const ghPaths = [
+    path.join(os.homedir(), '.config', 'gh', 'hosts.yml'),
+    path.join(process.env.APPDATA || '', 'GitHub CLI', 'hosts.yml'),
+  ];
+  for (const p of ghPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, 'utf-8');
+        const match = content.match(/oauth_token:\s*(.+)/);
+        if (match && match[1].trim()) {
+          log.info('Found GitHub token from gh CLI config');
+          return match[1].trim();
+        }
+      }
+    } catch {}
+  }
+
+  // Try reading from WSL — gh auth token first, then GITHUB_TOKEN env
+  const wslCommands = [
+    'gh auth token',
+    'echo $GITHUB_TOKEN',
+    'echo $GH_TOKEN',
+  ];
+  for (const cmd of wslCommands) {
+    try {
+      const result = execFileSync('wsl', ['bash', '-lc', cmd], {
+        encoding: 'utf-8', timeout: 8000, stdio: ['pipe', 'pipe', 'pipe'],
+      }).trim().replace(/\r/g, '');
+      if (result && (result.startsWith('ghp_') || result.startsWith('github_pat_') || result.startsWith('gho_'))) {
+        log.info('Found GitHub token from WSL (%s)', cmd.split(' ')[0]);
+        return result;
+      }
+    } catch {}
+  }
+
+  return '';
+}
 
 /**
  * Wire up electron-updater event listeners and point them at the
@@ -19,10 +70,19 @@ let launcherRef: BrowserWindow | null = null;
 export function setupUpdater(launcherWindow: BrowserWindow): void {
   launcherRef = launcherWindow;
 
+  // Set GitHub token for private repo access
+  const ghToken = getGitHubToken();
+  if (ghToken) {
+    process.env.GH_TOKEN = ghToken;
+    log.info('GitHub token configured for auto-updater');
+  } else {
+    log.warn('No GitHub token found — auto-update may not work for private repos');
+  }
+
   // Route updater logs through electron-log
   autoUpdater.logger = log;
 
-  // Don't auto-download — let the user decide
+  // Don't auto-download — show the user the update UI so they control it
   autoUpdater.autoDownload = false;
 
   // Install silently when the user quits
@@ -72,9 +132,14 @@ export function setupUpdater(launcherWindow: BrowserWindow): void {
     if (
       msg.includes('no published releases') ||
       msg.includes('HttpError: 404') ||
+      msg.includes('HttpError: 403') ||
       msg.includes('Cannot find latest.yml') ||
+      msg.includes('Cannot find channel') ||
       msg.includes('net::ERR_') ||
-      msg.includes('ENOTFOUND')
+      msg.includes('ENOTFOUND') ||
+      msg.includes('ECONNREFUSED') ||
+      msg.includes('ETIMEDOUT') ||
+      msg.includes('getaddrinfo')
     ) {
       log.info('No releases found — treating as up to date');
       sendToLauncher('update:not-available', {

@@ -17,14 +17,23 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore
 
+import asyncio
+import logging
+import re
 import subprocess
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
+log = logging.getLogger(__name__)
+
 # Track spawned agent processes
 _agent_processes: dict[str, subprocess.Popen] = {}
+_agent_lock = asyncio.Lock()
+
+# Agent name validation (prevents path traversal)
+_VALID_AGENT_NAME = re.compile(r'^[a-zA-Z0-9_-]{1,50}$')
 
 from store import MessageStore
 from registry import AgentRegistry
@@ -32,6 +41,7 @@ from router import MessageRouter
 from jobs import JobStore
 from rules import RuleStore
 from skills import SkillsRegistry
+from schedules import ScheduleStore, cron_matches
 import mcp_bridge
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -39,8 +49,17 @@ import mcp_bridge
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config.toml"
 
-with open(CONFIG_PATH, "rb") as f:
-    CONFIG = tomllib.load(f)
+if not CONFIG_PATH.exists():
+    print(f"ERROR: Config file not found at {CONFIG_PATH}")
+    print("Create a config.toml with at least a [server] section. See README.md.")
+    sys.exit(1)
+
+try:
+    with open(CONFIG_PATH, "rb") as f:
+        CONFIG = tomllib.load(f)
+except Exception as e:
+    print(f"ERROR: Failed to parse config.toml: {e}")
+    sys.exit(1)
 
 SERVER = CONFIG.get("server", {})
 PORT = int(os.environ.get("PORT", SERVER.get("port", 8300)))
@@ -61,6 +80,11 @@ if not DATA_DIR.is_absolute():
     DATA_DIR = BASE_DIR / DATA_DIR
 if not STATIC_DIR.is_absolute():
     STATIC_DIR = BASE_DIR / STATIC_DIR
+# Fallback: packaged app puts frontend at ../frontend/ (not ../frontend/dist/)
+if not STATIC_DIR.exists() or not (STATIC_DIR / "index.html").exists():
+    alt = STATIC_DIR.parent  # Try one level up (../frontend/ instead of ../frontend/dist/)
+    if (alt / "index.html").exists():
+        STATIC_DIR = alt
 if not UPLOAD_DIR.is_absolute():
     UPLOAD_DIR = BASE_DIR / UPLOAD_DIR
 
@@ -72,6 +96,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 store: MessageStore
 skills_registry: SkillsRegistry
 job_store: JobStore
+schedule_store: ScheduleStore
 rule_store: RuleStore
 registry = AgentRegistry()
 router = MessageRouter(max_hops=MAX_HOPS, default_routing=DEFAULT_ROUTING)
@@ -92,9 +117,12 @@ _settings: dict = {
 def _load_settings():
     global _settings
     if SETTINGS_PATH.exists():
-        with open(SETTINGS_PATH) as f:
-            saved = json.load(f)
-        _settings.update(saved)
+        try:
+            with open(SETTINGS_PATH) as f:
+                saved = json.load(f)
+            _settings.update(saved)
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning("Failed to load settings.json: %s — using defaults", e)
 
 
 def _save_settings():
@@ -178,10 +206,15 @@ def _route_mentions(sender: str, text: str, channel: str):
 
         queue_file = DATA_DIR / f"{target}_queue.jsonl"
         try:
+            import fcntl
             with open(queue_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"channel": channel}) + "\n")
-        except Exception:
-            pass
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                try:
+                    f.write(json.dumps({"channel": channel}) + "\n")
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except Exception as e:
+            log.warning("Queue write failed for %s: %s", target, e)
 
 
 # ── WebSocket hub ───────────────────────────────────────────────────
@@ -192,7 +225,7 @@ _ws_clients: set[WebSocket] = set()
 async def broadcast(event_type: str, data: dict):
     payload = json.dumps({"type": event_type, "data": data})
     dead: list[WebSocket] = []
-    for ws in _ws_clients:
+    for ws in list(_ws_clients):
         try:
             await ws.send_text(payload)
         except Exception:
@@ -205,9 +238,10 @@ async def broadcast(event_type: str, data: dict):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global store, job_store, rule_store, skills_registry
+    global store, job_store, rule_store, schedule_store, skills_registry
 
     _load_settings()
+    _settings["_server_start"] = time.time()
 
     db_path = DATA_DIR / "ghostlink.db"
     store = MessageStore(db_path)
@@ -219,6 +253,8 @@ async def lifespan(_app: FastAPI):
     await job_store.init()
     rule_store = RuleStore(db)
     await rule_store.init()
+    schedule_store = ScheduleStore(db)
+    await schedule_store.init()
     skills_registry = SkillsRegistry(DATA_DIR)
 
     # Broadcast new messages via WebSocket
@@ -228,6 +264,7 @@ async def lifespan(_app: FastAPI):
 
     # Start MCP bridge for agent CLIs (dual transport)
     import threading
+    mcp_cfg = CONFIG.get("mcp", {})
     mcp_bridge.configure(
         store=store,
         registry=registry,
@@ -237,6 +274,8 @@ async def lifespan(_app: FastAPI):
         rule_store=rule_store,
         job_store=job_store,
         router=router,
+        mcp_http_port=int(mcp_cfg.get("http_port", 0)),
+        mcp_sse_port=int(mcp_cfg.get("sse_port", 0)),
     )
     http_thread = threading.Thread(target=mcp_bridge.run_http_server, daemon=True)
     http_thread.start()
@@ -246,8 +285,60 @@ async def lifespan(_app: FastAPI):
     sse_thread.start()
     print(f"  MCP bridge (SSE) started on port {mcp_bridge.MCP_SSE_PORT}")
 
+    # Start schedule checker background thread
+    _schedule_stop = threading.Event()
+
+    def _schedule_checker():
+        """Check enabled schedules every 60 seconds and trigger matched agents."""
+        while not _schedule_stop.is_set():
+            try:
+                schedules = asyncio.run_coroutine_threadsafe(
+                    schedule_store.list_enabled(), asyncio.get_event_loop()
+                ).result(timeout=5)
+                now = time.time()
+                for sched in schedules:
+                    if cron_matches(sched["cron_expr"], now):
+                        # Don't re-trigger within the same minute
+                        if now - sched.get("last_run", 0) < 55:
+                            continue
+                        agent = sched.get("agent", "")
+                        command = sched.get("command", "")
+                        channel = sched.get("channel", "general")
+                        if agent and command:
+                            # Write to agent's queue file to trigger them
+                            queue_file = DATA_DIR / f"{agent}_queue.jsonl"
+                            try:
+                                with open(queue_file, "a") as f:
+                                    f.write(json.dumps({"channel": channel, "scheduled": True}) + "\n")
+                            except Exception:
+                                pass
+                            # Post a system message about the trigger
+                            try:
+                                asyncio.run_coroutine_threadsafe(
+                                    store.add(sender="system", text=f"Scheduled: @{agent} — {command}", msg_type="system", channel=channel),
+                                    asyncio.get_event_loop(),
+                                ).result(timeout=5)
+                            except Exception:
+                                pass
+                        # Mark as run
+                        try:
+                            asyncio.run_coroutine_threadsafe(
+                                schedule_store.mark_run(sched["id"]),
+                                asyncio.get_event_loop(),
+                            ).result(timeout=5)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            _schedule_stop.wait(60)
+
+    sched_thread = threading.Thread(target=_schedule_checker, daemon=True)
+    sched_thread.start()
+    print("  Schedule checker started (checks every 60s)")
+
     yield
 
+    _schedule_stop.set()
     await store.close()
     await db.close()
 
@@ -293,21 +384,44 @@ async def get_messages(channel: str = "general", since_id: int = 0, limit: int =
 @app.post("/api/send")
 async def send_message(request: Request):
     body = await request.json()
-    sender = body.get("sender", "You")
-    text = body.get("text", "")
-    channel = body.get("channel", "general")
+    sender = (body.get("sender", "You") or "").strip()
+    text = (body.get("text", "") or "")
+    channel = (body.get("channel", "general") or "").strip()
     reply_to = body.get("reply_to")
     attachments = body.get("attachments", [])
+    msg_type = (body.get("type", "chat") or "chat").strip()
+    raw_metadata = body.get("metadata", "{}")
+
+    # Validate msg_type — whitelist allowed values
+    _ALLOWED_TYPES = {"chat", "system", "decision", "job_proposal", "rule_proposal", "progress", "approval_request"}
+    if msg_type not in _ALLOWED_TYPES:
+        msg_type = "chat"
+
+    # Normalize metadata to JSON string
+    if isinstance(raw_metadata, dict):
+        metadata_str = json.dumps(raw_metadata)
+    elif isinstance(raw_metadata, str):
+        metadata_str = raw_metadata
+    else:
+        metadata_str = "{}"
 
     if not text.strip():
         return JSONResponse({"error": "empty message"}, 400)
+    if not sender or len(sender) > 100:
+        return JSONResponse({"error": "invalid sender (1-100 chars)"}, 400)
+    if len(text) > 102400:
+        return JSONResponse({"error": "message too long (max 100KB)"}, 400)
+    if not channel or len(channel) > 50:
+        return JSONResponse({"error": "invalid channel name (1-50 chars)"}, 400)
 
     msg = await store.add(
         sender=sender,
         text=text,
+        msg_type=msg_type,
         channel=channel,
         reply_to=reply_to,
         attachments=json.dumps(attachments),
+        metadata=metadata_str,
     )
 
     # Route @mentions to agent wrappers
@@ -345,6 +459,38 @@ async def react_message(msg_id: int, request: Request):
         return JSONResponse({"error": "not found"}, 404)
     await broadcast("reaction", {"message_id": msg_id, "reactions": reactions})
     return {"message_id": msg_id, "reactions": reactions}
+
+
+@app.patch("/api/messages/{msg_id}")
+async def edit_message(msg_id: int, request: Request):
+    body = await request.json()
+    new_text = (body.get("text", "") or "").strip()
+    if not new_text:
+        return JSONResponse({"error": "text required"}, 400)
+    if len(new_text) > 102400:
+        return JSONResponse({"error": "message too long"}, 400)
+    if store._db is None:
+        raise RuntimeError("Database not initialized.")
+    cursor = await store._db.execute("SELECT * FROM messages WHERE id = ?", (msg_id,))
+    row = await cursor.fetchone()
+    if not row:
+        return JSONResponse({"error": "not found"}, 404)
+    await store._db.execute("UPDATE messages SET text = ? WHERE id = ?", (new_text, msg_id))
+    await store._db.commit()
+    msg = store._row_to_dict(row)
+    msg["text"] = new_text
+    await broadcast("message_edit", {"message_id": msg_id, "text": new_text})
+    return msg
+
+
+@app.post("/api/messages/{msg_id}/bookmark")
+async def bookmark_message(msg_id: int, request: Request):
+    body = await request.json()
+    bookmarked = body.get("bookmarked", True)
+    # Bookmarks are stored client-side — this endpoint just acknowledges
+    # and broadcasts so other clients can sync
+    await broadcast("bookmark", {"message_id": msg_id, "bookmarked": bookmarked})
+    return {"message_id": msg_id, "bookmarked": bookmarked}
 
 
 @app.delete("/api/messages/{msg_id}")
@@ -412,6 +558,9 @@ async def save_settings(request: Request):
     # Sync loop guard to router
     if "loopGuard" in body:
         router.max_hops = int(body["loopGuard"])
+    # Sync auto-route toggle to router
+    if "autoRoute" in body:
+        router.default_routing = "all" if body["autoRoute"] else "none"
     return _settings
 
 
@@ -498,6 +647,7 @@ async def register_agent(request: Request):
 async def deregister_agent(name: str):
     ok = registry.deregister(name)
     if ok:
+        mcp_bridge.cleanup_agent(name)
         await broadcast("status", {"agents": _get_full_agent_list()})
     return {"ok": ok}
 
@@ -505,12 +655,30 @@ async def deregister_agent(name: str):
 @app.get("/api/agent-templates")
 async def agent_templates():
     """Return available agent CLI templates with defaults."""
+    import shutil as _shutil
+
+    # API key env vars that indicate an agent is usable even without CLI
+    _API_KEY_ENV = {
+        "claude": ["ANTHROPIC_API_KEY"],
+        "codex": ["OPENAI_API_KEY"],
+        "gemini": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        "grok": ["XAI_API_KEY"],
+    }
+
+    def _is_available(name: str, cmd: str) -> bool:
+        """Check if agent is available via CLI binary OR API key."""
+        if _shutil.which(cmd):
+            return True
+        # Check API keys
+        for key in _API_KEY_ENV.get(name, []):
+            if os.environ.get(key):
+                return True
+        return False
+
     agents_cfg = CONFIG.get("agents", {})
     templates = []
     for name, cfg in agents_cfg.items():
-        import shutil as _shutil
         cmd = cfg.get("command", name)
-        available = _shutil.which(cmd) is not None
         templates.append({
             "base": name,
             "command": cmd,
@@ -518,7 +686,7 @@ async def agent_templates():
             "color": cfg.get("color", "#a78bfa"),
             "defaultCwd": cfg.get("cwd", "."),
             "defaultArgs": cfg.get("args", []),
-            "available": available,
+            "available": _is_available(name, cmd),
         })
     # Scan for all known AI CLI agents
     KNOWN_AGENTS = [
@@ -534,18 +702,16 @@ async def agent_templates():
         ("cody", "cody", "Cody", "#ff5543", "Sourcegraph", []),
         ("continue", "continue", "Continue", "#0ea5e9", "Continue", []),
         ("opencode", "opencode", "OpenCode", "#22c55e", "OpenCode", []),
+        ("ollama", "ollama", "Ollama", "#ffffff", "Ollama (Local)", []),
     ]
     for name, cmd, label, color, provider, default_args in KNOWN_AGENTS:
         if not any(t["base"] == name for t in templates):
-            import shutil as _shutil
-            available = _shutil.which(cmd) is not None
             templates.append({
                 "base": name, "command": cmd, "label": label,
                 "color": color, "defaultCwd": ".", "defaultArgs": default_args,
-                "available": available, "provider": provider,
+                "available": _is_available(name, cmd), "provider": provider,
             })
         else:
-            # Add provider to existing template
             for t in templates:
                 if t["base"] == name:
                     t["provider"] = provider
@@ -648,7 +814,8 @@ async def spawn_agent(request: Request):
             stderr=subprocess.DEVNULL,
         )
         # Store by base name — wrapper will register with a unique instance name
-        _agent_processes[f"{base}_{proc.pid}"] = proc
+        async with _agent_lock:
+            _agent_processes[f"{base}_{proc.pid}"] = proc
 
         import asyncio
         await asyncio.sleep(3)
@@ -668,6 +835,8 @@ async def kill_agent(name: str):
     """Kill a specific agent by name. Only affects the named agent, never others."""
     # Only deregister this specific agent
     ok = registry.deregister(name)
+    if ok:
+        mcp_bridge.cleanup_agent(name)
 
     # Only kill this specific agent's tmux session
     session_name = f"ghostlink-{name}"
@@ -680,7 +849,8 @@ async def kill_agent(name: str):
         pass
 
     # Only kill the wrapper process for THIS agent
-    proc = _agent_processes.pop(name, None)
+    async with _agent_lock:
+        proc = _agent_processes.pop(name, None)
     if proc:
         try:
             proc.terminate()
@@ -717,13 +887,14 @@ async def cleanup_stale():
                 pass
 
     # Kill orphaned wrapper processes
-    for key, proc in list(_agent_processes.items()):
-        try:
-            if proc.poll() is not None:  # Process already exited
-                _agent_processes.pop(key, None)
-                cleaned.append(f"process:{key}")
-        except Exception:
-            pass
+    async with _agent_lock:
+        for key, proc in list(_agent_processes.items()):
+            try:
+                if proc.poll() is not None:  # Process already exited
+                    _agent_processes.pop(key, None)
+                    cleaned.append(f"process:{key}")
+            except Exception:
+                pass
 
     return {"ok": True, "cleaned": cleaned, "count": len(cleaned)}
 
@@ -734,13 +905,14 @@ async def shutdown_server():
     import asyncio, signal
 
     # Kill all running agents first
-    for inst in list(registry.get_all()):
-        try:
-            proc = _agent_processes.get(inst.name)
-            if proc and proc.poll() is None:
-                proc.terminate()
-        except Exception:
-            pass
+    async with _agent_lock:
+        for inst in list(registry.get_all()):
+            try:
+                proc = _agent_processes.get(inst.name)
+                if proc and proc.poll() is None:
+                    proc.terminate()
+            except Exception:
+                pass
 
     # Broadcast shutdown notice to all connected WebSocket clients
     try:
@@ -817,22 +989,40 @@ async def resume_agent(name: str):
 
 @app.get("/api/search")
 async def search_messages(q: str = "", channel: str = "", sender: str = "", limit: int = 50):
-    """Full-text search across messages."""
+    """Full-text search across messages using FTS5 with LIKE fallback."""
     if not q.strip():
         return {"results": []}
-    assert store._db is not None
-    query = "SELECT * FROM messages WHERE text LIKE ? COLLATE NOCASE"
-    params: list = [f"%{q}%"]
-    if channel:
-        query += " AND channel = ?"
-        params.append(channel)
-    if sender:
-        query += " AND sender = ?"
-        params.append(sender)
-    query += " ORDER BY id DESC LIMIT ?"
-    params.append(limit)
-    cursor = await store._db.execute(query, params)
-    rows = await cursor.fetchall()
+    if store._db is None:
+        raise RuntimeError("Database not initialized. Call init() first.")
+
+    # Try FTS5 first (much faster)
+    try:
+        fts_query = "SELECT m.* FROM messages m JOIN messages_fts f ON m.id = f.rowid WHERE messages_fts MATCH ?"
+        fts_params: list = [q.strip()]
+        if channel:
+            fts_query += " AND m.channel = ?"
+            fts_params.append(channel)
+        if sender:
+            fts_query += " AND m.sender = ?"
+            fts_params.append(sender)
+        fts_query += " ORDER BY m.id DESC LIMIT ?"
+        fts_params.append(limit)
+        cursor = await store._db.execute(fts_query, fts_params)
+        rows = await cursor.fetchall()
+    except Exception:
+        # FTS5 not available or query syntax error — fall back to LIKE
+        query = "SELECT * FROM messages WHERE text LIKE ? COLLATE NOCASE"
+        params: list = [f"%{q}%"]
+        if channel:
+            query += " AND channel = ?"
+            params.append(channel)
+        if sender:
+            query += " AND sender = ?"
+            params.append(sender)
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        cursor = await store._db.execute(query, params)
+        rows = await cursor.fetchall()
     return {"results": [store._row_to_dict(r) for r in rows], "query": q}
 
 
@@ -866,6 +1056,60 @@ async def heartbeat(agent_name: str, request: Request):
             await broadcast("status", {"agents": _get_full_agent_list()})
         return {"ok": True, "name": inst.name}
     return JSONResponse({"error": "not found"}, 404)
+
+
+# ── Approval Prompts ───────────────────────────────────────────────
+
+@app.post("/api/approval/respond")
+async def respond_approval(request: Request):
+    """Respond to an agent's permission prompt. Writes response file for wrapper to pick up."""
+    body = await request.json()
+    agent_name = (body.get("agent", "") or "").strip()
+    response = (body.get("response", "") or "").strip()
+    message_id = body.get("message_id", 0)
+
+    if not agent_name or not response:
+        return JSONResponse({"error": "agent and response required"}, 400)
+    if not _VALID_AGENT_NAME.match(agent_name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
+    if response not in ("allow_once", "allow_session", "deny"):
+        return JSONResponse({"error": "response must be allow_once, allow_session, or deny"}, 400)
+
+    # Write response file that the wrapper polls for
+    response_file = DATA_DIR / f"{agent_name}_approval.json"
+    response_file.write_text(json.dumps({
+        "response": response,
+        "message_id": message_id,
+        "timestamp": time.time(),
+    }))
+
+    # Update the approval message metadata to mark it as responded
+    if message_id and store._db:
+        try:
+            cursor = await store._db.execute("SELECT metadata FROM messages WHERE id = ?", (message_id,))
+            row = await cursor.fetchone()
+            if row:
+                try:
+                    meta = json.loads(row["metadata"]) if row["metadata"] else {}
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
+                meta["responded"] = response
+                await store._db.execute(
+                    "UPDATE messages SET metadata = ? WHERE id = ?",
+                    (json.dumps(meta), message_id),
+                )
+                await store._db.commit()
+        except Exception as e:
+            log.warning("Failed to update approval message metadata: %s", e)
+
+    # Broadcast so all connected clients see the response
+    await broadcast("approval_response", {
+        "agent": agent_name,
+        "response": response,
+        "message_id": message_id,
+    })
+
+    return {"ok": True}
 
 
 # ── Jobs ────────────────────────────────────────────────────────────
@@ -944,6 +1188,42 @@ async def update_rule(rule_id: int, request: Request):
     return JSONResponse({"error": "not found"}, 404)
 
 
+# ── Schedules ─────────────────────────────────────────────────────────
+
+@app.get("/api/schedules")
+async def list_schedules():
+    schedules = await schedule_store.list_all()
+    return {"schedules": schedules}
+
+
+@app.post("/api/schedules")
+async def create_schedule(request: Request):
+    body = await request.json()
+    sched = await schedule_store.create(
+        cron_expr=body.get("cron_expr", "*/5 * * * *"),
+        agent=body.get("agent", ""),
+        command=body.get("command", ""),
+        channel=body.get("channel", "general"),
+        enabled=body.get("enabled", True),
+    )
+    return sched
+
+
+@app.patch("/api/schedules/{sched_id}")
+async def update_schedule(sched_id: int, request: Request):
+    body = await request.json()
+    sched = await schedule_store.update(sched_id, body)
+    if sched:
+        return sched
+    return JSONResponse({"error": "not found"}, 404)
+
+
+@app.delete("/api/schedules/{sched_id}")
+async def delete_schedule(sched_id: int):
+    ok = await schedule_store.delete(sched_id)
+    return {"ok": ok}
+
+
 # ── Activity ──────────────────────────────────────────────────────────
 
 _activity_log: list[dict] = []
@@ -971,6 +1251,97 @@ async def report_usage(request: Request):
     tokens = body.get("tokens", 0)
     _usage[agent] = _usage.get(agent, 0) + tokens
     return {"ok": True, "agent": agent, "total": _usage[agent]}
+
+
+# ── URL Preview (OpenGraph) ──────────────────────────────────────────
+
+import urllib.request as _urllib_request
+import html.parser as _html_parser
+
+class _OGParser(_html_parser.HTMLParser):
+    """Extract OpenGraph meta tags from HTML."""
+    def __init__(self):
+        super().__init__()
+        self.og: dict[str, str] = {}
+        self.title = ""
+        self._in_title = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "title":
+            self._in_title = True
+        if tag == "meta":
+            d = dict(attrs)
+            prop = d.get("property", "")
+            name = d.get("name", "")
+            content = d.get("content", "")
+            if prop.startswith("og:"):
+                self.og[prop[3:]] = content
+            elif name == "description" and "description" not in self.og:
+                self.og["description"] = content
+
+    def handle_data(self, data):
+        if self._in_title:
+            self.title += data
+
+    def handle_endtag(self, tag):
+        if tag == "title":
+            self._in_title = False
+
+
+def _is_private_url(url: str) -> bool:
+    """Block requests to private/internal IP ranges to prevent SSRF."""
+    from urllib.parse import urlparse
+    import ipaddress
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        # Block obvious internal hostnames
+        if host in ("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"):
+            return True
+        if host.endswith(".local") or host.endswith(".internal"):
+            return True
+        # Try to resolve and check IP range
+        try:
+            import socket
+            ip = socket.gethostbyname(host)
+            addr = ipaddress.ip_address(ip)
+            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+                return True
+        except (socket.gaierror, ValueError):
+            pass
+    except Exception:
+        return True
+    return False
+
+
+@app.get("/api/preview")
+async def url_preview(url: str = ""):
+    """Fetch OpenGraph metadata for a URL. Returns title, description, image, site_name."""
+    if not url or not url.startswith("https://") and not url.startswith("http://"):
+        return JSONResponse({"error": "valid http(s) URL required"}, 400)
+    if _is_private_url(url):
+        return JSONResponse({"error": "cannot fetch internal/private URLs"}, 400)
+    try:
+        # Disable redirect following to prevent SSRF bypass
+        class _NoRedirect(_urllib_request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+        opener = _urllib_request.build_opener(_NoRedirect)
+        req = _urllib_request.Request(url, headers={"User-Agent": "GhostLink/1.0"})
+        with opener.open(req, timeout=5) as resp:
+            raw = resp.read(51200)
+            html_text = raw.decode("utf-8", errors="replace")
+        parser = _OGParser()
+        parser.feed(html_text)
+        return {
+            "url": url,
+            "title": parser.og.get("title", parser.title.strip()),
+            "description": parser.og.get("description", ""),
+            "image": parser.og.get("image", ""),
+            "site_name": parser.og.get("site_name", ""),
+        }
+    except Exception:
+        return JSONResponse({"error": "failed to fetch URL"}, 500)
 
 
 # ── Webhooks ─────────────────────────────────────────────────────────
@@ -1018,7 +1389,8 @@ async def delete_webhook(wh_id: str):
 
 @app.get("/api/export")
 async def export_channel(channel: str = "general", format: str = "markdown"):
-    assert store._db is not None
+    if store._db is None:
+        raise RuntimeError("Database not initialized. Call init() first.")
     cursor = await store._db.execute(
         "SELECT * FROM messages WHERE channel = ? ORDER BY id ASC",
         [channel],
@@ -1069,11 +1441,15 @@ _agent_dir = DATA_DIR / "agents"
 
 @app.get("/api/agents/{name}/soul")
 async def api_get_soul(name: str):
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
     return {"soul": get_soul(_agent_dir, name)}
 
 
 @app.post("/api/agents/{name}/soul")
 async def api_set_soul(name: str, request: Request):
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
     body = await request.json()
     set_soul(_agent_dir, name, body.get("content", ""))
     return {"ok": True}
@@ -1081,11 +1457,15 @@ async def api_set_soul(name: str, request: Request):
 
 @app.get("/api/agents/{name}/notes")
 async def api_get_notes(name: str):
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
     return {"notes": get_notes(_agent_dir, name)}
 
 
 @app.post("/api/agents/{name}/notes")
 async def api_set_notes(name: str, request: Request):
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
     body = await request.json()
     set_notes(_agent_dir, name, body.get("content", ""))
     return {"ok": True}
@@ -1133,12 +1513,16 @@ async def set_agent_config(name: str, request: Request):
 
 @app.get("/api/agents/{name}/memories")
 async def list_agent_memories(name: str):
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
     mem = get_agent_memory(_agent_dir, name)
     return {"memories": mem.list_all()}
 
 
 @app.get("/api/agents/{name}/memories/{key}")
 async def api_get_agent_memory(name: str, key: str):
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
     mem = get_agent_memory(_agent_dir, name)
     val = mem.load(key)
     if val is None:
@@ -1148,9 +1532,280 @@ async def api_get_agent_memory(name: str, key: str):
 
 @app.delete("/api/agents/{name}/memories/{key}")
 async def api_delete_agent_memory(name: str, key: str):
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
     mem = get_agent_memory(_agent_dir, name)
     ok = mem.delete(key)
     return {"ok": ok}
+
+
+# ── Terminal Peek ─────────────────────────────────────────────────
+
+@app.get("/api/agents/{name}/terminal")
+async def peek_terminal(name: str, lines: int = 30):
+    """Capture the last N lines from an agent's tmux pane."""
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
+    session_name = f"ghostlink-{name}"
+    try:
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", session_name, "-p", "-S", f"-{lines}"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if result.returncode != 0:
+            return {"name": name, "output": "", "active": False}
+        return {"name": name, "output": result.stdout, "active": True}
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return {"name": name, "output": "", "active": False}
+
+
+# ── Dashboard / Analytics ──────────────────────────────────────────
+
+@app.get("/api/dashboard")
+async def get_dashboard():
+    """Aggregated dashboard data — messages, tokens, agents, activity."""
+    if store._db is None:
+        raise RuntimeError("Database not initialized.")
+
+    # Message stats
+    cursor = await store._db.execute("SELECT COUNT(*) as cnt FROM messages")
+    total_msgs = (await cursor.fetchone())["cnt"]
+
+    cursor = await store._db.execute(
+        "SELECT channel, COUNT(*) as cnt FROM messages GROUP BY channel ORDER BY cnt DESC"
+    )
+    msgs_by_channel = {row["channel"]: row["cnt"] for row in await cursor.fetchall()}
+
+    cursor = await store._db.execute(
+        "SELECT sender, COUNT(*) as cnt FROM messages WHERE type = 'chat' GROUP BY sender ORDER BY cnt DESC LIMIT 10"
+    )
+    msgs_by_sender = {row["sender"]: row["cnt"] for row in await cursor.fetchall()}
+
+    # Messages over time (last 24 hours, hourly buckets)
+    day_ago = time.time() - 86400
+    cursor = await store._db.execute(
+        "SELECT CAST((timestamp - ?) / 3600 AS INTEGER) as hour, COUNT(*) as cnt "
+        "FROM messages WHERE timestamp > ? GROUP BY hour ORDER BY hour",
+        (day_ago, day_ago),
+    )
+    hourly = {row["hour"]: row["cnt"] for row in await cursor.fetchall()}
+
+    # Agent stats
+    agents = _get_full_agent_list()
+    online = [a for a in agents if a.get("state") in ("active", "thinking")]
+
+    # Token usage
+    total_tokens = sum(_usage.values())
+
+    return {
+        "total_messages": total_msgs,
+        "messages_by_channel": msgs_by_channel,
+        "messages_by_sender": msgs_by_sender,
+        "hourly_messages": hourly,
+        "agents_total": len(agents),
+        "agents_online": len(online),
+        "total_tokens": total_tokens,
+        "usage_by_agent": dict(_usage),
+        "estimated_cost": (total_tokens / 1_000_000) * 3,
+        "channels": len(_settings.get("channels", ["general"])),
+        "uptime_seconds": time.time() - _settings.get("_server_start", time.time()),
+    }
+
+
+# ── Agent Feedback ─────────────────────────────────────────────────
+
+@app.post("/api/agents/{name}/feedback")
+async def agent_feedback(name: str, request: Request):
+    """Record thumbs up/down feedback on an agent's message. Stores in agent memory for learning."""
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
+    body = await request.json()
+    message_id = body.get("message_id", 0)
+    rating = body.get("rating", "")  # "up" or "down"
+    if rating not in ("up", "down"):
+        return JSONResponse({"error": "rating must be 'up' or 'down'"}, 400)
+
+    # Get the message text for context
+    msg_text = ""
+    if message_id and store._db:
+        cursor = await store._db.execute("SELECT text FROM messages WHERE id = ?", (message_id,))
+        row = await cursor.fetchone()
+        if row:
+            msg_text = row["text"][:200]  # Keep preview only
+
+    # Store feedback in agent memory
+    mem = get_agent_memory(_agent_dir, name)
+    feedback_key = "_feedback"
+    existing = mem.load(feedback_key)
+    feedback_list = []
+    if existing and isinstance(existing.get("content"), str):
+        try:
+            feedback_list = json.loads(existing["content"])
+        except (json.JSONDecodeError, TypeError):
+            feedback_list = []
+
+    feedback_list.append({
+        "message_id": message_id,
+        "rating": rating,
+        "preview": msg_text,
+        "timestamp": time.time(),
+    })
+    # Keep last 50 feedback entries
+    feedback_list = feedback_list[-50:]
+    mem.save(feedback_key, json.dumps(feedback_list))
+
+    # Update message reactions to show the feedback visually
+    if message_id:
+        emoji = "👍" if rating == "up" else "👎"
+        await store.react(message_id, emoji, _settings.get("username", "You"))
+
+    return {"ok": True, "agent": name, "rating": rating, "total_feedback": len(feedback_list)}
+
+
+# ── Session Snapshots ──────────────────────────────────────────────
+
+@app.get("/api/snapshot")
+async def export_snapshot():
+    """Export the entire session state as a JSON snapshot (agents, channels, settings, messages)."""
+    if store._db is None:
+        raise RuntimeError("Database not initialized.")
+    # Get all messages across all channels
+    cursor = await store._db.execute("SELECT * FROM messages ORDER BY id ASC")
+    rows = await cursor.fetchall()
+    msgs = [store._row_to_dict(r) for r in rows]
+    # Get jobs
+    jobs = await job_store.list_jobs()
+    # Get rules
+    rules = await rule_store.list_all()
+    return {
+        "version": "1.0.0",
+        "exported_at": time.time(),
+        "settings": dict(_settings),
+        "agents": _get_full_agent_list(),
+        "channels": _settings.get("channels", ["general"]),
+        "messages": msgs,
+        "jobs": jobs,
+        "rules": rules,
+    }
+
+
+@app.post("/api/snapshot/import")
+async def import_snapshot(request: Request):
+    """Import a session snapshot. Merges messages, replaces settings."""
+    body = await request.json()
+    imported_msgs = body.get("messages", [])
+    imported_settings = body.get("settings", {})
+    imported_channels = body.get("channels", [])
+
+    # Merge settings (keep existing channels, merge the rest)
+    safe_keys = {"username", "theme", "fontSize", "loopGuard", "notificationSounds", "autoRoute"}
+    for k in safe_keys:
+        if k in imported_settings:
+            _settings[k] = imported_settings[k]
+
+    # Merge channels
+    existing = set(_settings.get("channels", ["general"]))
+    for ch in imported_channels:
+        existing.add(ch)
+    _settings["channels"] = sorted(existing)
+    _save_settings()
+
+    # Import messages (skip duplicates by uid)
+    if store._db is None:
+        raise RuntimeError("Database not initialized.")
+    cursor = await store._db.execute("SELECT uid FROM messages")
+    existing_uids = {row["uid"] for row in await cursor.fetchall()}
+
+    imported_count = 0
+    for msg in imported_msgs:
+        if msg.get("uid") and msg["uid"] not in existing_uids:
+            await store.add(
+                sender=msg.get("sender", "unknown"),
+                text=msg.get("text", ""),
+                msg_type=msg.get("type", "chat"),
+                channel=msg.get("channel", "general"),
+                uid=msg.get("uid", ""),
+                metadata=json.dumps(msg.get("metadata", {})) if isinstance(msg.get("metadata"), dict) else str(msg.get("metadata", "{}")),
+            )
+            imported_count += 1
+
+    await broadcast("channel_update", {"channels": [{"name": c, "unread": 0} for c in _settings["channels"]]})
+    return {"ok": True, "imported_messages": imported_count, "channels": _settings["channels"]}
+
+
+# ── Message Templates ─────────────────────────────────────────────
+
+_TEMPLATES_PATH = DATA_DIR / "templates.json"
+
+
+def _load_templates() -> list[dict]:
+    if _TEMPLATES_PATH.exists():
+        try:
+            return json.loads(_TEMPLATES_PATH.read_text("utf-8"))
+        except Exception:
+            return []
+    return []
+
+
+def _save_templates(templates: list[dict]):
+    _TEMPLATES_PATH.write_text(json.dumps(templates, indent=2), "utf-8")
+
+
+@app.get("/api/templates")
+async def list_templates():
+    return {"templates": _load_templates()}
+
+
+@app.post("/api/templates")
+async def create_template(request: Request):
+    body = await request.json()
+    name = (body.get("name", "") or "").strip()
+    text = (body.get("text", "") or "").strip()
+    if not name or not text:
+        return JSONResponse({"error": "name and text required"}, 400)
+    templates = _load_templates()
+    template = {
+        "id": f"tpl-{int(time.time())}",
+        "name": name,
+        "text": text,
+        "category": (body.get("category", "") or "").strip(),
+        "created_at": time.time(),
+    }
+    templates.append(template)
+    _save_templates(templates)
+    return template
+
+
+@app.delete("/api/templates/{tpl_id}")
+async def delete_template(tpl_id: str):
+    templates = _load_templates()
+    before = len(templates)
+    templates = [t for t in templates if t.get("id") != tpl_id]
+    _save_templates(templates)
+    return {"ok": len(templates) < before}
+
+
+# ── Agent DM Channels ─────────────────────────────────────────────
+
+@app.post("/api/dm-channel")
+async def create_dm_channel(request: Request):
+    """Create or get a DM channel between two agents."""
+    body = await request.json()
+    agent1 = (body.get("agent1", "") or "").strip()
+    agent2 = (body.get("agent2", "") or "").strip()
+    if not agent1 or not agent2:
+        return JSONResponse({"error": "agent1 and agent2 required"}, 400)
+    # Deterministic channel name (sorted for consistency)
+    pair = sorted([agent1, agent2])
+    dm_name = f"dm-{pair[0]}-{pair[1]}"
+    # Add to channels if not exists
+    channels = _settings.get("channels", ["general"])
+    if dm_name not in channels:
+        channels.append(dm_name)
+        _settings["channels"] = channels
+        _save_settings()
+        await broadcast("channel_update", {"channels": [{"name": c, "unread": 0} for c in channels]})
+    return {"channel": dm_name, "agents": pair}
 
 
 # ── Cloudflare Tunnel (Remote Session) ──────────────────────────────
@@ -1239,25 +1894,28 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 
 # ── Serve frontend (SPA fallback) ──────────────────────────────────
+# Always register the middleware — check STATIC_DIR at request time, not module load.
 
-if STATIC_DIR.exists():
-    @app.middleware("http")
-    async def spa_middleware(request: Request, call_next):
-        response = await call_next(request)
-        if response.status_code == 404:
-            path = request.url.path
-            if path.startswith("/api/") or path.startswith("/uploads/") or path == "/ws":
-                return response
-                
-            file_path = STATIC_DIR / path.lstrip("/")
-            if file_path.is_file():
-                return FileResponse(file_path)
-            
-            index = STATIC_DIR / "index.html"
-            if index.exists():
-                return FileResponse(index)
-                
-        return response
+@app.middleware("http")
+async def spa_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if response.status_code == 404:
+        req_path = request.url.path
+        if req_path.startswith("/api/") or req_path.startswith("/uploads/") or req_path == "/ws":
+            return response
+
+        if not STATIC_DIR.exists():
+            return response
+
+        file_path = (STATIC_DIR / req_path.lstrip("/")).resolve()
+        if file_path.is_relative_to(STATIC_DIR.resolve()) and file_path.is_file():
+            return FileResponse(file_path)
+
+        index = STATIC_DIR / "index.html"
+        if index.exists():
+            return FileResponse(index)
+
+    return response
 
 
 # ── Entrypoint ──────────────────────────────────────────────────────

@@ -126,6 +126,28 @@ export function SettingsPanel() {
           </p>
         </SettingField>
 
+        {/* Auto-Route Toggle */}
+        <SettingField label="Auto-Route Messages to Agents">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] text-on-surface-variant/45 flex-1 mr-3">
+              When ON, agents receive ALL messages (not just @mentions). When OFF, agents only respond when @mentioned.
+            </p>
+            <button
+              onClick={() => {
+                const current = display.autoRoute ?? false;
+                applyInstant({ autoRoute: !current });
+              }}
+              className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
+                display.autoRoute ? 'bg-primary' : 'bg-surface-container-highest'
+              }`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                display.autoRoute ? 'translate-x-5' : 'translate-x-0.5'
+              }`} />
+            </button>
+          </div>
+        </SettingField>
+
         {/* Divider */}
         <div className="h-px bg-outline-variant/8" />
 

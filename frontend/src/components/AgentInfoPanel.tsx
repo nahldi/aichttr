@@ -150,6 +150,9 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
                 <InfoRow icon="account_tree" label="Role" value={agent.role.charAt(0).toUpperCase() + agent.role.slice(1)} color={agent.role === 'manager' ? '#facc15' : agent.role === 'worker' ? '#38bdf8' : '#a78bfa'} />
               )}
               <HierarchySection agent={agent} />
+
+              {/* Response Mode */}
+              <ResponseModeSelector agent={agent} />
             </div>
           ) : (
             <div>
@@ -214,6 +217,40 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ResponseModeSelector({ agent }: { agent: Agent }) {
+  const [mode, setMode] = useState(agent.responseMode || 'mentioned');
+  const modes = [
+    { id: 'mentioned', label: 'Only @mentioned', icon: 'alternate_email' },
+    { id: 'always', label: 'Always respond', icon: 'forum' },
+    { id: 'listen', label: 'Listen & decide', icon: 'hearing' },
+    { id: 'silent', label: 'Silent observer', icon: 'visibility' },
+  ] as const;
+  return (
+    <div className="mt-3 pt-3 border-t border-outline-variant/10">
+      <div className="text-[10px] font-semibold text-on-surface-variant/40 uppercase tracking-wider mb-2">Response Mode</div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {modes.map(m => (
+          <button
+            key={m.id}
+            onClick={() => {
+              setMode(m.id);
+              api.setAgentConfig(agent.name, { responseMode: m.id }).catch(() => {});
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[10px] font-medium transition-all ${
+              mode === m.id
+                ? 'bg-primary/15 text-primary border border-primary/20'
+                : 'bg-surface-container/40 text-on-surface-variant/40 hover:text-on-surface-variant/60 border border-transparent'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[13px]">{m.icon}</span>
+            {m.label}
+          </button>
+        ))}
       </div>
     </div>
   );

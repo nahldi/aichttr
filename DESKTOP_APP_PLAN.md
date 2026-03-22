@@ -1,6 +1,6 @@
 # GhostLink — Desktop App Architecture Plan
 
-> This document outlines the desktop app implementation. Do NOT build yet — this is the plan for when the web app is fully polished.
+> This document outlines the desktop app architecture. The Windows .exe is built via electron-builder. macOS and Linux builds are planned.
 
 ---
 

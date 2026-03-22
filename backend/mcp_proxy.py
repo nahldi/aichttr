@@ -215,10 +215,10 @@ class McpIdentityProxy:
                     sender_key = _SENDER_PARAMS.get(tool_name)
                     if sender_key is None:
                         continue
-                    if args.get(sender_key, "") != proxy.agent_name:
-                        args[sender_key] = proxy.agent_name
-                        params["arguments"] = args
-                        modified = True
+                    # Always inject — never trust agent-provided sender
+                    args[sender_key] = proxy.agent_name
+                    params["arguments"] = args
+                    modified = True
 
                 if modified:
                     return json.dumps(data).encode("utf-8")

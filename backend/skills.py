@@ -161,8 +161,9 @@ class SkillsRegistry:
                 data = json.loads(path.read_text("utf-8"))
                 self._agent_skills = data.get("agent_skills", {})
                 self._skill_config = data.get("skill_config", {})
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Failed to load skills config: %s", e)
 
     def _save(self):
         path = self._config_path()

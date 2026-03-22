@@ -45,7 +45,12 @@ function settingsExist(): boolean {
     const settingsPath = getSettingsPath();
     if (!fs.existsSync(settingsPath)) return false;
     const data = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    return data.setupComplete === true;
+    if (data.setupComplete !== true) return false;
+    // Re-run wizard if app version changed (major.minor bump)
+    const savedVersion = (data.appVersion || '0.0.0').split('.').slice(0, 2).join('.');
+    const currentVersion = app.getVersion().split('.').slice(0, 2).join('.');
+    if (savedVersion !== currentVersion) return false;
+    return true;
   } catch {
     return false;
   }
@@ -151,6 +156,7 @@ function createChatWindow(port: number): void {
     title: 'GhostLink',
     backgroundColor: '#09090f',
     show: false,
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -167,11 +173,29 @@ function createChatWindow(port: number): void {
     if (launcher && !launcher.isDestroyed()) {
       launcher.hide();
     }
+    // Also hide wizard if somehow still showing
+    if (wizardWindow && !wizardWindow.isDestroyed()) {
+      wizardWindow.hide();
+    }
     log.info('Chat window opened on port', port);
   });
 
   chatWindow.on('closed', () => {
     chatWindow = null;
+    // Show launcher when chat window closes
+    const launcher = getLauncherWindow();
+    if (launcher && !launcher.isDestroyed()) {
+      launcher.show();
+      launcher.focus();
+    }
+  });
+
+  // If the server stops while chat is open, close chat and show launcher
+  chatWindow.webContents.on('did-fail-load', () => {
+    log.info('Chat window failed to load — server may have stopped');
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      chatWindow.close();
+    }
   });
 }
 
@@ -369,8 +393,9 @@ function setupWizardIPC(): void {
   ipcMain.handle('wizard:complete', async (_event, settings: Record<string, any>) => {
     log.info('Wizard complete — saving settings');
 
-    // Ensure setupComplete is set
+    // Ensure setupComplete is set with current app version
     settings.setupComplete = true;
+    settings.appVersion = app.getVersion();
 
     // Save settings to ~/.ghostlink/settings.json
     saveSettings(settings);
@@ -419,9 +444,16 @@ function setupIPC(): void {
     try {
       await serverManager.stop();
       updateTrayMenu(false);
+      // Close chat window and show launcher
+      if (chatWindow && !chatWindow.isDestroyed()) {
+        chatWindow.close();
+        chatWindow = null;
+      }
       const launcher = getLauncherWindow();
       if (launcher && !launcher.isDestroyed()) {
         launcher.webContents.send('server:stopped');
+        launcher.show();
+        launcher.focus();
       }
       return { success: true };
     } catch (err: any) {
@@ -590,9 +622,9 @@ app.whenReady().then(async () => {
   }
 });
 
-// Keep the app alive when all windows close (tray keeps running)
+// Quit the app when all windows close
 app.on('window-all-closed', () => {
-  // Do nothing — tray keeps the app running
+  app.quit();
 });
 
 // Graceful shutdown: stop the backend before quitting
@@ -605,6 +637,17 @@ app.on('before-quit', async (event) => {
       await serverManager.stop();
     } catch (err) {
       log.error('Error stopping server during quit:', err);
+    }
+    // Clean up temp files copied for WSL compatibility
+    // Uses hardcoded safe paths only — no user input in command
+    try {
+      const { execFileSync } = require('child_process');
+      execFileSync('wsl', ['bash', '-c', 'rm -rf /tmp/ghostlink-backend /tmp/ghostlink-frontend'], {
+        stdio: 'ignore',
+        timeout: 5000,
+      });
+    } catch {
+      // Best-effort cleanup
     }
     app.quit();
   }

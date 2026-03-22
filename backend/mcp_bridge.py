@@ -5,6 +5,7 @@ Serves two transports for compatibility:
   - SSE on port 8201 (Gemini)
 """
 
+import fcntl
 import json
 import os
 import time
@@ -44,6 +45,17 @@ _cursors_lock = threading.Lock()
 _empty_read_count: dict[str, int] = {}
 
 
+def cleanup_agent(name: str):
+    """Remove all tracked state for a deregistered agent."""
+    with _presence_lock:
+        _presence.pop(name, None)
+        _activity.pop(name, None)
+        _activity_ts.pop(name, None)
+    with _cursors_lock:
+        _cursors.pop(name, None)
+    _empty_read_count.pop(name, None)
+
+
 def configure(
     store,
     registry,
@@ -53,10 +65,13 @@ def configure(
     rule_store=None,
     job_store=None,
     router=None,
+    mcp_http_port: int = 0,
+    mcp_sse_port: int = 0,
 ):
     """Called before server start to inject dependencies."""
     global _store, _registry, _settings, _data_dir, _server_port
     global _rule_store, _job_store, _router
+    global MCP_HTTP_PORT, MCP_SSE_PORT, MCP_PORT
     _store = store
     _registry = registry
     _settings = settings
@@ -65,6 +80,11 @@ def configure(
     _rule_store = rule_store
     _job_store = job_store
     _router = router
+    if mcp_http_port:
+        MCP_HTTP_PORT = mcp_http_port
+        MCP_PORT = mcp_http_port
+    if mcp_sse_port:
+        MCP_SSE_PORT = mcp_sse_port
 
 
 # ── Async event loop for sync→async bridge ──────────────────────────
@@ -138,7 +158,8 @@ def _extract_agent_token(ctx: Context | None) -> str:
         if auth and auth.lower().startswith("bearer "):
             return auth[7:].strip()
         return headers.get("x-agent-token", "").strip()
-    except Exception:
+    except Exception as e:
+        log.debug("Failed to extract agent token: %s", e)
         return ""
 
 
@@ -163,14 +184,22 @@ def _resolve_identity(
             return inst.name, None
         return "", "Error: stale or unknown token. Re-register and retry."
 
-    # Fallback to raw name
+    # Fallback to raw name — only allowed for human names
     if not provided:
         if required:
             return "", f"Error: {field_name} is required."
         return "", None
 
-    _touch_presence(provided)
-    return provided, None
+    _HUMAN_NAMES = {"you", "user", "human", "admin"}
+    if provided.lower() in _HUMAN_NAMES:
+        _touch_presence(provided)
+        return provided, None
+
+    # Non-human names (agents) MUST authenticate with a bearer token
+    if _registry and _registry.get(provided):
+        return "", f"Error: '{provided}' is a registered agent — use bearer token authentication."
+
+    return "", f"Error: '{provided}' is not a registered agent. Register first."
 
 
 def _update_cursor(sender: str, msgs: list[dict], channel: str | None):
@@ -200,8 +229,8 @@ def _serialize_messages(msgs: list[dict]) -> str:
                     atts = json.loads(atts)
                 if atts:
                     entry["attachments"] = atts
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("Failed to parse attachments for msg %s: %s", m.get("id"), e)
         if m.get("reply_to") is not None:
             entry["reply_to"] = m["reply_to"]
         out.append(entry)
@@ -231,7 +260,11 @@ def _trigger_mentions(sender: str, text: str, channel: str):
         queue_file = _data_dir / f"{target}_queue.jsonl"
         try:
             with open(queue_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"channel": channel}) + "\n")
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                try:
+                    f.write(json.dumps({"channel": channel}) + "\n")
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         except Exception as e:
             log.warning(f"Failed to write queue for {target}: {e}")
 
@@ -244,6 +277,10 @@ _INSTRUCTIONS = (
     "Use chat_join when you start a session to announce your presence. "
     "Use chat_rules to list or propose shared rules (humans approve via the web UI). "
     "Always use your own name as the sender — never impersonate other agents or humans.\n\n"
+    "CRITICAL — Agent Isolation:\n"
+    "Your memory, notes, and soul are scoped to YOUR agent directory. You cannot access other agents' data. "
+    "When you call memory_save/load, the system automatically scopes to YOUR storage. "
+    "Do NOT attempt to read or modify another agent's files, memories, notes, or soul.\n\n"
     "CRITICAL — Sender Identity Rules:\n"
     "Your BASE agent identity (used for chat_read) is:\n"
     "  - Anthropic products (Claude Code, etc.) → base: \"claude\"\n"
@@ -415,6 +452,37 @@ def chat_read(
         msgs = _run_async(_store.get_recent(limit, ch))
 
     msgs = msgs[-limit:]
+
+    # Smart context compression: if this is a first read (no cursor) with many messages,
+    # compress older messages into a summary to save tokens
+    COMPRESS_THRESHOLD = 30  # Only compress if more than this many messages
+    KEEP_RECENT = 15  # Always keep the most recent N messages in full
+    if len(msgs) > COMPRESS_THRESHOLD and not since_id:
+        old_msgs = msgs[:-KEEP_RECENT]
+        recent_msgs = msgs[-KEEP_RECENT:]
+        # Build a compressed summary of old messages
+        senders = {}
+        topics = []
+        for m in old_msgs:
+            s = m.get("sender", "unknown")
+            senders[s] = senders.get(s, 0) + 1
+            # Extract key info from longer messages
+            text = m.get("text", "")
+            if len(text) > 50:
+                topics.append(f"[{s}] {text[:80]}...")
+        summary_lines = [f"--- Context summary ({len(old_msgs)} earlier messages) ---"]
+        summary_lines.append(f"Participants: {', '.join(f'{k} ({v} msgs)' for k, v in senders.items())}")
+        if topics:
+            summary_lines.append("Key messages:")
+            for t in topics[:8]:  # Max 8 topic previews
+                summary_lines.append(f"  {t}")
+        summary_lines.append("--- End summary (recent messages follow) ---")
+        summary_msg = {
+            "id": 0, "sender": "system", "text": "\n".join(summary_lines),
+            "type": "system", "time": "", "channel": ch,
+        }
+        msgs = [summary_msg] + recent_msgs
+
     _update_cursor(sender, msgs, ch)
     serialized = _serialize_messages(msgs)
 
@@ -648,8 +716,8 @@ def chat_react(
             method="POST",
         )
         urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass  # Direct DB update already done; broadcast is best-effort
+    except Exception as e:
+        log.debug("Reaction broadcast best-effort failed: %s", e)
     return f"Reacted {emoji} to message #{message_id}"
 
 
@@ -685,6 +753,10 @@ _ALL_TOOLS = [
 MCP_HTTP_PORT = 8200
 MCP_SSE_PORT = 8201
 
+# Lazy-initialized servers — created after configure() sets ports
+_mcp_http: FastMCP | None = None
+_mcp_sse: FastMCP | None = None
+
 
 def _create_server(port: int) -> FastMCP:
     server = FastMCP(
@@ -699,22 +771,29 @@ def _create_server(port: int) -> FastMCP:
     return server
 
 
-mcp_http = _create_server(MCP_HTTP_PORT)
-mcp_sse = _create_server(MCP_SSE_PORT)
+def _init_servers():
+    """Create MCP servers after configure() has set ports."""
+    global _mcp_http, _mcp_sse
+    if _mcp_http is None:
+        _mcp_http = _create_server(MCP_HTTP_PORT)
+    if _mcp_sse is None:
+        _mcp_sse = _create_server(MCP_SSE_PORT)
 
 
 def run_http_server():
     """Block — run streamable-http MCP in a background thread."""
     _ensure_loop()
+    _init_servers()
     log.info(f"MCP HTTP bridge starting on port {MCP_HTTP_PORT}")
-    mcp_http.run(transport="streamable-http")
+    _mcp_http.run(transport="streamable-http")
 
 
 def run_sse_server():
     """Block — run SSE MCP in a background thread."""
     _ensure_loop()
+    _init_servers()
     log.info(f"MCP SSE bridge starting on port {MCP_SSE_PORT}")
-    mcp_sse.run(transport="sse")
+    _mcp_sse.run(transport="sse")
 
 
 # Backward compat — single server entry point

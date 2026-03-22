@@ -1,7 +1,12 @@
+import { useState } from 'react';
 import { useChatStore } from '../stores/chatStore';
+import { api } from '../lib/api';
 
 export function RulesPanel() {
   const rules = useChatStore((s) => s.rules);
+  const settings = useChatStore((s) => s.settings);
+  const [showForm, setShowForm] = useState(false);
+  const [text, setText] = useState('');
 
   const active = rules.filter((r) => r.status === 'active');
   const drafts = rules.filter((r) => r.status === 'draft' || r.status === 'pending');
@@ -13,16 +18,49 @@ export function RulesPanel() {
     { label: 'Archived', items: archived, color: '#958da1' },
   ];
 
+  const handleCreate = async () => {
+    if (!text.trim()) return;
+    try {
+      await api.proposeRule(text.trim(), settings.username, '');
+      const res = await api.getRules();
+      useChatStore.getState().setRules(res.rules);
+      setText('');
+      setShowForm(false);
+    } catch {}
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/10">
         <h2 className="text-sm font-bold text-on-surface uppercase tracking-widest">
           Rules
         </h2>
-        <button className="p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors">
-          <span className="material-symbols-outlined text-lg">add</span>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors"
+        >
+          <span className="material-symbols-outlined text-lg">{showForm ? 'close' : 'add'}</span>
         </button>
       </div>
+
+      {showForm && (
+        <div className="px-4 py-3 border-b border-outline-variant/10 flex gap-2">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+            placeholder="Propose a rule..."
+            className="flex-1 bg-surface-container rounded-lg px-3 py-1.5 text-xs text-on-surface outline-none border border-outline-variant/10 focus:border-primary/50"
+            autoFocus
+          />
+          <button
+            onClick={handleCreate}
+            className="px-3 py-1.5 bg-primary-container text-on-primary-container rounded-lg text-xs font-medium hover:brightness-110 transition-all"
+          >
+            Propose
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {sections.map((section) => (
