@@ -101,10 +101,5 @@ class AgentRegistry:
     def resolve_token(self, token: str) -> AgentInstance | None:
         for inst in self._instances.values():
             if inst.token == token:
-                if inst.is_token_expired():
-                    # Auto-rotate on heartbeat — expired tokens are still valid
-                    # during the grace period if the agent is actively heartbeating.
-                    # The wrapper picks up the new token from heartbeat response.
-                    inst.rotate_token()
                 return inst
         return None

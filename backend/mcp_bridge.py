@@ -5,7 +5,10 @@ Serves two transports for compatibility:
   - SSE on port 8201 (Gemini)
 """
 
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore  # Windows: no file locking
 import json
 import os
 import time
@@ -260,11 +263,14 @@ def _trigger_mentions(sender: str, text: str, channel: str):
         queue_file = _data_dir / f"{target}_queue.jsonl"
         try:
             with open(queue_file, "a", encoding="utf-8") as f:
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-                try:
+                if fcntl:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                    try:
+                        f.write(json.dumps({"channel": channel}) + "\n")
+                    finally:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                else:
                     f.write(json.dumps({"channel": channel}) + "\n")
-                finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         except Exception as e:
             log.warning(f"Failed to write queue for {target}: {e}")
 

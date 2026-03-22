@@ -127,9 +127,9 @@ def setup(app, store=None, registry=None, mcp_bridge=None):
         impl_content = (body.get("impl_content", "") or "").strip()
         impl_type = body.get("impl_type", "prompt")
 
-        # Safety scan for script-type implementations
+        # Safety scan all skill implementations
         scan_result = None
-        if impl_type in ("script", "mcp") and impl_content:
+        if impl_content:
             scan_result = scan_skill_content(impl_content)
             if not scan_result["safe"]:
                 return JSONResponse({
@@ -189,8 +189,7 @@ def setup(app, store=None, registry=None, mcp_bridge=None):
         # Safety scan imported skill content
         impl = body.get("implementation", {})
         impl_content = impl.get("content", "")
-        impl_type = impl.get("type", "prompt")
-        if impl_type in ("script", "mcp") and impl_content:
+        if impl_content:
             scan_result = scan_skill_content(impl_content)
             if not scan_result["safe"]:
                 return JSONResponse({

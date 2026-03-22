@@ -221,13 +221,17 @@ def _route_mentions(sender: str, text: str, channel: str):
 
         queue_file = DATA_DIR / f"{target}_queue.jsonl"
         try:
-            import fcntl
             with open(queue_file, "a", encoding="utf-8") as f:
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                 try:
+                    import fcntl
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                    try:
+                        f.write(json.dumps({"channel": channel}) + "\n")
+                    finally:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                except ImportError:
+                    # Windows: fcntl not available, write without locking
                     f.write(json.dumps({"channel": channel}) + "\n")
-                finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         except Exception as e:
             log.warning("Queue write failed for %s: %s", target, e)
 
@@ -800,7 +804,9 @@ async def pick_folder():
     )
     # Find powershell
     import shutil as _shutil
-    ps_exe = _shutil.which("powershell.exe") or "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+    ps_exe = _shutil.which("powershell.exe")
+    if not ps_exe:
+        return JSONResponse({"error": "powershell.exe not found — not running on WSL?"}, 500)
 
     try:
         result = subprocess.run(
@@ -909,8 +915,15 @@ async def kill_agent(name: str):
         log.debug("tmux kill-session for %s: %s", name, e)
 
     # Only kill the wrapper process for THIS agent
+    # Processes are stored as {base}_{pid} — scan for matching base name
     async with _agent_lock:
         proc = _agent_processes.pop(name, None)
+        if proc is None:
+            # Scan for keys that start with the agent's base name
+            for key in list(_agent_processes):
+                if key.startswith(name + "_") or key.startswith(name.split("-")[0] + "_"):
+                    proc = _agent_processes.pop(key, None)
+                    break
     if proc:
         try:
             proc.terminate()
@@ -1116,10 +1129,9 @@ async def heartbeat(agent_name: str, request: Request):
         if inst.state != old_state:
             await broadcast("status", {"agents": _get_full_agent_list()})
         result: dict = {"ok": True, "name": inst.name}
-        # Return rotated token if it changed
+        # Rotate token if expired — wrapper picks up the new token
         if inst.is_token_expired():
-            new_token = inst.rotate_token()
-            result["token"] = new_token
+            result["token"] = inst.rotate_token()
         return result
     return JSONResponse({"error": "not found"}, 404)
 
@@ -1690,8 +1702,8 @@ async def open_terminal(name: str):
             return {"ok": True, "method": "windows-terminal"}
 
         # Fallback: try cmd.exe
-        cmd_exe = _shutil.which("cmd.exe") or "/mnt/c/Windows/System32/cmd.exe"
-        if Path(cmd_exe).exists():
+        cmd_exe = _shutil.which("cmd.exe")
+        if cmd_exe:
             subprocess.Popen(
                 [cmd_exe, "/c", "start", "wsl", "tmux", "attach-session", "-t", session_name],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

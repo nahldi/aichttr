@@ -431,12 +431,12 @@ def _queue_watcher(get_identity_fn, inject_fn, *, server_port: int = 8300,
                         continue
                     try:
                         data = json.loads(line)
-                        if isinstance(data, dict):
+                        if isinstance(data, dict) and data:
                             if "channel" in data:
                                 channel = data["channel"]
                             if "job_id" in data:
                                 job_id = data["job_id"]
-                        has_trigger = True
+                            has_trigger = True
                     except json.JSONDecodeError:
                         continue
 
