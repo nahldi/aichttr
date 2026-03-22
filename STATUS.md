@@ -4,14 +4,28 @@
 **GitHub:** https://github.com/nahldi/aichttr (repo name is still `aichttr`, contents are GhostLink)
 **License:** MIT
 
+
 ## RECENT FIXES (2026-03-22)
 
-- **BUG-001 Resolved:** Fixed WebSocket connection drop issue by replacing the catch-all SPA route with an ASGI middleware (`spa_middleware`) that properly ignores `/ws` upgrades.
-- **BUG-002 Resolved:** Fixed first-run Python dependency errors inside WSL by adding `tomli` and `websockets` to the automated `pip install --break-system-packages` script in `server.ts`.
-- **BUG-003 Resolved:** Fixed memory sync issues in `backend/app.py` by transitioning from a global `AgentMemory` instantiation to per-agent `get_agent_memory` usage.
-- **BUG-004, BUG-005, BUG-006 Resolved:** Eliminated UI freezing (60-second lockups and white screens) during desktop app launcher/wizard boot by rewriting synchronous `execSync` auth and python checks to asynchronous Promises (`util.promisify(exec)`) in `auth/index.ts` and `main/index.ts`. Ensured wizard properly forwards the user-selected platform to backend Python detectors.
-- **BUG-007 Resolved:** Confirmed logic is present to copy backend files to `/tmp/ghostlink-backend/` when a OneDrive path is detected in WSL.
+### 1. Architectural Cleanup & Git Repository Migration
+- **Distributable Consolidation**: Completely removed the redundant top-level `backend/` and `frontend/` folders from the local workspace. All active development and source code was correctly relocated and isolated into the `aichttrr/` clean distributable directory.
+- **Git Repository Optimization**: Pushed the entire updated source code to the private GitHub repository (`https://github.com/nahldi/aichttr`).
+- **Data Privacy & Ignored Files**: Reconfigured `.gitignore` to explicitly exclude all local databases (`backend/data/`), uploaded files (`backend/uploads/`), Python caches (`__pycache__`), and desktop build artifacts (`desktop/dist/`). Restored `config.toml` to a safe boilerplate template with all personal paths removed.
 
+### 2. Desktop App & Performance Fixes (BUG-004, BUG-005, BUG-006)
+- **Asynchronous CLI Auth Checks**: Rewrote the entire desktop auth detection flow (`main/auth/index.ts` and individual provider files like `anthropic.ts`, `google.ts`, etc.). Replaced thread-blocking synchronous `execSync` calls with fully asynchronous `execAsync` wrappers utilizing `util.promisify(exec)`.
+- **Eliminated Freezes**: This completely resolved the 30-60 second UI lockups occurring on the Desktop launcher and setup wizard during initial boot. 
+- **Wizard Platform Detection Fix**: Fixed a bug in `wizard.js` where the platform selected by the user (e.g., "wsl") was not being forwarded to the backend. Updated `api.invoke('wizard:detect-python', settings.platform)` to correctly pass the selection to the IPC handler, ensuring the Next button unlocks reliably.
+
+### 3. Backend Bug Fixes (BUG-001, BUG-002, BUG-003)
+- **FastAPI / WebSocket Conflict (BUG-001)**: Refactored the `backend/app.py` routing layer. Replaced the catch-all `@app.get("/{full_path:path}")` endpoint (which was swallowing WebSocket upgrade requests and causing connection drops) with a custom ASGI HTTP middleware (`spa_middleware`). This properly ignores `/ws` and `/api/` paths while correctly falling back to serving `index.html` for React Router routes.
+- **WSL First-Run Dependency Failures (BUG-002)**: Updated `desktop/main/server.ts`. When `ghostlink` initializes in WSL and encounters PEP 668 restrictions (Python 3.12+), the automated fallback installation (`pip install --break-system-packages ...`) now explicitly includes the previously missing `tomli` and `websockets` libraries, preventing crash loops on clean installs.
+- **Memory Persistence Scoping (BUG-003)**: Fixed a bug in `backend/app.py` where a global `AgentMemory` instance was incorrectly instantiated without a target agent name. Transitioned all memory-related endpoints to use the dynamic `get_agent_memory(_agent_dir, name)` function to correctly isolate memories to their respective agent subdirectories.
+
+### 4. Build Artifact Deletion (Accident)
+- **Installer Cleanup Mistake**: During the cleanup of the root directory, mistakenly executed `rm -rf aichttrr/desktop/dist`, inadvertently deleting the pre-built `GhostLink Setup 1.0.3.exe` file. Rebuilding requires execution of `npm run build:win` directly from a Windows shell since cross-compilation within WSL with `wine` fails.
+
+---
 ---
 
 ## HANDOFF PROMPT
