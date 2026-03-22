@@ -103,8 +103,10 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const editMessageInStore = useChatStore((s) => s.editMessage);
   const agent = agents.find((a) => a.name === message.sender);
   const agentNames = new Set(agents.map(a => a.name));
-  // Update color map for @mention highlighting
-  agents.forEach(a => { _agentColorMap[a.name] = a.color; _agentColorMap[a.base] = a.color; });
+  // Build color map for @mention highlighting (avoid module-level mutation)
+  const colorMap: Record<string, string> = {};
+  agents.forEach(a => { colorMap[a.name] = a.color; colorMap[a.base] = a.color; });
+  _agentColorMap = colorMap;
   const isUser = message.sender === settings.username || message.sender === 'You' || (!agentNames.has(message.sender) && message.type === 'chat');
   const isSystem = message.type === 'system' || message.type === 'join';
 

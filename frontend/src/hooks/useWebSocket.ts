@@ -47,7 +47,6 @@ export function useWebSocket() {
   const {
     addMessage,
     incrementUnread,
-    activeChannel,
     setAgents,
     setTyping,
     updateJob,
@@ -81,7 +80,7 @@ export function useWebSocket() {
         switch (parsed.type) {
           case 'message':
             addMessage(parsed.data);
-            if (parsed.data.channel !== activeChannel) {
+            if (parsed.data.channel !== useChatStore.getState().activeChannel) {
               incrementUnread(parsed.data.channel);
             }
             // Notifications for agent messages when tab is blurred

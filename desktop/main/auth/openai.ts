@@ -6,14 +6,11 @@
  * Check:   Config dirs (~/.codex/ or ~/.config/codex/) or env var
  */
 
-import { exec } from 'child_process';
-
-
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import type { AuthStatus } from './index';
-import { cmd, hasCommand, isWsl, spawnInTerminal, execAsync } from './index';
+import { hasCommand, isWsl, spawnInTerminal, execAsync } from './index';
 
 const PROVIDER = 'openai';
 const NAME     = 'Codex';

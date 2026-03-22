@@ -5,14 +5,11 @@
  * Auth:    `gemini auth login`, `gcloud auth login`, or GOOGLE_API_KEY / GEMINI_API_KEY env var
  */
 
-import { exec } from 'child_process';
-
-
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import type { AuthStatus } from './index';
-import { cmd, execCmd, hasCommand, isCommandNotFound, isWsl, spawnInTerminal, execAsync } from './index';
+import { execCmd, hasCommand, isCommandNotFound, isWsl, spawnInTerminal, execAsync } from './index';
 
 const PROVIDER = 'google';
 const NAME     = 'Gemini';

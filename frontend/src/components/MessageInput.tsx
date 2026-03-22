@@ -77,6 +77,17 @@ export function MessageInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeChannel = useChatStore((s) => s.activeChannel);
   const settings = useChatStore((s) => s.settings);
+  const pendingInput = useChatStore((s) => s.pendingInput);
+  const setPendingInput = useChatStore((s) => s.setPendingInput);
+
+  // Watch for external input (from SearchModal command palette)
+  useEffect(() => {
+    if (pendingInput) {
+      setText(pendingInput);
+      setPendingInput('');
+      textareaRef.current?.focus();
+    }
+  }, [pendingInput, setPendingInput]);
   const replyTo = useChatStore((s) => s.replyTo);
   const setReplyTo = useChatStore((s) => s.setReplyTo);
   const messages = useChatStore((s) => s.messages);

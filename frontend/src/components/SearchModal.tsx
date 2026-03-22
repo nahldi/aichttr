@@ -82,22 +82,12 @@ export function SearchModal({ onClose }: SearchModalProps) {
   };
 
   const handleCommandSelect = (name: string) => {
-    // Put the command in the message input and close
-    const input = document.querySelector('textarea') as HTMLTextAreaElement;
-    if (input) {
-      input.value = name;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    }
+    useChatStore.getState().setPendingInput(name);
     onClose();
   };
 
   const handleAgentSelect = (name: string) => {
-    // Put @mention in message input
-    const input = document.querySelector('textarea') as HTMLTextAreaElement;
-    if (input) {
-      input.value = `@${name} `;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    }
+    useChatStore.getState().setPendingInput(`@${name} `);
     onClose();
   };
 

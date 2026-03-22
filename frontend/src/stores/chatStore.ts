@@ -70,6 +70,8 @@ interface ChatState {
   setMobileMenuOpen: (open: boolean) => void;
   replyTo: Message | null;
   setReplyTo: (msg: Message | null) => void;
+  pendingInput: string;
+  setPendingInput: (text: string) => void;
   chatAtBottom: boolean;
   setChatAtBottom: (v: boolean) => void;
   newMsgCount: number;
@@ -198,6 +200,8 @@ export const useChatStore = create<ChatState>((set) => ({
   setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
   replyTo: null,
   setReplyTo: (msg) => set({ replyTo: msg }),
+  pendingInput: '',
+  setPendingInput: (text) => set({ pendingInput: text }),
   chatAtBottom: true,
   setChatAtBottom: (v) => set({ chatAtBottom: v }),
   newMsgCount: 0,

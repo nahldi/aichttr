@@ -6,9 +6,6 @@
  * Check:   `claude auth status` or check ~/.claude/ directory
  */
 
-import { exec } from 'child_process';
-
-
 import type { AuthStatus } from './index';
 import { execCmd, isWsl, isCommandNotFound, spawnInTerminal, hasClaudeCli, execAsync } from './index';
 
