@@ -197,18 +197,8 @@ function renderProviders(statuses) {
       status.style.color = '#facc15';
     }
 
-    // Installed indicator (green check or dash)
-    if (s.installed || s.authenticated) {
-      const installBadge = document.createElement('div');
-      installBadge.style.cssText = 'font-size:9px; color:#4ade80; margin-top:2px;';
-      installBadge.innerHTML = '&#10003; CLI installed';
-      info.appendChild(name);
-      info.appendChild(status);
-      info.appendChild(installBadge);
-    } else {
-      info.appendChild(name);
-      info.appendChild(status);
-    }
+    info.appendChild(name);
+    info.appendChild(status);
 
     // Action area — 3 states
     const action = document.createElement('div');

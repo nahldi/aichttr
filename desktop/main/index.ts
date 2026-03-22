@@ -45,11 +45,13 @@ function settingsExist(): boolean {
     const settingsPath = getSettingsPath();
     if (!fs.existsSync(settingsPath)) return false;
     const data = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    // Only show wizard on true fresh install — never on updates
     if (data.setupComplete !== true) return false;
-    // Re-run wizard if app version changed (any version bump)
-    const savedVersion = data.appVersion || '0.0.0';
-    const currentVersion = app.getVersion();
-    if (savedVersion !== currentVersion) return false;
+    // Update stored version silently on update
+    if (data.appVersion !== app.getVersion()) {
+      data.appVersion = app.getVersion();
+      fs.writeFileSync(settingsPath, JSON.stringify(data, null, 2), 'utf-8');
+    }
     return true;
   } catch {
     return false;

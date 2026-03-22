@@ -99,7 +99,6 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
   const template = templates.find(t => t.base === selected);
   const presets = PERMISSION_PRESETS[selected] || [{ label: 'Default', args: [], desc: 'Standard mode' }];
   const installed = templates.filter(t => t.available);
-  const notInstalledList = templates.filter(t => !t.available);
 
   const handlePickFolder = async () => {
     setPickingFolder(true);
@@ -230,42 +229,29 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
             </div>
           </Section>
 
-          {/* Agent Selection */}
+          {/* Agent Selection — show all agents, highlight available */}
           <Section label="Agent">
             <div className="grid grid-cols-3 gap-2">
-              {installed.map((t) => (
+              {templates.map((t) => (
                 <button
                   key={t.base}
                   onClick={() => { setSelected(t.base); setPermPreset(0); setSelectedModel(0); }}
                   className={`flex flex-col items-center gap-2 py-3 px-2 rounded-xl transition-all ${
                     selected === t.base
                       ? 'ring-1 ring-primary/30 bg-primary/8'
-                      : 'bg-surface-container/30 hover:bg-surface-container/50'
+                      : t.available
+                        ? 'bg-surface-container/30 hover:bg-surface-container/50'
+                        : 'bg-surface-container/20 opacity-50 hover:opacity-70'
                   }`}
                 >
-                  <AgentIcon base={t.base} color={t.color} size={36} />
+                  <AgentIcon base={t.base} color={t.color} size={32} />
                   <div className="text-center">
-                    <div className="text-[11px] font-semibold text-on-surface">{t.label}</div>
-                    <div className="text-[9px] text-on-surface-variant/30">{t.provider || 'Installed'}</div>
+                    <div className="text-[10px] font-semibold text-on-surface">{t.label}</div>
+                    <div className="text-[8px] text-on-surface-variant/30">{t.available ? (t.provider || 'Ready') : 'Not installed'}</div>
                   </div>
                 </button>
               ))}
             </div>
-            {notInstalledList.length > 0 && (
-              <details className="mt-3">
-                <summary className="text-[10px] text-on-surface-variant/30 cursor-pointer hover:text-on-surface-variant/50 select-none">
-                  {notInstalledList.length} more agents available — install CLI to use
-                </summary>
-                <div className="grid grid-cols-4 gap-1.5 mt-2">
-                  {notInstalledList.map((t) => (
-                    <div key={t.base} className="flex flex-col items-center gap-1 py-2 px-1 rounded-lg opacity-30">
-                      <AgentIcon base={t.base} color={t.color} size={24} />
-                      <div className="text-[9px] text-on-surface-variant/40">{t.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            )}
           </Section>
 
           {/* Workspace */}
