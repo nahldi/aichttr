@@ -12,7 +12,10 @@
     "build:all": "tsc && electron-builder --win --mac --linux",
     "clean": "rimraf main/**/*.js main/**/*.js.map"
   },
-  "author": "GhostLink",
+  "author": {
+    "name": "GhostLink",
+    "email": "ghostlink@users.noreply.github.com"
+  },
   "license": "MIT",
   "homepage": "https://github.com/nahldi/aichttr",
   "devDependencies": {
