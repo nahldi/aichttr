@@ -239,14 +239,21 @@ def _auth_headers(token: str, *, include_json: bool = False) -> dict[str, str]:
 _APPROVAL_PATTERNS = [
     # Claude Code: "Allow tool_name? (y/n)" or "(y)es, (n)o, (a)lways"
     re.compile(r'(?:Allow|Approve|Permit).*\?\s*\(([yYnNaA/\s,]+)\)\s*$', re.MULTILINE | re.IGNORECASE),
-    # Numbered options: "1) Allow once  2) Allow all  3) Deny"
+    # Claude Code MCP: "Do you want to proceed?" with numbered options
     re.compile(
-        r'(?:^|\n)\s*1[.\)]\s*(?:Allow|Yes|Accept|Approve).*'
-        r'(?:\n\s*2[.\)]\s*(?:Allow|Yes|Accept|Approve|Session).*)?'
-        r'\n\s*(?:2|3)[.\)]\s*(?:Deny|No|Reject|Cancel)',
+        r'Do you want to proceed\?.*'
+        r'[\s\S]*?1[.\)]\s*Yes'
+        r'[\s\S]*?(?:2|3)[.\)]\s*(?:No|Deny)',
         re.MULTILINE | re.IGNORECASE,
     ),
-    # Generic y/n with question: "Do you want to allow...? [y/N]"
+    # Numbered options: "1) Allow/Yes  2) ... 3) Deny/No"  (with possible > cursor)
+    re.compile(
+        r'[>\s]*1[.\)]\s*(?:Allow|Yes|Accept|Approve).*'
+        r'(?:[\s\S]*?2[.\)]\s*(?:Allow|Yes|Accept|Approve|Session|don).*)?'
+        r'[\s\S]*?(?:2|3)[.\)]\s*(?:Deny|No|Reject|Cancel)',
+        re.MULTILINE | re.IGNORECASE,
+    ),
+    # Generic y/n with question
     re.compile(
         r'(?:Do you want to|Would you like to|Should I)\s+'
         r'(?:allow|approve|permit|run|execute|proceed).*\?\s*'
@@ -259,7 +266,7 @@ _APPROVAL_PATTERNS = [
 
 # Key mappings: what key to inject for each response, per agent base
 _APPROVAL_KEYMAPS: dict[str, dict[str, str]] = {
-    "claude":   {"allow_once": "y", "allow_session": "a", "deny": "n"},
+    "claude":   {"allow_once": "1", "allow_session": "2", "deny": "3"},
     "codex":    {"allow_once": "y", "allow_session": "a", "deny": "n"},
     "gemini":   {"allow_once": "y", "allow_session": "a", "deny": "n"},
     "_default": {"allow_once": "y", "allow_session": "a", "deny": "n"},
@@ -361,6 +368,17 @@ def _approval_watcher(
                     prompt_hash = hash(match.group(0).strip())
                     if prompt_hash == last_prompt_hash:
                         break  # Already sent this prompt
+
+                    # Auto-approve GhostLink MCP tool prompts (our own tools)
+                    if 'ghostlink' in pane_text.lower() or 'chat_read' in pane_text or 'chat_send' in pane_text:
+                        keymap = _APPROVAL_KEYMAPS.get(agent_base, _APPROVAL_KEYMAPS["_default"])
+                        key = keymap.get("allow_session", "2")
+                        subprocess.run(["tmux", "send-keys", "-t", session_name, key], capture_output=True, timeout=3)
+                        time.sleep(0.1)
+                        subprocess.run(["tmux", "send-keys", "-t", session_name, "Enter"], capture_output=True, timeout=3)
+                        last_prompt_hash = prompt_hash
+                        time.sleep(1)
+                        break
 
                     # Extract context: last 10 non-empty lines
                     lines = [l for l in pane_text.strip().split('\n') if l.strip()]
