@@ -18,21 +18,33 @@ let cachedLauncher: BrowserWindow | null = null;
  * Uses a 16x16 or 32x32 PNG from the assets directory.
  */
 function getTrayIconPath(): string {
-  const assetsDir = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '..', 'assets');
+  // Search multiple locations — packaged app may put assets in different places
+  const searchDirs = app.isPackaged
+    ? [
+        path.join(process.resourcesPath, 'assets'),
+        path.join(process.resourcesPath),
+        path.join(process.resourcesPath, 'app', 'assets'),
+        path.join(process.resourcesPath, 'app.asar', 'assets'),
+        path.dirname(app.getPath('exe')),
+      ]
+    : [
+        path.join(__dirname, '..', 'assets'),
+        path.join(__dirname, '..', '..', 'assets'),
+      ];
 
-  // Prefer a dedicated tray icon; fall back to the main icon
   const candidates = ['tray-icon.png', 'icon.png'];
-  for (const name of candidates) {
-    const full = path.join(assetsDir, name);
-    try {
-      require('fs').accessSync(full);
-      return full;
-    } catch { /* try next */ }
+  for (const dir of searchDirs) {
+    for (const name of candidates) {
+      const full = path.join(dir, name);
+      try {
+        require('fs').accessSync(full);
+        log.info('Tray icon found at: %s', full);
+        return full;
+      } catch { /* try next */ }
+    }
   }
 
-  // Absolute fallback: create an empty 16x16 image
+  log.warn('No tray icon found — tray will have no icon');
   return '';
 }
 

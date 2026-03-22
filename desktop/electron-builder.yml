@@ -19,6 +19,11 @@ extraResources:
       - "!*.pyc"
   - from: ../frontend/dist
     to: frontend
+  - from: assets
+    to: assets
+    filter:
+      - "*.png"
+      - "*.ico"
 win:
   target: nsis
   icon: assets/icon.ico
