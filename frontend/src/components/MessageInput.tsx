@@ -8,7 +8,7 @@ import { api } from '../lib/api';
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const VOICE_AVAILABLE = !!SpeechRecognition;
 
-function useVoiceInput(onTranscript: (text: string) => void) {
+function useVoiceInput(onTranscript: (text: string) => void, lang?: string) {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<any>(null);
 
@@ -17,7 +17,7 @@ function useVoiceInput(onTranscript: (text: string) => void) {
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.lang = navigator.language || 'en-US';
+    recognition.lang = lang || navigator.language || 'en-US';
 
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
@@ -31,7 +31,7 @@ function useVoiceInput(onTranscript: (text: string) => void) {
     recognitionRef.current = recognition;
     recognition.start();
     setListening(true);
-  }, [listening, onTranscript]);
+  }, [listening, onTranscript, lang]);
 
   const stop = useCallback(() => {
     recognitionRef.current?.stop();
@@ -87,10 +87,11 @@ export function MessageInput() {
   const { suggestions, selectedIndex, setSelectedIndex, isOpen, applyMention } =
     useMentionAutocomplete(text, cursorPos);
 
-  // Voice input
+  // Voice input — uses language from settings or browser default
+  const voiceLang = settings.voiceLanguage;
   const voice = useVoiceInput(useCallback((transcript: string) => {
     setText(prev => prev ? `${prev} ${transcript}` : transcript);
-  }, []));
+  }, []), voiceLang);
 
   // Slash commands
   const slashCommands: SlashCommand[] = useMemo(() => [

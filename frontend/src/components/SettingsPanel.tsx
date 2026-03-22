@@ -148,6 +148,92 @@ export function SettingsPanel() {
           </div>
         </SettingField>
 
+        {/* Timezone */}
+        <SettingField label="Timezone">
+          <select
+            value={display.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
+            onChange={(e) => applyInstant({ timezone: e.target.value })}
+            className="setting-input text-[12px] w-full"
+          >
+            {Intl.supportedValuesOf?.('timeZone')?.map((tz: string) => (
+              <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+            )) ?? (
+              <>
+                <option value="America/New_York">America/New York</option>
+                <option value="America/Chicago">America/Chicago</option>
+                <option value="America/Denver">America/Denver</option>
+                <option value="America/Los_Angeles">America/Los Angeles</option>
+                <option value="Europe/London">Europe/London</option>
+                <option value="Europe/Paris">Europe/Paris</option>
+                <option value="Europe/Berlin">Europe/Berlin</option>
+                <option value="Asia/Tokyo">Asia/Tokyo</option>
+                <option value="Asia/Shanghai">Asia/Shanghai</option>
+                <option value="Asia/Kolkata">Asia/Kolkata</option>
+                <option value="Australia/Sydney">Australia/Sydney</option>
+                <option value="Pacific/Auckland">Pacific/Auckland</option>
+                <option value="UTC">UTC</option>
+              </>
+            )}
+          </select>
+          <p className="text-[9px] text-on-surface-variant/30 mt-1">Controls all timestamps and time displays</p>
+        </SettingField>
+
+        {/* Time Format */}
+        <SettingField label="Time Format">
+          <div className="flex gap-2">
+            {(['12h', '24h'] as const).map(fmt => (
+              <button
+                key={fmt}
+                onClick={() => applyInstant({ timeFormat: fmt })}
+                className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-all ${
+                  (display.timeFormat || '12h') === fmt
+                    ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+                    : 'bg-surface-container/40 text-on-surface-variant/40'
+                }`}
+              >
+                {fmt === '12h' ? '12-hour (AM/PM)' : '24-hour'}
+              </button>
+            ))}
+          </div>
+        </SettingField>
+
+        {/* Voice Language */}
+        <SettingField label="Voice Input Language">
+          <select
+            value={display.voiceLanguage || navigator.language || 'en-US'}
+            onChange={(e) => applyInstant({ voiceLanguage: e.target.value })}
+            className="setting-input text-[12px] w-full"
+          >
+            <option value="">Auto-detect (browser default)</option>
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="en-AU">English (Australia)</option>
+            <option value="es-ES">Spanish (Spain)</option>
+            <option value="es-MX">Spanish (Mexico)</option>
+            <option value="fr-FR">French</option>
+            <option value="de-DE">German</option>
+            <option value="it-IT">Italian</option>
+            <option value="pt-BR">Portuguese (Brazil)</option>
+            <option value="pt-PT">Portuguese (Portugal)</option>
+            <option value="ja-JP">Japanese</option>
+            <option value="ko-KR">Korean</option>
+            <option value="zh-CN">Chinese (Simplified)</option>
+            <option value="zh-TW">Chinese (Traditional)</option>
+            <option value="ar-SA">Arabic</option>
+            <option value="hi-IN">Hindi</option>
+            <option value="ru-RU">Russian</option>
+            <option value="nl-NL">Dutch</option>
+            <option value="sv-SE">Swedish</option>
+            <option value="pl-PL">Polish</option>
+            <option value="tr-TR">Turkish</option>
+            <option value="th-TH">Thai</option>
+            <option value="vi-VN">Vietnamese</option>
+            <option value="id-ID">Indonesian</option>
+            <option value="uk-UA">Ukrainian</option>
+          </select>
+          <p className="text-[9px] text-on-surface-variant/30 mt-1">Language used for push-to-talk voice recognition</p>
+        </SettingField>
+
         {/* Divider */}
         <div className="h-px bg-outline-variant/8" />
 

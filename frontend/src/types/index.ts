@@ -110,6 +110,9 @@ export interface Settings {
   autoRoute?: boolean;
   channels?: string[];
   persistentAgents?: PersistentAgent[];
+  timezone?: string;
+  timeFormat?: '12h' | '24h';
+  voiceLanguage?: string;
 }
 
 export interface AgentTemplate {
