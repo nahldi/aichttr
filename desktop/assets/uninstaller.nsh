@@ -1,8 +1,7 @@
+; GhostLink uninstaller — intentionally does NOT remove user settings.
+; Settings at ~/.ghostlink/ persist across installs so users don't lose
+; their configuration. To do a fully clean uninstall, manually delete
+; the .ghostlink folder in your home directory.
 !macro customUnInstall
-  ; Only ask about cleanup in non-silent mode (manual uninstall)
-  ; Auto-updates run silently and should NEVER delete user data
-  IfSilent SkipCleanup
-    MessageBox MB_YESNO "Remove GhostLink settings and data? (Select Yes for a clean uninstall)" IDNO SkipCleanup
-      RMDir /r "$PROFILE\.ghostlink"
-  SkipCleanup:
+  ; No-op — preserve user data
 !macroend
