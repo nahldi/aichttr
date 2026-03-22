@@ -1539,7 +1539,61 @@ async def api_delete_agent_memory(name: str, key: str):
     return {"ok": ok}
 
 
-# ── Terminal Peek ─────────────────────────────────────────────────
+# ── Terminal Peek & Visible Terminal ──────────────────────────────
+
+@app.post("/api/agents/{name}/terminal/open")
+async def open_terminal(name: str):
+    """Open a visible terminal window attached to the agent's tmux session."""
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
+    session_name = f"ghostlink-{name}"
+    # Check if session exists
+    try:
+        result = subprocess.run(
+            ["tmux", "has-session", "-t", session_name],
+            capture_output=True, timeout=3,
+        )
+        if result.returncode != 0:
+            return JSONResponse({"error": f"No active session for {name}"}, 404)
+    except Exception:
+        return JSONResponse({"error": "tmux not available"}, 500)
+
+    # Open a new terminal window attached to the tmux session
+    # On WSL: open Windows Terminal with wsl tmux attach
+    # On native Linux/macOS: open a terminal emulator
+    try:
+        import shutil as _shutil
+        # Try Windows Terminal (wt.exe) first
+        wt = _shutil.which("wt.exe") or "/mnt/c/Users/skull/AppData/Local/Microsoft/WindowsApps/wt.exe"
+        if Path(wt).exists() or _shutil.which("wt.exe"):
+            subprocess.Popen(
+                ["wt.exe", "wsl", "tmux", "attach-session", "-t", session_name],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            return {"ok": True, "method": "windows-terminal"}
+
+        # Fallback: try cmd.exe
+        cmd_exe = _shutil.which("cmd.exe") or "/mnt/c/Windows/System32/cmd.exe"
+        if Path(cmd_exe).exists():
+            subprocess.Popen(
+                [cmd_exe, "/c", "start", "wsl", "tmux", "attach-session", "-t", session_name],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            return {"ok": True, "method": "cmd"}
+
+        # Native Linux/macOS: try common terminal emulators
+        for term in ["gnome-terminal", "xterm", "konsole", "alacritty", "kitty"]:
+            if _shutil.which(term):
+                subprocess.Popen(
+                    [term, "--", "tmux", "attach-session", "-t", session_name],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                return {"ok": True, "method": term}
+
+        return JSONResponse({"error": "No terminal emulator found"}, 500)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, 500)
+
 
 @app.get("/api/agents/{name}/terminal")
 async def peek_terminal(name: str, lines: int = 30):

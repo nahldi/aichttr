@@ -244,11 +244,16 @@ export const api = {
       body: JSON.stringify({ agent1, agent2 }),
     }),
 
-  // Terminal peek
+  // Terminal peek & visible terminal
   peekTerminal: (agentName: string, lines?: number) =>
     request<{ name: string; output: string; active: boolean }>(
       `/api/agents/${encodeURIComponent(agentName)}/terminal?lines=${lines || 30}`
     ),
+
+  openTerminal: (agentName: string) =>
+    request<{ ok: boolean; method: string }>(`/api/agents/${encodeURIComponent(agentName)}/terminal/open`, {
+      method: 'POST',
+    }),
 
   // Schedules
   getSchedules: () =>

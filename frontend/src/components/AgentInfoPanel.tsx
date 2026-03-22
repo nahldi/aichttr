@@ -195,6 +195,21 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
           )}
         </div>
 
+        {/* Terminal Actions */}
+        {isActive && (
+          <div className="px-4 pb-2 flex gap-2 shrink-0">
+            <button
+              onClick={() => {
+                api.openTerminal(agent.name).catch(() => {});
+              }}
+              className="flex-1 py-2 rounded-lg text-xs font-medium text-on-surface-variant/50 hover:text-on-surface-variant hover:bg-surface-container-high border border-outline-variant/10 transition-all flex items-center justify-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[14px]">terminal</span>
+              Open Terminal
+            </button>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="p-4 pt-3 border-t border-outline-variant/8 flex gap-2 shrink-0">
           {isActive && (
