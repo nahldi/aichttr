@@ -110,8 +110,8 @@
 - [ ] **Native Windows support** — without WSL
 
 ### Skills (remaining)
-- [ ] **Skills marketplace** — community-driven sharing
-- [ ] **Custom skill creator UI**
+- [x] **Skills marketplace** — browse, install, create, export/import custom skills (plugin-based, no external hosting)
+- [x] **Custom skill creator** — create custom skills via API with name, description, category, implementation type (prompt/script/MCP)
 
 ---
 
