@@ -46,9 +46,9 @@ function settingsExist(): boolean {
     if (!fs.existsSync(settingsPath)) return false;
     const data = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
     if (data.setupComplete !== true) return false;
-    // Re-run wizard if app version changed (major.minor bump)
-    const savedVersion = (data.appVersion || '0.0.0').split('.').slice(0, 2).join('.');
-    const currentVersion = app.getVersion().split('.').slice(0, 2).join('.');
+    // Re-run wizard if app version changed (any version bump)
+    const savedVersion = data.appVersion || '0.0.0';
+    const currentVersion = app.getVersion();
     if (savedVersion !== currentVersion) return false;
     return true;
   } catch {

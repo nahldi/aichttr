@@ -29,6 +29,7 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   artifactName: "GhostLink-Setup-${version}.${ext}"
+  include: assets/uninstaller.nsh
 mac:
   target: dmg
   icon: assets/icon.icns
