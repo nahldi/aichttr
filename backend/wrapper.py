@@ -473,10 +473,9 @@ def main():
     import urllib.request
 
     config = load_config()
-    agent_names = list(config.get("agents", {}).keys())
 
     parser = argparse.ArgumentParser(description="GhostLink agent wrapper")
-    parser.add_argument("agent", choices=agent_names, help="Agent to wrap")
+    parser.add_argument("agent", help="Agent base name (e.g. claude, codex, gemini)")
     parser.add_argument("--no-restart", action="store_true")
     parser.add_argument("--label", type=str, default=None)
     parser.add_argument("--headless", action="store_true",
@@ -485,6 +484,7 @@ def main():
 
     agent = args.agent
     agent_cfg = config.get("agents", {}).get(agent, {})
+    # Fall back to agent name as command if not in config
     command = agent_cfg.get("command", agent)
     agent_args = agent_cfg.get("args", [])
     cwd = agent_cfg.get("cwd", ".")

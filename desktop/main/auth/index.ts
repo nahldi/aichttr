@@ -233,12 +233,41 @@ const _providers: Record<string, ProviderEntry> = {
   github:    { check: checkGitHub,    login: loginGitHub,    install: installGitHub },
 };
 
+// Additional CLI agents (no OAuth — just detect if installed)
+const _extraAgents: { command: string; name: string; color: string; installCmd: string }[] = [
+  { command: 'grok',     name: 'Grok',     color: '#ff6b35', installCmd: 'npm i -g grok' },
+  { command: 'aider',    name: 'Aider',    color: '#14b8a6', installCmd: 'pip install aider-chat' },
+  { command: 'goose',    name: 'Goose',    color: '#f59e0b', installCmd: 'brew install goose' },
+  { command: 'opencode', name: 'OpenCode', color: '#22c55e', installCmd: 'curl -fsSL https://opencode.ai/install | bash' },
+  { command: 'ollama',   name: 'Ollama',   color: '#ffffff', installCmd: 'curl -fsSL https://ollama.com/install.sh | sh' },
+];
+
+async function checkExtraAgent(agent: typeof _extraAgents[0]): Promise<AuthStatus> {
+  let installed = false;
+  try {
+    const useWsl = isWsl();
+    const checkCmd = useWsl ? `wsl bash -lc "which ${agent.command}"` : `which ${agent.command}`;
+    await execAsync(checkCmd, { timeout: 5000 });
+    installed = true;
+  } catch {}
+  return {
+    provider: agent.command,
+    name: agent.name,
+    authenticated: installed,
+    installed,
+    icon: agent.command,
+    color: agent.color,
+    command: agent.command,
+    installCommand: agent.installCmd,
+  };
+}
+
 class AuthManager {
   async checkAll(): Promise<AuthStatus[]> {
-    const results = await Promise.allSettled(
+    const mainResults = await Promise.allSettled(
       Object.values(_providers).map(p => p.check())
     );
-    return results.map((r, i) => {
+    const main = mainResults.map((r, i) => {
       if (r.status === 'fulfilled') return r.value;
       const key = Object.keys(_providers)[i];
       return {
@@ -252,6 +281,16 @@ class AuthManager {
         error: 'Check failed',
       };
     });
+
+    // Check extra CLI agents in parallel
+    const extraResults = await Promise.allSettled(
+      _extraAgents.map(a => checkExtraAgent(a))
+    );
+    const extra = extraResults
+      .filter((r): r is PromiseFulfilledResult<AuthStatus> => r.status === 'fulfilled')
+      .map(r => r.value);
+
+    return [...main, ...extra];
   }
 
   async check(provider: string): Promise<AuthStatus | null> {

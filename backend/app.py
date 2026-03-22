@@ -876,8 +876,8 @@ async def spawn_agent(request: Request):
             spawn_args,
             cwd=str(BASE_DIR),
             env=os.environ.copy(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
         # Store by base name — wrapper will register with a unique instance name
         async with _agent_lock:
@@ -885,6 +885,19 @@ async def spawn_agent(request: Request):
 
         import asyncio
         await asyncio.sleep(3)
+
+        # Check if process died immediately (CLI not found, etc)
+        if proc.poll() is not None:
+            stderr_output = ""
+            try:
+                stderr_output = proc.stderr.read().decode("utf-8", errors="replace").strip() if proc.stderr else ""
+            except Exception:
+                pass
+            error_msg = stderr_output or f"Agent '{base}' exited immediately. Is the '{command}' CLI installed and authenticated?"
+            log.warning("Agent spawn failed for %s: %s", base, error_msg)
+            async with _agent_lock:
+                _agent_processes.pop(f"{base}_{proc.pid}", None)
+            return JSONResponse({"error": error_msg}, 400)
 
         return {
             "ok": True,
