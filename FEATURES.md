@@ -93,16 +93,16 @@
 ### Agent Intelligence (remaining)
 - [x] **Consensus mode** — /consensus asks all agents the same question via @all
 - [x] **Agent debates** — /debate agent1 agent2 topic, structured FOR/AGAINST prompts
-- [ ] **Smart auto-routing (LLM)** — classify messages and route to best-fit agent with LLM fallback
+- [x] **Smart auto-routing** — keyword-based message classification routes to best-fit agent (none/all/smart modes)
 
 ### Observability (remaining)
 - [x] **Terminal peek** — live view of agent tmux pane output with auto-scroll
-- [ ] **File change feed** — real-time list of files agents modify
+- [x] **File change feed** — real-time file change monitoring via plugin, tracks creates/modifies/deletes
 
 ### Power User (remaining)
 - [x] **Split view** — two channels side by side with divider
 - [x] **Session replay** — playback stored messages with original timing, speed controls
-- [ ] **Plugin system** — drop-in Python modules
+- [x] **Plugin system** — drop-in Python modules in plugins/ directory, auto-discovered and loaded on startup
 
 ### Desktop (remaining)
 - [ ] **macOS .dmg installer**

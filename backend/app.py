@@ -43,6 +43,7 @@ from rules import RuleStore
 from skills import SkillsRegistry
 from schedules import ScheduleStore, cron_matches
 import mcp_bridge
+import plugin_loader
 
 # ── Config ──────────────────────────────────────────────────────────
 
@@ -336,6 +337,9 @@ async def lifespan(_app: FastAPI):
     sched_thread.start()
     print("  Schedule checker started (checks every 60s)")
 
+    # Load plugins
+    plugin_loader.load_plugins(app, store=store, registry=registry, mcp_bridge_module=mcp_bridge)
+
     yield
 
     _schedule_stop.set()
@@ -560,7 +564,13 @@ async def save_settings(request: Request):
         router.max_hops = int(body["loopGuard"])
     # Sync auto-route toggle to router
     if "autoRoute" in body:
-        router.default_routing = "all" if body["autoRoute"] else "none"
+        val = body["autoRoute"]
+        if isinstance(val, str) and val in ("none", "all", "smart"):
+            router.default_routing = val
+        elif val is True:
+            router.default_routing = "all"
+        else:
+            router.default_routing = "none"
     return _settings
 
 
@@ -1537,6 +1547,14 @@ async def api_delete_agent_memory(name: str, key: str):
     mem = get_agent_memory(_agent_dir, name)
     ok = mem.delete(key)
     return {"ok": ok}
+
+
+# ── Plugins ───────────────────────────────────────────────────────
+
+@app.get("/api/plugins")
+async def list_plugins():
+    """List all discovered plugins."""
+    return {"plugins": plugin_loader.list_plugins()}
 
 
 # ── Terminal Peek & Visible Terminal ──────────────────────────────
