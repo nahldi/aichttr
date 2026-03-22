@@ -98,7 +98,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
 
   const template = templates.find(t => t.base === selected);
   const presets = PERMISSION_PRESETS[selected] || [{ label: 'Default', args: [], desc: 'Standard mode' }];
-  const installed = templates.filter(t => t.available);
+  // templates already contains available flag per agent
 
   const handlePickFolder = async () => {
     setPickingFolder(true);
@@ -185,44 +185,32 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
           <Section label="Quick Presets">
             <div className="grid grid-cols-2 gap-2">
               {([
-                { label: 'Code Reviewer', icon: 'rate_review', base: 'claude', desc: 'Reviews PRs and suggests improvements', soul: 'You are a meticulous code reviewer. Focus on bugs, security, performance, and readability. Be specific about line numbers and suggest fixes.' },
-                { label: 'Project Manager', icon: 'assignment', base: 'claude', desc: 'Tracks tasks, plans work, coordinates agents', soul: 'You are a project manager. Break work into tasks, track progress, set priorities, and coordinate between agents. Be organized and concise.' },
-                { label: 'DevOps Engineer', icon: 'cloud', base: 'codex', desc: 'CI/CD, Docker, deployment, infrastructure', soul: 'You are a DevOps engineer. Focus on deployment, CI/CD, Docker, monitoring, and infrastructure. Prefer automation and reliability.' },
-                { label: 'Creative Writer', icon: 'edit_note', base: 'gemini', desc: 'Documentation, copy, creative content', soul: 'You are a creative writer and technical author. Write clear documentation, engaging copy, and well-structured content. Be creative but precise.' },
-                { label: 'Research Analyst', icon: 'science', base: 'gemini', desc: 'Deep research, analysis, comparisons', soul: 'You are a research analyst. Dive deep into topics, compare alternatives, cite sources, and provide thorough analysis with clear conclusions.' },
-                { label: 'Test Engineer', icon: 'bug_report', base: 'codex', desc: 'Write tests, find bugs, ensure quality', soul: 'You are a test engineer. Write comprehensive tests, find edge cases, ensure code coverage, and validate functionality. Be thorough and systematic.' },
+                { label: 'Code Reviewer', icon: 'rate_review', base: 'claude', desc: 'Reviews PRs and suggests improvements' },
+                { label: 'Project Manager', icon: 'assignment', base: 'claude', desc: 'Tracks tasks, plans work, coordinates' },
+                { label: 'DevOps Engineer', icon: 'cloud', base: 'codex', desc: 'CI/CD, Docker, deployment' },
+                { label: 'Creative Writer', icon: 'edit_note', base: 'gemini', desc: 'Documentation, copy, content' },
+                { label: 'Research Analyst', icon: 'science', base: 'gemini', desc: 'Deep research, analysis' },
+                { label: 'Test Engineer', icon: 'bug_report', base: 'codex', desc: 'Tests, bugs, quality' },
               ]).map(preset => (
                 <button
                   key={preset.label}
-                  onClick={async () => {
-                    const t = installed.find(t => t.base === preset.base) || installed[0];
-                    if (!t) return;
-                    try {
-                      await api.spawnAgent(t.base, preset.label, '.', t.defaultArgs || []);
-                      // Set soul after spawn
-                      setTimeout(async () => {
-                        try {
-                          const r = await api.getStatus();
-                          setAgents(r.agents);
-                          const spawned = r.agents.find(a => a.label === preset.label);
-                          if (spawned) {
-                            await fetch(`/api/agents/${spawned.name}/soul`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ content: preset.soul }),
-                            });
-                          }
-                        } catch {}
-                        onClose();
-                      }, 3500);
-                    } catch {}
+                  onClick={() => {
+                    // Fill the form with preset — don't auto-spawn
+                    setSelected(preset.base);
+                    setLabel(preset.label);
+                    setPermPreset(0);
+                    setSelectedModel(0);
                   }}
-                  className="flex items-start gap-2.5 p-3 rounded-xl bg-surface-container/30 hover:bg-surface-container/50 border border-outline-variant/8 hover:border-primary/15 transition-all text-left"
+                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all text-left ${
+                    label === preset.label && selected === preset.base
+                      ? 'bg-primary/8 border-primary/20'
+                      : 'bg-surface-container/30 hover:bg-surface-container/50 border-outline-variant/8 hover:border-primary/15'
+                  }`}
                 >
-                  <span className="material-symbols-outlined text-[18px] text-primary/60 mt-0.5">{preset.icon}</span>
+                  <span className="material-symbols-outlined text-[16px] text-primary/60 mt-0.5">{preset.icon}</span>
                   <div>
-                    <div className="text-[11px] font-semibold text-on-surface">{preset.label}</div>
-                    <div className="text-[9px] text-on-surface-variant/40 mt-0.5">{preset.desc}</div>
+                    <div className="text-[10px] font-semibold text-on-surface">{preset.label}</div>
+                    <div className="text-[8px] text-on-surface-variant/40 mt-0.5">{preset.desc}</div>
                   </div>
                 </button>
               ))}

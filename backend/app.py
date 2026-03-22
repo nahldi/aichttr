@@ -730,13 +730,23 @@ async def agent_templates():
     }
 
     def _is_available(name: str, cmd: str) -> bool:
-        """Check if agent is available via CLI binary OR API key."""
+        """Check if agent is available via CLI binary, API key, or WSL."""
         if _shutil.which(cmd):
             return True
         # Check API keys
         for key in _API_KEY_ENV.get(name, []):
             if os.environ.get(key):
                 return True
+        # Check in WSL (agents may be installed in WSL, not native)
+        try:
+            result = subprocess.run(
+                ['wsl', 'bash', '-lc', f'which {cmd}'],
+                capture_output=True, timeout=5,
+            )
+            if result.returncode == 0:
+                return True
+        except Exception:
+            pass
         return False
 
     agents_cfg = CONFIG.get("agents", {})
