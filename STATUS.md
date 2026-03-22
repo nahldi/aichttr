@@ -1,5 +1,5 @@
 # GhostLink -- Project Status & Handoff
-**Last updated:** 2026-03-22
+**Last updated:** 2026-03-22 (19:00 UTC)
 **Owner:** Finn (FinnTheDogg / nahldi)
 **GitHub:** https://github.com/nahldi/aichttr (repo name is still `aichttr`, contents are GhostLink)
 **License:** MIT
@@ -7,7 +7,20 @@
 
 ## RECENT FIXES (2026-03-22) — v1.0.0 Bug Fix Pass
 
-### 0. v1.0.0 Bug Fix Pass (latest)
+### 0. v1.0.3 Full Feature Release (latest)
+- **76 completed features**, 37 React components, 77+ API endpoints, 10 MCP tools
+- **Cross-platform CI**: GitHub Actions builds Windows .exe, Linux .AppImage/.deb, macOS .dmg automatically on version tags
+- **Plugin system**: Drop-in Python plugins with auto-discovery, includes file watcher and skills marketplace
+- **Smart routing**: Keyword-based message classification routes to best-fit agent (none/all/smart modes)
+- **Visible terminal**: Open Terminal button opens real terminal attached to agent's tmux session
+- **Skills marketplace**: Browse, create, export/import custom skills locally
+- **All broken features fixed**: message editing, bookmarking, scheduled tasks, FTS5 search
+- **Security hardened**: path traversal, SSRF, MCP identity, agent isolation, content validation
+- **Premium polish**: liquid glass CSS, animations, transitions, micro-interactions
+- **In-app help/FAQ**: 12-topic searchable help panel
+- **Free AI support**: Gemini CLI (1,000 req/day free), Ollama (local), OpenCode, Aider
+
+### 1. v1.0.0 Bug Fix Pass
 - **Version sync**: All version references unified to v1.0.0 across package.json, launcher.html, STATUS.md
 - **MCP identity spoofing fixed**: `_resolve_identity()` now requires bearer token for agent names; only human names accepted without token
 - **Assert crashes fixed**: Replaced `assert store._db is not None` in search/export endpoints with proper `RuntimeError`
@@ -63,7 +76,7 @@ The backend is solid and working. The desktop Electron app has auth detection fo
 | Owner | Finn (FinnTheDogg / nahldi) |
 | GitHub | https://github.com/nahldi/aichttr |
 | Purpose | Multi-agent AI chat platform -- unified command center for ALL AI agents (Claude, Codex, Gemini, Copilot, Grok, etc.) |
-| Version | v1.0.0 |
+| Version | v1.0.3 |
 | Port | 8300 (HTTP/WS), 8200 (MCP HTTP), 8201 (MCP SSE) |
 
 ---
