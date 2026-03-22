@@ -425,6 +425,21 @@ function setupWizardIPC(): void {
 // ---------------------------------------------------------------------------
 function setupIPC(): void {
   // ── Server lifecycle ──────────────────────────────────────────────────
+  // Notify launcher when server process exits unexpectedly
+  serverManager.onServerExit = () => {
+    updateTrayMenu(false);
+    const launcher = getLauncherWindow();
+    if (launcher && !launcher.isDestroyed()) {
+      launcher.webContents.send('server:stopped');
+      launcher.show();
+      launcher.focus();
+    }
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      chatWindow.close();
+      chatWindow = null;
+    }
+  };
+
   ipcMain.handle('server:start', async () => {
     try {
       const result = await serverManager.start();

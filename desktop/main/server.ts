@@ -61,6 +61,7 @@ function winToWsl(windowsPath: string): string {
 class ServerManager {
   private process: ChildProcess | null = null;
   private port: number = 8300;
+  onServerExit: (() => void) | null = null;
 
   // ---------- public API ----------
 
@@ -334,6 +335,7 @@ class ServerManager {
     this.process.on('exit', (code, signal) => {
       log.info('Backend process exited — code=%s signal=%s', code, signal);
       this.process = null;
+      if (this.onServerExit) this.onServerExit();
     });
 
     this.process.on('error', (err) => {
