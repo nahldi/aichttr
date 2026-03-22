@@ -737,16 +737,29 @@ async def agent_templates():
         for key in _API_KEY_ENV.get(name, []):
             if os.environ.get(key):
                 return True
-        # Check in WSL (agents may be installed in WSL, not native)
+        # Check in WSL with full login shell PATH (npm globals, pip, etc)
         try:
             result = subprocess.run(
-                ['wsl', 'bash', '-lc', f'which {cmd}'],
-                capture_output=True, timeout=5,
+                ['wsl', 'bash', '-lc', f'which {cmd} 2>/dev/null || command -v {cmd} 2>/dev/null'],
+                capture_output=True, timeout=8,
             )
-            if result.returncode == 0:
+            if result.returncode == 0 and result.stdout.strip():
                 return True
         except Exception:
             pass
+        # Check npm global for node-based CLIs
+        _NPM_AGENTS = {"claude": "@anthropic-ai/claude-code", "gemini": "@google/gemini-cli", "codex": "@openai/codex"}
+        pkg = _NPM_AGENTS.get(name)
+        if pkg:
+            try:
+                result = subprocess.run(
+                    ['wsl', 'bash', '-lc', f'npm list -g {pkg} 2>/dev/null | grep {pkg}'],
+                    capture_output=True, timeout=8,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return True
+            except Exception:
+                pass
         return False
 
     agents_cfg = CONFIG.get("agents", {})

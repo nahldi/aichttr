@@ -10,7 +10,7 @@ BUILTIN_SKILLS = [
     {
         "id": "web-search",
         "name": "Web Search",
-        "description": "Search the web using Brave or DuckDuckGo API",
+        "description": "Search the web using DuckDuckGo or Google API",
         "category": "Research",
         "icon": "search",
         "builtin": True,

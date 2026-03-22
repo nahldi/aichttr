@@ -1,6 +1,6 @@
 {
   "name": "ghostlink",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "GhostLink — Multi-Agent AI Chat Platform",
   "main": "main/index.js",
   "scripts": {
