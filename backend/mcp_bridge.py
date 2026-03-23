@@ -771,9 +771,9 @@ def memory_save(sender: str, key: str, content: str) -> str:
     Returns:
         Confirmation of saved memory
     """
-    identity = _resolve_identity(sender)
-    if identity.startswith("Error"):
-        return identity
+    identity, err = _resolve_identity(sender, None, field_name="sender", required=True)
+    if err:
+        return err
     from agent_memory import get_agent_memory
     mem = get_agent_memory(_data_dir, identity)
     result = mem.save(key, content)
@@ -790,9 +790,9 @@ def memory_search(sender: str, query: str) -> str:
     Returns:
         JSON array of matching memory entries with key, content preview, and timestamps
     """
-    identity = _resolve_identity(sender)
-    if identity.startswith("Error"):
-        return identity
+    identity, err = _resolve_identity(sender, None, field_name="sender", required=True)
+    if err:
+        return err
     from agent_memory import get_agent_memory
     mem = get_agent_memory(_data_dir, identity)
     results = mem.search(query)
@@ -818,9 +818,9 @@ def memory_get(sender: str, key: str) -> str:
     Returns:
         The full content of the memory entry, or error if not found
     """
-    identity = _resolve_identity(sender)
-    if identity.startswith("Error"):
-        return identity
+    identity, err = _resolve_identity(sender, None, field_name="sender", required=True)
+    if err:
+        return err
     from agent_memory import get_agent_memory
     mem = get_agent_memory(_data_dir, identity)
     entry = mem.load(key)
@@ -838,9 +838,9 @@ def memory_list(sender: str) -> str:
     Returns:
         JSON array of memory keys with sizes
     """
-    identity = _resolve_identity(sender)
-    if identity.startswith("Error"):
-        return identity
+    identity, err = _resolve_identity(sender, None, field_name="sender", required=True)
+    if err:
+        return err
     from agent_memory import get_agent_memory
     mem = get_agent_memory(_data_dir, identity)
     entries = mem.list_all()
@@ -1109,9 +1109,9 @@ def set_thinking(sender: str, level: str = "medium") -> str:
     Returns:
         Confirmation of the new thinking level
     """
-    identity = _resolve_identity(sender)
-    if identity.startswith("Error"):
-        return identity
+    identity, err = _resolve_identity(sender, None, field_name="sender", required=True)
+    if err:
+        return err
     valid = ("off", "minimal", "low", "medium", "high")
     if level not in valid:
         return f"Invalid level. Choose from: {', '.join(valid)}"
@@ -1130,9 +1130,9 @@ def sessions_list(sender: str) -> str:
     Returns:
         JSON array of active agents with name, base, state, and role
     """
-    identity = _resolve_identity(sender)
-    if identity.startswith("Error"):
-        return identity
+    identity, err = _resolve_identity(sender, None, field_name="sender", required=True)
+    if err:
+        return err
     agents = _registry.get_all() if _registry else []
     items = []
     for a in agents:
@@ -1158,9 +1158,9 @@ def sessions_send(sender: str, target: str, message: str, channel: str = "genera
     Returns:
         Confirmation that the message was routed
     """
-    identity = _resolve_identity(sender)
-    if identity.startswith("Error"):
-        return identity
+    identity, err = _resolve_identity(sender, None, field_name="sender", required=True)
+    if err:
+        return err
     if not _registry or not _registry.get(target):
         return f"Error: Agent '{target}' not found or offline."
     # Send as @mention so routing picks it up
@@ -1285,7 +1285,10 @@ def gemini_video(prompt: str, duration: str = "8", aspect_ratio: str = "16:9") -
                 videos = response.get("generatedVideos", response.get("predictions", []))
                 if videos:
                     import base64
-                    vid_data = base64.b64decode(videos[0].get("bytesBase64Encoded", videos[0].get("video", "")))
+                    raw_b64 = videos[0].get("bytesBase64Encoded") or videos[0].get("video") or ""
+                    if not raw_b64:
+                        return "Video generation completed but no video data in response."
+                    vid_data = base64.b64decode(raw_b64)
                     save_dir = _data_dir / "generated" if _data_dir else Path("./data/generated")
                     save_dir.mkdir(parents=True, exist_ok=True)
                     filepath = save_dir / f"vid-{int(time.time())}.mp4"

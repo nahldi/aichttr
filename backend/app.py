@@ -273,22 +273,23 @@ async def broadcast(event_type: str, data: dict):
             dead.append(ws)
     for ws in dead:
         _ws_clients.discard(ws)
-    # Deliver to active webhooks
-    _deliver_webhooks(event_type, data)
+    # Deliver to active webhooks (non-blocking)
+    import threading as _th
+    _th.Thread(target=_deliver_webhooks, args=(event_type, data), daemon=True).start()
 
 
 def _deliver_webhooks(event_type: str, data: dict):
-    """Fire-and-forget POST to all matching active webhooks."""
+    """Fire-and-forget POST to all matching active webhooks. Runs in background thread."""
     import urllib.request
     payload = json.dumps({"event": event_type, "data": data, "timestamp": time.time()}).encode()
-    for wh in _webhooks:
+    for wh in list(_webhooks):  # Copy list to avoid mutation during iteration
         if not wh.get("active"):
             continue
         events = wh.get("events", [])
         if events and event_type not in events:
             continue
         url = wh.get("url", "")
-        if not url:
+        if not url or not url.startswith(("http://", "https://")):
             continue
         try:
             req = urllib.request.Request(
