@@ -624,7 +624,8 @@ def main():
         token=assigned_token, mcp_cfg=mcp_cfg, project_dir=project_dir,
     )
 
-    launch_args = list(agent_args) + mcp_args + extra
+    # Permission/model flags first, then MCP config (CLI parsers expect flags before config)
+    launch_args = list(agent_args) + extra + mcp_args
 
     print(f"  === {assigned_name.capitalize()} Chat Wrapper ===")
     if not needs_proxy:

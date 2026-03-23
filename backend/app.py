@@ -195,22 +195,40 @@ def _get_full_agent_list() -> list[dict]:
 # ── Mention routing ─────────────────────────────────────────────────
 
 def _route_mentions(sender: str, text: str, channel: str):
-    """Parse @mentions in messages and write to agent queue files."""
+    """Parse @mentions and route based on responseMode.
+
+    Routing rules:
+    - 'mentioned' (default): only when @mentioned
+    - 'always': receives ALL messages
+    - 'listen': receives ALL messages (agent decides whether to respond)
+    - 'silent': never receives messages (observe only)
+    """
     import re
     mentions = re.findall(r"@(\w[\w-]*)", text)
-    if not mentions:
-        return
 
     agent_names = [inst.name for inst in registry.get_all()]
     targets = []
 
-    if "all" in mentions:
-        targets = [n for n in agent_names if n != sender]
-    else:
-        targets = [m for m in mentions if m in agent_names and m != sender]
+    if mentions:
+        if "all" in mentions:
+            targets = [n for n in agent_names if n != sender]
+        else:
+            targets = [m for m in mentions if m in agent_names and m != sender]
 
-    # Loop guard via router
-    targets = router.get_targets(sender, text, channel, agent_names)
+        # Loop guard via router
+        targets = router.get_targets(sender, text, channel, agent_names)
+
+    # Add agents with 'always' or 'listen' responseMode (even without @mention)
+    for inst in registry.get_all():
+        if inst.name == sender:
+            continue
+        if inst.name in targets:
+            continue
+        if getattr(inst, 'responseMode', 'mentioned') in ('always', 'listen'):
+            targets.append(inst.name)
+
+    if not targets:
+        return
 
     # Skip paused agents
     targets = [t for t in targets if not (registry.get(t) and registry.get(t).state == "paused")]
