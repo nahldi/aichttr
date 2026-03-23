@@ -1538,6 +1538,7 @@ def _kill_port(port: int):
 
 def run_http_server():
     """Block — run streamable-http MCP in a background thread."""
+    global _mcp_http
     _ensure_loop()
     _init_servers()
     log.info(f"MCP HTTP bridge starting on port {MCP_HTTP_PORT}")
@@ -1548,7 +1549,6 @@ def run_http_server():
             log.warning("Port %d in use — killing stale process and retrying", MCP_HTTP_PORT)
             _kill_port(MCP_HTTP_PORT)
             try:
-                global _mcp_http
                 _mcp_http = _create_server(MCP_HTTP_PORT)
                 _mcp_http.run(transport="streamable-http")
             except Exception as e2:
@@ -1559,6 +1559,7 @@ def run_http_server():
 
 def run_sse_server():
     """Block — run SSE MCP in a background thread."""
+    global _mcp_sse
     _ensure_loop()
     _init_servers()
     log.info(f"MCP SSE bridge starting on port {MCP_SSE_PORT}")
@@ -1569,7 +1570,6 @@ def run_sse_server():
             log.warning("Port %d in use — killing stale process and retrying", MCP_SSE_PORT)
             _kill_port(MCP_SSE_PORT)
             try:
-                global _mcp_sse
                 _mcp_sse = _create_server(MCP_SSE_PORT)
                 _mcp_sse.run(transport="sse")
             except Exception as e2:
