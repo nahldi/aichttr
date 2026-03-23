@@ -758,12 +758,18 @@ function PersistentAgentsSection() {
 function SupportedAgentsSection() {
   const [templates, setTemplates] = useState<import('../types').AgentTemplate[]>([]);
   const [open, setOpen] = useState(false);
+  const agents = useChatStore((s) => s.agents);
+  const storeSettings = useChatStore((s) => s.settings);
 
   useEffect(() => {
     if (open && templates.length === 0) {
-      api.getAgentTemplates().then(r => setTemplates(r.templates)).catch(() => {});
+      const bases = [...new Set([
+        ...agents.map(a => a.base),
+        ...(storeSettings.persistentAgents || []).map(a => a.base),
+      ])];
+      api.getAgentTemplates(bases).then(r => setTemplates(r.templates)).catch(() => {});
     }
-  }, [open, templates.length]);
+  }, [open, templates.length, agents, storeSettings.persistentAgents]);
 
   const installed = templates.filter(t => t.available);
   const notInstalled = templates.filter(t => !t.available);

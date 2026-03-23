@@ -796,6 +796,10 @@ async def agent_templates(connected: str = ""):
     import shutil as _shutil
     # Agents the desktop auth system has verified as connected
     _connected_set = set(c.strip() for c in connected.split(",") if c.strip())
+    # Also include connected agents saved by the desktop launcher
+    stored = _settings.get("connectedAgents", [])
+    if isinstance(stored, list):
+        _connected_set.update(stored)
 
     # API key env vars that indicate an agent is usable even without CLI
     _API_KEY_ENV = {

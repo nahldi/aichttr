@@ -364,6 +364,8 @@ $btnRestart.addEventListener('click', () => {
 api.on('server:started', (port) => {
   setServerState('running');
   if (port) $portDisplay.textContent = 'Port: ' + port;
+  // Sync any already-detected auth results to the backend
+  if (providerStatuses.length > 0) syncConnectedToBackend(providerStatuses);
   // Auto-open the chat window after a short delay
   setTimeout(() => {
     api.invoke('app:open-chat');
@@ -382,6 +384,8 @@ api.on('server:error', (errorMsg) => {
 // Auth status updates
 api.on('auth:status', (statuses) => {
   renderProviders(statuses);
+  // Sync connected agents to backend so the agent launcher can see them
+  syncConnectedToBackend(statuses);
 });
 
 // Auto-update lifecycle
@@ -412,6 +416,25 @@ api.on('app:version', (ver) => {
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * POST connected agent base names to the backend settings so the
+ * chat window's agent launcher can mark them as available.
+ */
+function syncConnectedToBackend(statuses) {
+  if (!serverRunning) return;
+  const providerToBase = { anthropic: 'claude', openai: 'codex', google: 'gemini', github: 'copilot' };
+  const connected = statuses
+    .filter(s => s.authenticated || s.installed)
+    .map(s => providerToBase[s.provider] || s.provider)
+    .filter(Boolean);
+  if (connected.length === 0) return;
+  fetch('http://127.0.0.1:8300/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ connectedAgents: connected }),
+  }).catch(() => {});
+}
 
 function escapeHtml(str) {
   const div = document.createElement('div');
