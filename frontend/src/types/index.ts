@@ -167,4 +167,5 @@ export type WSEvent =
   | { type: 'activity'; data: ActivityEvent }
   | { type: 'approval_response'; data: { agent: string; response: string; message_id: number } }
   | { type: 'session_update'; data: { channel: string; session: Record<string, unknown> } }
+  | { type: 'thinking_stream'; data: { agent: string; text: string; active: boolean } }
   | { type: 'system'; data: Record<string, unknown> };

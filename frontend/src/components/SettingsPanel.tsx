@@ -720,7 +720,6 @@ function IntegrationsTab() {
   useEffect(() => { loadBridges(); }, []);
 
   const handleSave = async (platform: string) => {
-    const info = BRIDGE_INFO[platform];
     const tokenKey = platform === 'slack' || platform === 'webhook' ? 'url' : 'token';
     await api.configureBridge(platform, {
       [tokenKey]: tokenInput,

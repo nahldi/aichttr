@@ -5,7 +5,8 @@ import { api } from '../lib/api';
 
 // ── Voice Input (Web Speech API) ───────────────────────────────────
 
-const SpeechRecognition = (window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SpeechRecognition: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const VOICE_AVAILABLE = !!SpeechRecognition;
 
 function useVoiceInput(onTranscript: (text: string) => void, lang?: string) {
