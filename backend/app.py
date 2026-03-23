@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 # Track spawned agent processes
 _agent_processes: dict[str, subprocess.Popen] = {}
 _agent_lock = asyncio.Lock()
+_last_heartbeats: dict[str, float] = {}
 
 # Agent name validation (prevents path traversal)
 _VALID_AGENT_NAME = re.compile(r'^[a-zA-Z0-9_-]{1,50}$')
@@ -431,7 +432,6 @@ async def lifespan(_app: FastAPI):
 
     # Agent health monitor — detects crashed agents and marks them offline
     _health_stop = threading.Event()
-    _last_heartbeats: dict[str, float] = {}
     HEALTH_CHECK_INTERVAL = 30  # seconds
     HEARTBEAT_STALE_THRESHOLD = 45  # mark offline if no heartbeat for this long
 
