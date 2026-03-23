@@ -488,17 +488,9 @@ def _queue_watcher(get_identity_fn, inject_fn, *, server_port: int = 8300,
                     time.sleep(0.5)
 
                     if job_id:
-                        prompt = (
-                            f"You were mentioned in job #{job_id}. "
-                            f"Use the chat_read tool with job_id={job_id} to read the conversation, "
-                            f"then use chat_send to reply."
-                        )
+                        prompt = f"Read job #{job_id} and respond."
                     else:
-                        prompt = (
-                            f"You were @mentioned in #{channel} on GhostLink. "
-                            f"Use the chat_read tool with channel=\"{channel}\" to read recent messages, "
-                            f"then use chat_send to respond in the same channel."
-                        )
+                        prompt = f"Read #{channel} and respond."
 
                     inject_fn(prompt.replace("\n", " "))
         except Exception as e:
