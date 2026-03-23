@@ -435,6 +435,36 @@ async def lifespan(_app: FastAPI):
     # Load plugins
     plugin_loader.load_plugins(app, store=store, registry=registry, mcp_bridge_module=mcp_bridge)
 
+    # Plugin management endpoints
+    @app.get("/api/plugins")
+    async def api_list_plugins():
+        return {"plugins": plugin_loader.list_plugins()}
+
+    @app.post("/api/plugins/{name}/enable")
+    async def api_enable_plugin(name: str):
+        ok = plugin_loader.enable_plugin(name)
+        return {"ok": ok, "note": "Restart server to apply" if ok else "Plugin not disabled"}
+
+    @app.post("/api/plugins/{name}/disable")
+    async def api_disable_plugin(name: str):
+        ok = plugin_loader.disable_plugin(name)
+        return {"ok": ok, "note": "Restart server to apply" if ok else "Plugin not enabled"}
+
+    @app.post("/api/plugins/install")
+    async def api_install_plugin(request: Request):
+        body = await request.json()
+        name = body.get("name", "").strip()
+        code = body.get("code", "")
+        if not name or not code:
+            return JSONResponse({"error": "name and code required"}, 400)
+        result = plugin_loader.install_plugin(name, code, body.get("description", ""), body.get("version", "1.0.0"))
+        return result
+
+    @app.delete("/api/plugins/{name}")
+    async def api_uninstall_plugin(name: str):
+        ok = plugin_loader.uninstall_plugin(name)
+        return {"ok": ok}
+
     yield
 
     _schedule_stop.set()
@@ -1796,6 +1826,74 @@ async def delete_webhook(wh_id: str):
     before = len(_webhooks)
     _webhooks = [w for w in _webhooks if w["id"] != wh_id]
     return {"ok": len(_webhooks) < before}
+
+
+# ── Inbound Webhooks (external triggers) ─────────────────────────────
+
+@app.post("/api/trigger")
+async def inbound_trigger(request: Request):
+    """External services can POST here to trigger agents or send messages.
+
+    Body: {
+        "text": "Deploy completed for v1.3.0",     # Message text (required)
+        "agent": "claude",                          # Agent to @mention (optional)
+        "channel": "general",                       # Target channel (default: general)
+        "source": "github-actions",                 # Source label (optional)
+        "event": "deploy",                          # Event type label (optional)
+    }
+    """
+    body = await request.json()
+    text = body.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "text is required"}, 400)
+
+    agent = body.get("agent", "").strip()
+    channel = body.get("channel", "general").strip()
+    source = body.get("source", "webhook").strip()
+    event_type = body.get("event", "trigger").strip()
+
+    # Build message with @mention if agent specified
+    if agent:
+        msg_text = f"@{agent} [{source}/{event_type}] {text}"
+    else:
+        msg_text = f"[{source}/{event_type}] {text}"
+
+    msg = await store.add(sender="system", text=msg_text, msg_type="system", channel=channel)
+    await broadcast("message", msg)
+
+    # Route to mentioned agent
+    if agent:
+        _route_mentions("system", msg_text, channel)
+
+    return {"ok": True, "message_id": msg.get("id"), "routed_to": agent or None}
+
+
+@app.post("/api/trigger/{agent_name}")
+async def trigger_agent(agent_name: str, request: Request):
+    """Directly trigger a specific agent with a message.
+
+    Body: {
+        "text": "Check the latest PR",             # Message/task text
+        "channel": "general",                       # Channel (default: general)
+    }
+    """
+    body = await request.json()
+    text = body.get("text", "").strip()
+    channel = body.get("channel", "general").strip()
+
+    if not text:
+        return JSONResponse({"error": "text is required"}, 400)
+
+    inst = registry.get(agent_name)
+    if not inst:
+        return JSONResponse({"error": f"agent '{agent_name}' not found"}, 404)
+
+    msg_text = f"@{agent_name} {text}"
+    msg = await store.add(sender="system", text=msg_text, msg_type="system", channel=channel)
+    await broadcast("message", msg)
+    _route_mentions("system", msg_text, channel)
+
+    return {"ok": True, "message_id": msg.get("id"), "agent": agent_name}
 
 
 # ── Export ───────────────────────────────────────────────────────────

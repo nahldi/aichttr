@@ -850,12 +850,276 @@ def memory_list(sender: str) -> str:
     return json.dumps(items, indent=2)
 
 
+# ── Web & Browser tools ──────────────────────────────────────────────
+
+def web_fetch(url: str, extract: str = "text") -> str:
+    """Fetch a URL and return its content. Use for reading web pages, APIs, docs.
+
+    Args:
+        url: The URL to fetch (must start with http:// or https://)
+        extract: What to extract — "text" (readable text), "html" (raw HTML), "json" (parse as JSON)
+
+    Returns:
+        The fetched content (truncated to 50KB for safety)
+    """
+    import urllib.request
+    import urllib.error
+    from html.parser import HTMLParser
+
+    if not url.startswith(("http://", "https://")):
+        return "Error: URL must start with http:// or https://"
+
+    # Block private IPs
+    import re
+    hostname = url.split("//", 1)[-1].split("/")[0].split(":")[0]
+    if re.match(r'^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|localhost)', hostname):
+        return "Error: Cannot fetch private/local URLs"
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "GhostLink/1.3 (Bot)"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read(51200).decode("utf-8", errors="replace")
+
+        if extract == "json":
+            return json.dumps(json.loads(raw), indent=2)[:50000]
+        elif extract == "html":
+            return raw[:50000]
+        else:
+            # Strip HTML tags for readable text
+            class TextExtractor(HTMLParser):
+                def __init__(self):
+                    super().__init__()
+                    self.parts: list[str] = []
+                    self._skip = False
+                def handle_starttag(self, tag, attrs):
+                    if tag in ('script', 'style', 'noscript'):
+                        self._skip = True
+                def handle_endtag(self, tag):
+                    if tag in ('script', 'style', 'noscript'):
+                        self._skip = False
+                def handle_data(self, data):
+                    if not self._skip:
+                        t = data.strip()
+                        if t:
+                            self.parts.append(t)
+            parser = TextExtractor()
+            parser.feed(raw)
+            return "\n".join(parser.parts)[:50000]
+    except urllib.error.HTTPError as e:
+        return f"HTTP Error {e.code}: {e.reason}"
+    except Exception as e:
+        return f"Fetch failed: {str(e)[:200]}"
+
+
+def web_search(query: str, num_results: int = 5) -> str:
+    """Search the web using DuckDuckGo. Returns titles, URLs, and snippets.
+
+    Args:
+        query: Search query
+        num_results: Number of results to return (max 10)
+
+    Returns:
+        JSON array of search results with title, url, and snippet
+    """
+    import urllib.request
+    import urllib.parse
+
+    num_results = min(max(num_results, 1), 10)
+    encoded = urllib.parse.quote_plus(query)
+    url = f"https://html.duckduckgo.com/html/?q={encoded}"
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "GhostLink/1.3 (Bot)"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html = resp.read(102400).decode("utf-8", errors="replace")
+
+        # Parse DuckDuckGo HTML results
+        import re
+        results = []
+        # Find result blocks
+        blocks = re.findall(r'<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>', html, re.DOTALL)
+        snippets = re.findall(r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>', html, re.DOTALL)
+
+        for i, (href, title) in enumerate(blocks[:num_results]):
+            # Clean HTML tags from title and snippet
+            clean_title = re.sub(r'<[^>]+>', '', title).strip()
+            clean_snippet = re.sub(r'<[^>]+>', '', snippets[i]).strip() if i < len(snippets) else ""
+            # Decode DuckDuckGo redirect URL
+            if "uddg=" in href:
+                match = re.search(r'uddg=([^&]+)', href)
+                if match:
+                    href = urllib.parse.unquote(match.group(1))
+            results.append({"title": clean_title, "url": href, "snippet": clean_snippet})
+
+        if not results:
+            return f"No results found for: {query}"
+        return json.dumps(results, indent=2)
+    except Exception as e:
+        return f"Search failed: {str(e)[:200]}"
+
+
+def browser_snapshot(url: str) -> str:
+    """Take a screenshot of a web page and return the file path. Requires Playwright.
+
+    Args:
+        url: The URL to screenshot
+
+    Returns:
+        Path to the saved screenshot image, or error message
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return "Error: Playwright not installed. Run: pip install playwright && playwright install chromium"
+
+    if not url.startswith(("http://", "https://")):
+        return "Error: URL must start with http:// or https://"
+
+    screenshot_dir = _data_dir / "screenshots" if _data_dir else Path("./data/screenshots")
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"snap-{int(time.time())}.png"
+    filepath = screenshot_dir / filename
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1280, "height": 720})
+            page.goto(url, timeout=15000, wait_until="domcontentloaded")
+            page.screenshot(path=str(filepath), full_page=False)
+            browser.close()
+        return f"Screenshot saved: {filepath} (1280x720)"
+    except Exception as e:
+        return f"Screenshot failed: {str(e)[:200]}"
+
+
+def image_generate(prompt: str, style: str = "natural") -> str:
+    """Generate an image from a text description. Posts the result to chat.
+
+    Args:
+        prompt: Description of the image to generate
+        style: Image style — "natural", "artistic", "diagram", "icon"
+
+    Returns:
+        Status message. Image will be posted to the chat channel.
+    """
+    # Check for available image generation APIs
+    import urllib.request
+
+    # Try OpenAI DALL-E
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            body = json.dumps({
+                "model": "dall-e-3",
+                "prompt": prompt,
+                "n": 1,
+                "size": "1024x1024",
+                "style": "vivid" if style == "artistic" else "natural",
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.openai.com/v1/images/generations",
+                data=body,
+                headers={
+                    "Authorization": f"Bearer {openai_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                result = json.loads(resp.read())
+            image_url = result["data"][0]["url"]
+            return f"Image generated: {image_url}\nPrompt: {prompt}"
+        except Exception as e:
+            return f"Image generation failed: {str(e)[:200]}"
+
+    return "Error: No image generation API configured. Set OPENAI_API_KEY for DALL-E support."
+
+
+# ── Agent control tools ──────────────────────────────────────────────
+
+def set_thinking(sender: str, level: str = "medium") -> str:
+    """Set your thinking/reasoning level. Higher levels = deeper analysis but slower.
+
+    Args:
+        sender: Your agent name
+        level: Thinking level — "off", "minimal", "low", "medium", "high"
+
+    Returns:
+        Confirmation of the new thinking level
+    """
+    identity = _resolve_identity(sender)
+    if identity.startswith("Error"):
+        return identity
+    valid = ("off", "minimal", "low", "medium", "high")
+    if level not in valid:
+        return f"Invalid level. Choose from: {', '.join(valid)}"
+    inst = _registry.get(identity) if _registry else None
+    if inst:
+        inst.thinkingLevel = level
+    return f"Thinking level set to: {level}"
+
+
+def sessions_list(sender: str) -> str:
+    """List all active agent sessions (other agents currently running).
+
+    Args:
+        sender: Your agent name
+
+    Returns:
+        JSON array of active agents with name, base, state, and role
+    """
+    identity = _resolve_identity(sender)
+    if identity.startswith("Error"):
+        return identity
+    agents = _registry.get_all() if _registry else []
+    items = []
+    for a in agents:
+        items.append({
+            "name": a.name,
+            "base": a.base,
+            "state": a.state,
+            "role": getattr(a, "role", ""),
+            "responseMode": getattr(a, "responseMode", "mentioned"),
+        })
+    return json.dumps(items, indent=2) if items else "No agents online."
+
+
+def sessions_send(sender: str, target: str, message: str, channel: str = "general") -> str:
+    """Send a message to another agent's session directly. Use for agent-to-agent coordination.
+
+    Args:
+        sender: Your agent name
+        target: Target agent name to message
+        message: The message text (will be sent as @target in the channel)
+        channel: Channel to send in (default "general")
+
+    Returns:
+        Confirmation that the message was routed
+    """
+    identity = _resolve_identity(sender)
+    if identity.startswith("Error"):
+        return identity
+    if not _registry or not _registry.get(target):
+        return f"Error: Agent '{target}' not found or offline."
+    # Send as @mention so routing picks it up
+    full_text = f"@{target} {message}"
+    result = _run_async(_store.add(sender=identity, text=full_text, msg_type="chat", channel=channel))
+    if isinstance(result, dict) and result.get("id"):
+        return f"Message sent to @{target} in #{channel}"
+    return "Failed to send message."
+
+
 # ── Server setup ────────────────────────────────────────────────────
 
 _ALL_TOOLS = [
+    # Chat
     chat_send, chat_read, chat_join, chat_who, chat_channels,
     chat_rules, chat_progress, chat_propose_job, chat_react, chat_claim,
+    # Memory
     memory_save, memory_search, memory_get, memory_list,
+    # Web & Browser
+    web_fetch, web_search, browser_snapshot, image_generate,
+    # Agent control
+    set_thinking, sessions_list, sessions_send,
 ]
 
 MCP_HTTP_PORT = 8200
