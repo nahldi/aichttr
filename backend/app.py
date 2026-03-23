@@ -2038,6 +2038,13 @@ async def bridge_inbound(request: Request):
     channel = body.get("channel", "general")
     platform = body.get("platform", "webhook")
 
+    # Validate platform to prevent spoofing
+    _VALID_PLATFORMS = {"discord", "telegram", "slack", "whatsapp", "webhook"}
+    if platform not in _VALID_PLATFORMS:
+        return JSONResponse({"error": "invalid platform"}, 400)
+    # Sanitize sender name
+    sender = sender[:50].replace(":", "_") if sender else "external"
+
     if not text.strip():
         return JSONResponse({"error": "text required"}, 400)
 
@@ -2186,7 +2193,7 @@ async def test_provider_key(provider_id: str):
     test_urls = {
         "anthropic": ("https://api.anthropic.com/v1/messages", {"x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}),
         "openai": ("https://api.openai.com/v1/models", {"Authorization": f"Bearer {key}"}),
-        "google": (f"https://generativelanguage.googleapis.com/v1beta/models?key={key}", {}),
+        "google": ("https://generativelanguage.googleapis.com/v1beta/models", {"x-goog-api-key": key}),
         "xai": ("https://api.x.ai/v1/models", {"Authorization": f"Bearer {key}"}),
         "groq": ("https://api.groq.com/openai/v1/models", {"Authorization": f"Bearer {key}"}),
         "together": ("https://api.together.xyz/v1/models", {"Authorization": f"Bearer {key}"}),
@@ -2207,7 +2214,8 @@ async def test_provider_key(provider_id: str):
             return JSONResponse({"error": "Invalid API key — authentication failed"}, 401)
         return {"ok": True, "message": f"Key accepted (status {e.code})"}
     except Exception as e:
-        return JSONResponse({"error": f"Connection failed: {str(e)[:100]}"}, 500)
+        log.warning("Provider test failed for %s: %s", provider_id, e)
+        return JSONResponse({"error": "Connection failed — check your network and try again"}, 500)
 
     return {"ok": True, "message": "Key appears valid"}
 

@@ -227,9 +227,14 @@ export const useChatStore = create<ChatState>((set) => ({
   // Agent thinking streams
   thinkingStreams: {},
   setThinkingStream: (agent, text, active) =>
-    set((s) => ({
-      thinkingStreams: { ...s.thinkingStreams, [agent]: { text, active } },
-    })),
+    set((s) => {
+      const updated = { ...s.thinkingStreams, [agent]: { text, active } };
+      // Remove inactive entries older than 30s to prevent unbounded growth
+      if (!active) {
+        delete updated[agent];
+      }
+      return { thinkingStreams: updated };
+    }),
 
   // Multi-select deletion
   selectMode: false,

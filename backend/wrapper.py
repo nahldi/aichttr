@@ -781,6 +781,7 @@ def main():
                                 urllib.request.urlopen(think_req, timeout=3)
                     except Exception:
                         pass
+                    last_report_time = now
                 elif not active and last_thinking_text:
                     # Clear thinking when idle
                     try:

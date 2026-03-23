@@ -206,7 +206,7 @@ class DiscordBridge(BaseBridge):
         super().__init__(config, store, registry, data_dir)
         self._token = config.get("token", "")
         self._stop_event = threading.Event()
-        self._message_cache: set[str] = set()  # Dedup sent messages
+        self._message_cache: list[str] = []  # Dedup sent messages (ordered)
         self._last_message_ids: dict[str, str] = {}  # channel_id → last seen message id
 
     def start(self):
@@ -278,10 +278,9 @@ class DiscordBridge(BaseBridge):
             if msg_id in self._message_cache:
                 continue
 
-            self._message_cache.add(msg_id)
+            self._message_cache.append(msg_id)
             if len(self._message_cache) > 1000:
-                # Trim cache
-                self._message_cache = set(list(self._message_cache)[-500:])
+                self._message_cache = self._message_cache[-500:]
 
             author = msg.get("author", {}).get("username", "discord-user")
             content = msg.get("content", "")
