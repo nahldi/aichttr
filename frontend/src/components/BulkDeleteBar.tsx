@@ -21,8 +21,9 @@ export function BulkDeleteBar() {
     const ids = Array.from(selectedIds);
     try {
       const result = await api.deleteMessages(ids);
+      const deleted = result.deleted && result.deleted.length > 0 ? result.deleted : ids;
       if (result.ok) {
-        deleteMessages(result.deleted || ids);
+        deleteMessages(deleted);
         clearSelection();
       } else {
         setError('Delete failed');

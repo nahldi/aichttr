@@ -571,8 +571,13 @@ async def bulk_delete_messages(request: Request):
         return JSONResponse({"error": "ids must be a non-empty list"}, 400)
     if len(ids) > 200:
         return JSONResponse({"error": "max 200 messages per request"}, 400)
-    # Sanitize: ensure all IDs are integers
-    safe_ids = [int(i) for i in ids if isinstance(i, (int, float))]
+    # Sanitize: coerce to int, skip any non-numeric values
+    safe_ids = []
+    for i in ids:
+        try:
+            safe_ids.append(int(i))
+        except (ValueError, TypeError):
+            continue
     if not safe_ids:
         return JSONResponse({"error": "no valid ids"}, 400)
     deleted = await store.delete(safe_ids)

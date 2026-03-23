@@ -36,11 +36,10 @@ export function SessionBar() {
   if (!session || session.status === 'completed') return null;
 
   const phases = session.phases || [];
+  if (phases.length === 0) return null;
   const phaseIdx = Math.min(session.current_phase, phases.length - 1);
   const phase = phaseIdx >= 0 ? phases[phaseIdx] : null;
-  const progress = phases.length > 0
-    ? ((session.current_phase / phases.length) * 100)
-    : 0;
+  const progress = (Math.min(session.current_phase, phases.length) / phases.length) * 100;
 
   const handleAdvance = async () => {
     try {
