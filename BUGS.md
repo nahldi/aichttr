@@ -1,8 +1,8 @@
 # GhostLink — Known Bugs & Issues
 
 **Last updated:** 2026-03-23
-**Version:** v1.2.0
-**Source:** Full codebase audit + bug fix pass
+**Version:** v1.6.2
+**Source:** Full codebase audit + bug fix pass + feature development
 
 ---
 
@@ -94,6 +94,16 @@
 ### BUG-018: Settings.json persists across uninstall/reinstall
 **Severity:** Low — causes BUG-004
 **Workaround:** Delete `~/.ghostlink/settings.json` before reinstalling.
+
+---
+
+## v1.6.x BUGS
+
+### BUG-019: All 7 new MCP tools crashed with TypeError — FIXED (v1.6.2)
+### BUG-020: Webhook delivery blocked WebSocket broadcasts — FIXED (v1.6.2)
+### BUG-021: Gemini video gen created empty files — FIXED (v1.6.2)
+### BUG-022: Auth detection too strict for Claude/Gemini — FIXED (v1.6.3)
+### BUG-023: Gemini Connect opens wrong terminal command — FIXED (v1.6.3)
 
 ---
 

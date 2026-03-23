@@ -50,23 +50,35 @@ export async function checkAnthropic(): Promise<AuthStatus> {
   // Check auth status via CLI
   try {
     const output = await execCmd('claude auth status');
-    if (/\b(logged in|authenticated|active)\b/i.test(output) && !/not (logged in|authenticated|active)/i.test(output)) {
-      const userMatch = output.match(/(?:as|user|email|account)\s+(\S+)/i);
+    // Accept any non-empty output that doesn't explicitly say "not authenticated"
+    if (output.length > 0 && !/not (logged in|authenticated|connected)/i.test(output)) {
+      const userMatch = output.match(/(?:as|user|email|account|@)\s*(\S+)/i);
       return { ...base, authenticated: true, user: userMatch ? userMatch[1] : '(session)' };
     }
   } catch (err: any) {
-    if (isCommandNotFound(err)) {
-      // Shouldn't happen if hasClaudeCli passed, but handle gracefully
+    // If command ran but returned non-zero, check stderr for auth info
+    const stderr = String(err?.stderr || '');
+    const stdout = String(err?.stdout || '');
+    const combined = stdout + stderr;
+    if (combined.length > 0 && !/not (logged|authenticated|connected)/i.test(combined) && !isCommandNotFound(err)) {
+      return { ...base, authenticated: true, user: '(session)' };
     }
   }
 
   // Check ~/.claude/ directory (indicates prior auth session)
   try {
     if (isWsl()) {
-      const result = await execAsync('wsl bash -lc "test -d ~/.claude && ls ~/.claude/ 2>/dev/null | head -1"', {
+      const result = await execAsync('wsl bash -lc "test -d ~/.claude && echo found"', {
         encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5_000,
       });
-      if (String(result).length > 0) {
+      if (String(result).includes('found')) {
+        return { ...base, authenticated: true, user: '(session)' };
+      }
+    } else {
+      const { existsSync } = require('fs');
+      const { join } = require('path');
+      const { homedir } = require('os');
+      if (existsSync(join(homedir(), '.claude'))) {
         return { ...base, authenticated: true, user: '(session)' };
       }
     }
