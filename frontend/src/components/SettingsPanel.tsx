@@ -860,6 +860,8 @@ function SecurityTab() {
 function SecretsSection() {
   const [secrets, setSecrets] = useState<{ key: string; preview: string; length: number }[]>([]);
   const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [secretError, setSecretError] = useState('');
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
 
@@ -867,12 +869,19 @@ function SecretsSection() {
   useEffect(() => { load(); }, []);
 
   const handleAdd = async () => {
-    if (!newKey.trim() || !newValue.trim()) return;
+    if (!newKey.trim() || !newValue.trim() || saving) return;
+    setSaving(true);
+    setSecretError('');
     try {
       await api.setSecret(newKey.trim(), newValue.trim());
       setNewKey(''); setNewValue(''); setAdding(false);
       load();
-    } catch (e) { console.warn('Set secret:', e instanceof Error ? e.message : String(e)); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setSecretError(msg);
+      console.warn('Set secret:', msg);
+    }
+    setSaving(false);
   };
 
   const handleDelete = async (key: string) => {
@@ -890,7 +899,8 @@ function SecretsSection() {
         <div className="p-3 rounded-xl bg-surface-container/30 border border-outline-variant/8 space-y-2 mb-2">
           <input value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="Key name (e.g. ANTHROPIC_API_KEY)" className="w-full bg-surface-container-highest rounded-md px-2 py-1.5 text-[11px] text-on-surface border border-outline-variant/10 outline-none" />
           <input value={newValue} onChange={e => setNewValue(e.target.value)} placeholder="Secret value" type="password" className="w-full bg-surface-container-highest rounded-md px-2 py-1.5 text-[11px] text-on-surface border border-outline-variant/10 outline-none font-mono" />
-          <button onClick={handleAdd} disabled={!newKey.trim() || !newValue.trim()} className="w-full py-1.5 rounded-lg bg-primary/15 text-primary text-[11px] font-semibold hover:bg-primary/25 transition-colors disabled:opacity-40">Save Secret</button>
+          {secretError && <div className="text-red-400 text-[9px]">{secretError}</div>}
+          <button onClick={handleAdd} disabled={!newKey.trim() || !newValue.trim() || saving} className="w-full py-1.5 rounded-lg bg-primary/15 text-primary text-[11px] font-semibold hover:bg-primary/25 transition-colors disabled:opacity-40">{saving ? 'Saving...' : 'Save Secret'}</button>
         </div>
       )}
       <div className="space-y-1">
@@ -956,6 +966,7 @@ function DataManagementSection() {
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState('');
 
   const handleExport = async () => {
     setExporting(true);
@@ -971,12 +982,16 @@ function DataManagementSection() {
 
   const handleDelete = async () => {
     setDeleting(true);
+    setError('');
     try {
       await api.deleteAllData();
       window.location.reload();
-    } catch (e) { console.warn('Delete all:', e instanceof Error ? e.message : String(e)); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      console.warn('Delete all:', msg);
+    }
     setDeleting(false);
-    setConfirmDelete(false);
   };
 
   return (
@@ -1008,6 +1023,7 @@ function DataManagementSection() {
               <button onClick={handleDelete} disabled={deleting} className="flex-1 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-[11px] font-semibold hover:bg-red-500/30 disabled:opacity-40">{deleting ? 'Deleting...' : 'Yes, Delete Everything'}</button>
               <button onClick={() => setConfirmDelete(false)} className="flex-1 py-1.5 rounded-lg bg-surface-container text-on-surface-variant/60 text-[11px] font-semibold hover:bg-surface-container-high">Cancel</button>
             </div>
+            {error && <div className="text-red-400 text-[9px] mt-2">Error: {error}</div>}
           </div>
         )}
       </div>

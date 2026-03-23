@@ -162,7 +162,11 @@ class ExecPolicy:
 
     def check_command(self, agent_name: str, command: str) -> dict:
         """Check if a command is allowed for an agent."""
-        cmd_lower = command.strip().lower()
+        # Normalize shell escaping to prevent bypass via backslash-space, quotes, etc.
+        cmd_lower = command.replace("\\ ", " ").replace("\\t", "\t").strip().lower()
+        # Also strip surrounding quotes
+        if (cmd_lower.startswith('"') and cmd_lower.endswith('"')) or (cmd_lower.startswith("'") and cmd_lower.endswith("'")):
+            cmd_lower = cmd_lower[1:-1]
 
         for blocked in BLOCKED_COMMANDS:
             if blocked in cmd_lower:
@@ -204,6 +208,8 @@ class AuditLog:
     def __init__(self, data_dir: Path):
         self._log_file = data_dir / "audit_log.jsonl"
 
+    _MAX_LOG_SIZE = 50_000_000  # 50MB rotation threshold
+
     def log(self, event_type: str, details: dict, actor: str = "system"):
         entry = {
             "timestamp": time.time(),
@@ -213,8 +219,23 @@ class AuditLog:
         }
         try:
             self._log_file.parent.mkdir(parents=True, exist_ok=True)
+            # Rotate if file exceeds size limit
+            if self._log_file.exists() and self._log_file.stat().st_size > self._MAX_LOG_SIZE:
+                backup = self._log_file.with_suffix(".jsonl.old")
+                if backup.exists():
+                    backup.unlink()
+                self._log_file.rename(backup)
             with open(self._log_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry) + "\n")
+                try:
+                    import fcntl
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                    try:
+                        f.write(json.dumps(entry) + "\n")
+                    finally:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                except ImportError:
+                    # Windows: no fcntl
+                    f.write(json.dumps(entry) + "\n")
         except Exception as e:
             log.debug("Audit log write failed: %s", e)
 
@@ -296,10 +317,22 @@ class DataManager:
                         if p.exists():
                             zf.writestr(f"agents/{agent_dir.name}/{txt}", p.read_text())
 
-            for f in ("providers.json", "sessions.json", "hooks.json"):
+            for f in ("sessions.json", "hooks.json"):
                 p = self._data_dir / f
                 if p.exists():
                     zf.writestr(f, p.read_text())
+
+            # Redact API keys from provider config
+            prov_path = self._data_dir / "providers.json"
+            if prov_path.exists():
+                try:
+                    prov_data = json.loads(prov_path.read_text())
+                    for k in list(prov_data.keys()):
+                        if k.endswith("_api_key"):
+                            prov_data[k] = "***REDACTED***"
+                    zf.writestr("providers.json", json.dumps(prov_data, indent=2))
+                except Exception:
+                    pass
 
             # Redact tokens from bridge configs
             bridges_path = self._data_dir / "bridges.json"
@@ -359,7 +392,10 @@ class DataManager:
         cutoff = time.time() - (max_age * 86400)
         deleted_count = 0
         if self._store and self._store._db:
-            cursor = await self._store._db.execute("DELETE FROM messages WHERE timestamp < ?", (cutoff,))
+            # Preserve system messages (join, session, scheduled)
+            cursor = await self._store._db.execute(
+                "DELETE FROM messages WHERE timestamp < ? AND type NOT IN ('system', 'join')", (cutoff,)
+            )
             await self._store._db.commit()
             deleted_count = cursor.rowcount
         return {"ok": True, "deleted_messages": deleted_count, "cutoff_days": max_age}
