@@ -69,9 +69,9 @@ html, body {
   color: rgba(255, 255, 255, 0.8);
 }
 
-#btn-close:hover {
-  background: #e53935 !important;
-  color: #fff !important;
+#titlebar-controls #btn-close:hover {
+  background: #e53935;
+  color: #fff;
 }
 
 /* ── Step progress dots ─────────────────────────────────────────────────── */

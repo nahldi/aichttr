@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 
 // ── Voice Input (Web Speech API) ───────────────────────────────────
 
-const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+const SpeechRecognition = (window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
 const VOICE_AVAILABLE = !!SpeechRecognition;
 
 function useVoiceInput(onTranscript: (text: string) => void, lang?: string) {
@@ -158,7 +158,8 @@ export function MessageInput() {
         api.getStatus().then(() => {
           const ms = Math.round(performance.now() - t0);
           addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: `Pong! (${ms}ms)`, type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
-        }).catch(() => {
+        }).catch((e) => {
+          console.warn('Ping failed:', e instanceof Error ? e.message : String(e));
           addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: 'Backend unreachable', type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
         });
       },

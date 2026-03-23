@@ -21,7 +21,7 @@ export function SessionBar() {
   useEffect(() => {
     api.getSession(activeChannel)
       .then(r => setSession(r.session))
-      .catch(() => setSession(null));
+      .catch((e) => { console.warn('Session fetch:', e instanceof Error ? e.message : String(e)); setSession(null); });
   }, [activeChannel]);
 
   useEffect(() => {

@@ -436,7 +436,7 @@ function syncConnectedToBackend(statuses) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ connectedAgents: connected }),
-  }).catch(() => {});
+  }).catch((e) => console.warn('Connected agents sync:', e.message || e));
 }
 
 function escapeHtml(str) {

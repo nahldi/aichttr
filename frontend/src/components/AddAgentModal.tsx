@@ -328,7 +328,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
                 <Section label="Permission Mode">
                   <div className="space-y-1">
                     {presets.map((p, i) => (
-                      <button key={i} onClick={() => setPermPreset(i)}
+                      <button key={presets[i]?.label || i} onClick={() => setPermPreset(i)}
                         className={`w-full text-left py-2 px-3 rounded-xl transition-all ${
                           permPreset === i ? 'bg-primary/8 ring-1 ring-primary/20' : 'bg-surface-container/30 hover:bg-surface-container/50'
                         }`}>

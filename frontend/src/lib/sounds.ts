@@ -49,7 +49,7 @@ export const SoundManager = {
       const audio = getAudio(url);
       audio.volume = volume;
       audio.currentTime = 0;
-      audio.play().catch(() => {});
+      audio.play().catch(() => { /* browser autoplay policy */ });
     } catch {}
   },
 
@@ -60,7 +60,7 @@ export const SoundManager = {
       const audio = getAudio(url);
       audio.volume = volume;
       audio.currentTime = 0;
-      audio.play().catch(() => {});
+      audio.play().catch(() => { /* browser autoplay policy */ });
     } catch {}
   },
 

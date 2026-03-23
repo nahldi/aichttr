@@ -55,7 +55,7 @@ class AgentMemory:
                     existing = json.loads(path.read_text("utf-8"))
                     entry["created_at"] = existing.get("created_at", entry["created_at"])
                 except Exception:
-                    pass
+                    pass  # Corrupt file — use new created_at
             path.write_text(json.dumps(entry, indent=2, ensure_ascii=False), "utf-8")
         return {"key": key, "status": "saved", "path": str(path)}
 
@@ -109,7 +109,7 @@ class AgentMemory:
                             "updated_at": data.get("updated_at", 0),
                         })
                 except Exception:
-                    pass
+                    pass  # Corrupt file — use new created_at
         return results
 
     def delete(self, key: str) -> bool:

@@ -107,7 +107,7 @@ export function SettingsPanel() {
       setSaved(true);
       setSaving(false);
       setTimeout(() => setSaved(false), 2000);
-    }).catch(() => setSaving(false));
+    }).catch((e) => { console.warn('Settings save:', e instanceof Error ? e.message : String(e)); setSaving(false); });
   }, [draft, hasPendingChanges, updateSettings]);
 
   // Auto-save after 2s of no changes

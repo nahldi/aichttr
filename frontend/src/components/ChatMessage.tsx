@@ -299,7 +299,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           {proposal && <JobProposal title={proposal.title} assignee={proposal.assignee} description={proposal.description} accepted={proposal.accepted} onAccept={() => {}} onDismiss={() => {}} />}
           {handoff && <HandoffCard from={handoff.from} to={handoff.to} reason={handoff.reason} context={handoff.context} fromColor={agents.find(a => a.name === handoff.from)?.color} toColor={agents.find(a => a.name === handoff.to)?.color} />}
           {approval && <ApprovalCard messageId={message.id} agent={approval.agent || message.sender} agentColor={agentColor} agentBase={agent?.base} prompt={approval.prompt || message.text} responded={approval.responded} />}
-          {card && <GenerativeCard card={card as any} agentColor={agentColor} />}
+          {card && <GenerativeCard card={card as Record<string, unknown>} agentColor={agentColor} />}
         </div>
 
         {/* Reactions display */}
@@ -348,7 +348,7 @@ function Attachments({ attachments }: { attachments: Attachment[] }) {
   return (
     <div className="mt-2 flex flex-wrap gap-2">
       {attachments.map((att, i) => (
-        <div key={i}>
+        <div key={att.url || i}>
           {att.type?.startsWith('image/') ? (
             <img src={att.url} alt={att.name} className="max-w-[280px] max-h-[180px] rounded-lg border border-outline-variant/10 object-cover" />
           ) : (
