@@ -79,11 +79,22 @@ class ServerManager {
     // Kill any stale processes on our ports to prevent "address already in use"
     try {
       if (isWsl()) {
-        execSync(`wsl bash -c "kill \\$(lsof -ti:${this.port}) 2>/dev/null; kill \\$(lsof -ti:8200) 2>/dev/null; kill \\$(lsof -ti:8201) 2>/dev/null" 2>/dev/null`, { stdio: 'ignore', timeout: 5_000 });
+        // Try multiple methods — lsof, fuser, or pkill
+        const killCmd = [
+          `lsof -ti:${this.port} | xargs -r kill -9`,
+          `lsof -ti:8200 | xargs -r kill -9`,
+          `lsof -ti:8201 | xargs -r kill -9`,
+          `fuser -k ${this.port}/tcp`,
+          `fuser -k 8200/tcp`,
+          `fuser -k 8201/tcp`,
+        ].join('; ');
+        execSync(`wsl bash -c "${killCmd}" 2>/dev/null`, { stdio: 'ignore', timeout: 8_000 });
       } else {
-        execSync(`kill $(lsof -ti:${this.port}) 2>/dev/null`, { stdio: 'ignore', timeout: 5_000 });
+        execSync(`kill $(lsof -ti:${this.port}) 2>/dev/null; kill $(lsof -ti:8200) 2>/dev/null; kill $(lsof -ti:8201) 2>/dev/null`, { stdio: 'ignore', timeout: 5_000 });
       }
-      log.info('Cleared stale processes on port %d', this.port);
+      // Give OS time to release the ports
+      await new Promise(r => setTimeout(r, 1000));
+      log.info('Cleared stale processes on ports %d, 8200, 8201', this.port);
     } catch { /* no stale processes — normal */ }
 
     const useWsl = isWsl();
@@ -315,14 +326,29 @@ class ServerManager {
       `if [ -f '${v}' ]; then source '${v}'; fi`
     ).join('; ');
 
-    bashCmd += `${venvChecks}; PORT=${this.port} PYTHONUNBUFFERED=1 python3 app.py`;
+    bashCmd += `${venvChecks}; PORT=${this.port} PYTHONUNBUFFERED=1 python3 app.py 2>&1`;
 
     log.info('Starting backend via WSL — bash -lc "%s"', bashCmd);
+
+    // Capture all output for crash diagnostics
+    let serverOutput = '';
 
     try {
       this.process = spawn('wsl', ['bash', '-lc', bashCmd], {
         env: { ...process.env },
         stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      // Capture stdout/stderr for diagnostics
+      this.process.stdout?.on('data', (data: Buffer) => {
+        const text = data.toString();
+        serverOutput += text;
+        if (serverOutput.length > 4000) serverOutput = serverOutput.slice(-4000);
+      });
+      this.process.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString();
+        serverOutput += text;
+        if (serverOutput.length > 4000) serverOutput = serverOutput.slice(-4000);
       });
 
       this.attachProcessHandlers();
@@ -331,8 +357,20 @@ class ServerManager {
       return { success: true, port: this.port };
     } catch (err: any) {
       log.error('Failed to start backend via WSL:', err);
+      if (serverOutput) {
+        log.error('Server output before crash:\n%s', serverOutput);
+      }
       await this.stop();
-      return { success: false, error: err.message ?? String(err) };
+      // Extract the actual error from server output
+      const errorLines = serverOutput.split('\n').filter(l =>
+        l.includes('Error') || l.includes('error') || l.includes('Traceback') ||
+        l.includes('ModuleNotFoundError') || l.includes('ImportError') ||
+        l.includes('Address already in use') || l.includes('Permission denied')
+      );
+      const errorMsg = errorLines.length > 0
+        ? errorLines.slice(-3).join('\n')
+        : (err.message ?? 'Server failed to start. Check that Python 3.10+ and all dependencies are installed in WSL.');
+      return { success: false, error: errorMsg };
     }
   }
 
