@@ -1,373 +1,455 @@
-# GhostLink — Complete Development Roadmap
+# GhostLink — Complete Development Roadmap v2
 
-> Every bug, fix, feature, and upgrade needed — phased, prioritized, with test plans.
+> The plan to make GhostLink the best multi-agent AI platform — surpassing OpenClaw in features, security, UX, and reliability.
 > For any AI picking this up: follow the phases IN ORDER. Each phase has verification steps. Do NOT skip ahead.
 
-**Last updated:** 2026-03-22
-**Source:** Full codebase audit (identity isolation + bug sweep + feature gap analysis)
+**Last updated:** 2026-03-23
+**Version:** v1.8.0
+**Benchmark:** OpenClaw v2026.3.22 (247K stars, 125+ features)
+**Source:** Full competitive analysis + codebase audit + user feedback
 
 ---
 
-## HOW TO USE THIS ROADMAP
+## COMPLETED (v1.0–v1.8)
 
-1. Read the phase description
-2. For each item: read the problem, the fix, AND the test plan
-3. Implement the fix
-4. Run the FAIL TEST first (verify the bug exists)
-5. Apply the fix
-6. Run the FIX TEST (verify the fix works)
-7. Run the SMOKE TEST (verify nothing else broke)
-8. Run the STRESS TEST where applicable
-9. Only move to the next item after all tests pass
-10. At the end of each phase: full build + visual check + push to git
+The following phases from the original roadmap are **DONE**:
 
----
+- ~~Phase 0: Critical Security & Stability~~ — 45 bugs fixed, XSS patched, SSRF hardened, token rotation, input validation
+- ~~Phase 1: Agent Identity Isolation~~ — Bearer auth, MCP proxy sender injection, memory file locking, name validation
+- ~~Phase 2: Code Quality & Reliability~~ — DB indexes, configurable ports, input validation, config schema validation, store encapsulation
+- ~~Phase 3: Desktop App Fixes~~ — Async IPC, wizard detection, menu bar, launcher hide, OneDrive detection
+- ~~Phase 4: Agent Intelligence~~ — Auto-route, response modes, context compression, presets, conversation starters
+- ~~Phase 5: Skills & Tools~~ — Web search, web fetch, image gen, video gen, TTS, STT, code execution
+- ~~Phase 6: UX & Polish~~ — Generative UI, command history, URL previews, drag & drop, onboarding, voice input, session snapshots
+- ~~Phase 7: Growth & Distribution~~ — Share conversations, CI/CD builds, Cloudflare tunnel, plugin system
 
-## PHASE 0: CRITICAL SECURITY & STABILITY (Do First — Nothing Else Until These Pass)
-
-> These bugs can cause crashes, data corruption, or identity spoofing. Ship-blocking.
-
-### 0.1 Fix MCP Identity Spoofing
-**Bug:** MCP bridge falls back to accepting raw `sender` parameter when no auth token is present. Any HTTP request can impersonate any agent.
-**File:** `backend/mcp_bridge.py` lines 166-173 (`_resolve_identity`)
-**Fix:** Remove the fallback. If no valid token, return an error. Never accept unverified sender names.
-**Fail test:** `curl -X POST http://127.0.0.1:8200/mcp` with `sender="claude"` but no Bearer token → currently succeeds (BUG)
-**Fix test:** Same curl → returns error "sender requires bearer token authentication"
-**Smoke test:** Start real agents, verify they still communicate normally via MCP proxy with valid tokens
-
-### 0.2 Fix WebSocket Race Condition
-**Bug:** `_ws_clients` set is modified during iteration in `broadcast()`. Concurrent connect/disconnect causes `RuntimeError: Set changed size during iteration`.
-**File:** `backend/app.py` lines 192-201
-**Fix:** Copy the set before iterating: `for ws in list(_ws_clients):` or add an asyncio.Lock
-**Fail test:** Rapidly connect/disconnect 10 WebSocket clients while broadcasting → crashes intermittently
-**Fix test:** Same stress test → no crashes, all messages delivered
-**Smoke test:** Normal chat works, agents connect/disconnect cleanly
-
-### 0.3 Fix Store Assertion Failures
-**Bug:** `assert self._db is not None` crashes with cryptic `AttributeError` if Python runs with `-O` flag.
-**File:** `backend/store.py` lines 78, 106, 115, 124, 135, 147
-**Fix:** Replace every `assert self._db is not None` with `if self._db is None: raise RuntimeError("Database not initialized. Call init() first.")`
-**Fail test:** Run `python -O app.py` → store methods crash with AttributeError
-**Fix test:** Run `python -O app.py` → store methods raise RuntimeError with clear message
-**Smoke test:** Normal operation unaffected
-
-### 0.4 Fix Memory Leak — Unbounded Dictionaries
-**Bug:** `_empty_read_count`, `_cursors`, `_activity_ts`, `_presence` dictionaries grow forever. Each disconnected agent leaves orphaned entries.
-**File:** `backend/mcp_bridge.py` lines 34, 40-44
-**Fix:** Clean up entries when agent deregisters. Add `_cleanup_agent(name)` called from deregister flow. Also add periodic cleanup (every 5 min) for entries older than 1 hour.
-**Fail test:** Register/deregister 100 agents → dict sizes grow to 100 (no cleanup)
-**Fix test:** Register/deregister 100 agents → dict sizes stay near 0 after deregister
-**Stress test:** Run for 24 hours with agents cycling → memory usage stays flat
-
-### 0.5 Fix Queue File Race Condition
-**Bug:** Two agents writing to the same queue file simultaneously can corrupt JSONL lines or lose triggers.
-**File:** `backend/mcp_bridge.py` lines 230-236 (`_trigger_mentions`)
-**Fix:** Add per-file threading.Lock. Lock before write, unlock after.
-**Fail test:** 2 threads rapidly writing `@claude` triggers → some lines corrupted in `claude_queue.jsonl`
-**Fix test:** Same stress → all lines valid JSON, one per line
-**Smoke test:** Normal @mention routing works
-
-### 0.6 Fix Agent Process Dictionary Race
-**Bug:** `_agent_processes` dict accessed without lock from concurrent spawn/kill endpoints.
-**File:** `backend/app.py` lines 27, 683, 723
-**Fix:** Add `_process_lock = threading.Lock()` and wrap all reads/writes.
-**Fail test:** Rapidly spawn and kill agents simultaneously → dict corruption or KeyError
-**Fix test:** Same stress → clean operation, no errors
+**Current state: 80+ features, 37 components, 80+ API endpoints, 17 MCP tools, 8 providers, 9 themes, 28 skills**
 
 ---
 
-## PHASE 1: AGENT IDENTITY ISOLATION (Agents Must Never Confuse Each Other)
+## PHASE 8: CHANNEL INTEGRATIONS (Top Priority — Biggest Gap vs OpenClaw)
 
-> Multiple agents (claude, claude-1, bob, codex) sharing a workspace MUST have perfect isolation.
+> OpenClaw has 15+ channel integrations. GhostLink has zero. This is the #1 competitive gap.
 
-### 1.1 Validate Agent Name on All Endpoints
-**Bug:** `/api/agents/{name}/soul`, `/notes`, `/memories` accept any name — even unregistered agents or path traversal.
-**File:** `backend/app.py` lines 1070-1153
-**Fix:** Add registry validation at the top of every agent-scoped endpoint: `if not registry.get(name): return 404`
-**Fail test:** `GET /api/agents/../../etc/passwd/soul` → returns data or 500
-**Fix test:** Same request → returns 404 "agent not found"
-**Also test:** `GET /api/agents/offline-agent/memories` when agent is not registered → 404
+### 8.1 Discord Bot Bridge
+**What:** Bidirectional message sync between GhostLink and Discord channels.
+**Effort:** Large
+**How:**
+- Settings > Integrations tab with Discord bot token input
+- Channel mapping: GhostLink channel ↔ Discord channel ID
+- On/off toggle per integration
+- Backend: discord.py or lightweight HTTP bot using Discord Gateway API
+- Inbound: Discord messages forwarded to GhostLink as chat messages
+- Outbound: GhostLink agent messages posted to Discord
+- Slash commands in Discord: `/status`, `/agents`, `/ask @agent`
+- Support embeds, reactions, file attachments
+- DM support (agents respond in DMs)
+**Test:** Send message in Discord → appears in GhostLink. Agent responds → appears in Discord.
 
-### 1.2 Make MCP Proxy Sender Injection Mandatory
-**Bug:** Proxy only overwrites sender if it differs from proxy's name. Should ALWAYS inject.
-**File:** `backend/mcp_proxy.py` lines 196-225
-**Fix:** Remove the conditional. Always set `args[sender_key] = proxy.agent_name`.
-**Fail test:** Agent sends request with sender="other-agent" → proxy passes it through unchanged
-**Fix test:** Same request → proxy replaces sender with its own identity
-**Smoke test:** Normal agent communication unaffected
+### 8.2 Telegram Bot Bridge
+**What:** Telegram bot that connects to GhostLink.
+**Effort:** Large
+**How:**
+- Bot token input in Settings > Integrations
+- python-telegram-bot or aiogram library
+- Group chat support with @mention gating
+- DM support (private conversations with agents)
+- Forum topic support (thread-based conversations)
+- Media handling (images, voice messages, documents)
+- Inline keyboard buttons for approvals
+**Test:** Message bot in Telegram → agent responds in Telegram.
 
-### 1.3 Add Memory File Locking
-**Bug:** Concurrent memory_save from two agents writing to the same agent's memory can corrupt JSON files.
-**File:** `backend/agent_memory.py` lines 111-119
-**Fix:** Add `threading.RLock` per agent. Lock around all file read/write operations in `save()`, `load()`, `delete()`.
-**Fail test:** 2 threads call `memory_save(key="x")` simultaneously → file corruption
-**Fix test:** Same test → both writes succeed, file is valid JSON
-**Smoke test:** Agent memory operations work normally
+### 8.3 Slack Bot Bridge
+**What:** Slack app integration.
+**Effort:** Large
+**How:**
+- Slack app manifest + OAuth flow
+- Channel mapping with workspace selection
+- Thread support (Slack threads ↔ GhostLink reply chains)
+- Block Kit interactive messages (buttons, dropdowns)
+- Slash commands: `/ghostlink ask @claude review this PR`
+- File sharing between platforms
+**Test:** Message in Slack channel → agent responds in thread.
 
-### 1.4 Implement Token Expiration
-**Bug:** Agent tokens never expire. Leaked/stale tokens valid forever.
-**File:** `backend/registry.py` lines 10-29
-**Fix:** Add `token_issued_at` and `token_ttl` (default 1 hour). Check expiration in `resolve_token()`. Rotate token on each heartbeat.
-**Fail test:** Use a token from a previous session → still works (BUG)
-**Fix test:** Use expired token → rejected with "token expired"
-**Smoke test:** Active agents auto-rotate tokens via heartbeat, no disruption
+### 8.4 WhatsApp Bridge
+**What:** WhatsApp Business API or Baileys-based bridge.
+**Effort:** Large
+**How:**
+- QR code pairing flow in Settings
+- Message sync with reconnection handling
+- Media support (images, voice notes, documents)
+- Group chat support
+**Test:** Send WhatsApp message → agent responds.
 
-### 1.5 Fix Queue TOCTOU Race in Wrapper
-**Bug:** Queue file can be written to between read and clear, losing triggers.
-**File:** `backend/wrapper.py` lines 239-243
-**Fix:** Atomic read-and-clear: rename file to `.processing`, read it, delete it. New writes go to the original filename.
-**Fail test:** Rapidly write triggers while watcher is reading → some triggers lost
-**Fix test:** Same stress → all triggers processed, none lost
-
-### 1.6 Enhance System Prompt Identity
-**Action:** Ensure every agent's system prompt includes:
-- "You are {name} (instance of {base}). Your unique agent ID is {name}."
-- "Your files are at: data/{name}/ — ONLY access YOUR files, never another agent's."
-- "Other agents in this workspace: {list with names}. Do NOT access their memory/notes/soul."
-- "When you call memory_save/load, the system automatically scopes to YOUR storage. You cannot access other agents' memories."
-**File:** `backend/wrapper.py` (`_build_system_prompt`) and `backend/mcp_bridge.py` (`_INSTRUCTIONS`)
-**Test:** Start claude and claude-1, ask each "what is your name?" → each correctly identifies itself
-**Test:** Ask claude to "read claude-1's memories" → should refuse or get empty result (not claude-1's actual data)
-
----
-
-## PHASE 2: CODE QUALITY & RELIABILITY
-
-> Fix silent failures, add logging, make errors visible.
-
-### 2.1 Replace Bare Except Clauses with Logging
-**Bug:** 20+ locations silently swallow exceptions. Impossible to debug production issues.
-**Files:** `mcp_bridge.py` (6 locations), `store.py` (2), `app.py` (10+), `wrapper.py` (5+)
-**Fix:** Replace every `except Exception: pass` with `except Exception as e: log.warning(f"...: {e}")`. Keep the graceful behavior but ADD logging.
-**Test:** Trigger known error conditions → verify log messages appear
-
-### 2.2 Add Database Indexes
-**Bug:** No index on `sender` or `reply_to` columns. Slow queries on large datasets.
-**File:** `backend/store.py` DB_SCHEMA
-**Fix:** Add: `CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender);` and `CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to);`
-**Test:** Insert 10,000 messages, query by sender → response time <100ms
-
-### 2.3 Make Ports Configurable
-**Bug:** MCP ports 8200/8201 hardcoded. Can't run multiple GhostLink instances.
-**File:** `backend/mcp_bridge.py` lines 685-686
-**Fix:** Read from config.toml `[mcp] http_port` and `sse_port`. Fall back to 8200/8201 if not set.
-**Test:** Set `http_port = 9200` in config.toml → MCP starts on 9200
-
-### 2.4 Add Input Validation
-**Bug:** No length/character validation on sender names, channel names, message text.
-**File:** `backend/app.py` send_message endpoint
-**Fix:** Validate: sender max 100 chars alphanumeric, text max 100KB, channel max 30 chars lowercase.
-**Test:** Send message with 1MB text → returns 400 "message too long"
-
-### 2.5 Add Config Schema Validation
-**Bug:** Missing/malformed config.toml causes cryptic crashes.
-**File:** `backend/app.py` lines 40-48
-**Fix:** Validate required keys exist on load. Print helpful error if missing.
-**Test:** Remove `[server]` section from config.toml → clear error message, not crash
-
----
-
-## PHASE 3: DESKTOP APP FIXES
-
-> Make the Electron app reliable on all Windows setups.
-
-### 3.1 Async All IPC Handlers
-**Bug:** `execSync` calls block Electron main thread for 5-60 seconds, freezing UI.
-**Files:** `desktop/main/index.ts`, `desktop/main/auth/index.ts`
-**Fix:** Replace ALL remaining `execSync` with `util.promisify(exec)` or `child_process.spawn`. Every IPC handler must be async.
-**Test:** Launch app → window appears in <2 seconds, never shows "Not Responding"
-
-### 3.2 Fix Wizard First-Run Detection
-**Bug:** `~/.ghostlink/settings.json` persists across uninstall. Wizard skipped on reinstall.
-**File:** `desktop/main/index.ts` (app ready handler)
-**Fix:** Check settings version. If version < current app version, show wizard anyway. Also add cleanup to NSIS uninstaller.
-**Test:** Uninstall → reinstall → wizard shows
-
-### 3.3 Fix Menu Bar on Chat Window
-**Bug:** File/Edit/View menu shows on framed chat window.
-**File:** `desktop/main/index.ts` (chat window creation)
-**Fix:** Set `autoHideMenuBar: true` on BrowserWindow options.
-**Test:** Chat window opens → no menu bar visible
-
-### 3.4 Fix Launcher Staying Open
-**Bug:** Launcher doesn't always hide when chat window opens.
-**File:** `desktop/main/index.ts` (createChatWindow)
-**Fix:** Explicitly call `launcher.hide()` after chat window `ready-to-show` in ALL code paths.
-**Test:** Start server → chat opens → launcher is hidden
-
-### 3.5 Handle Non-OneDrive Installs
-**Bug:** Server.ts OneDrive detection is path-string-based. May false-positive or false-negative.
-**File:** `desktop/main/server.ts` line 168
-**Fix:** Actually test WSL path accessibility (`wsl test -r /path/to/app.py`) instead of checking for "OneDrive" in string.
-**Test:** Install to `C:\GhostLink` → server starts directly, no /tmp copy needed
-
-### 3.6 Add Temp File Cleanup
-**Bug:** `/tmp/ghostlink-backend/` never cleaned up. Stale files from previous runs.
-**File:** `desktop/main/server.ts`
-**Fix:** Clean up on app quit. Also clean up before copying on start.
-**Test:** Start → stop → start → no stale file conflicts
-
----
-
-## PHASE 4: NEW FEATURES — AGENT INTELLIGENCE
-
-> Make agents smarter, more capable, more autonomous.
-
-### 4.1 Auto-Route Toggle
-**What:** Settings toggle: agents receive ALL messages vs only @mentioned.
-**Effort:** Tiny
-**How:** Add toggle in SettingsPanel → syncs to `router.default_routing` ("all" vs "none")
-**Test:** Toggle ON → send message without @mention → agent responds
-
-### 4.2 Agent Response Modes
-**What:** Per-agent setting: "Always respond", "Only when mentioned", "Listen & decide", "Silent observer"
-**Effort:** Small
-**How:** Store per-agent in settings, pass to router filtering
-
-### 4.3 Smart Context Compression
-**What:** Compress old messages into summaries for token efficiency.
+### 8.5 Generic Webhook Bridge
+**What:** Configurable webhook bridge for any platform.
 **Effort:** Medium
-**How:** Every 50 messages, summarize. Replace old context with summary in MCP reads.
-**Test:** 500 messages in channel → agent reads compressed context (<2000 tokens) not full history
-
-### 4.4 Agent Presets
-**What:** One-click agent configurations: "Code Reviewer", "PM", "DevOps", "Creative Writer"
-**Effort:** Medium
-**How:** Preset library with SOUL template + skill set + model. Apply with one click.
-
-### 4.5 Conversation Starters
-**What:** Empty channel shows suggested prompts: "Ask Claude to review your code", "Brainstorm with @all"
-**Effort:** Small
-**How:** Clickable suggestion chips in empty channel state
+**How:**
+- Inbound webhook endpoint: POST /api/bridge/inbound with configurable auth
+- Outbound webhook: POST to configurable URL on agent responses
+- Message format mapping (customizable JSON templates)
+- Supports Matrix, Mattermost, Rocket.Chat, or any webhook-compatible platform
+**Test:** curl POST to inbound webhook → message appears in GhostLink → agent responds → outbound webhook fires.
 
 ---
 
-## PHASE 5: NEW FEATURES — SKILLS & TOOLS
+## PHASE 9: PLUGIN MARKETPLACE & SDK
 
-> Give agents real capabilities. Each skill = new MCP tool.
+> OpenClaw has ClawHub with 100+ plugins. GhostLink has 3. Build the ecosystem.
 
-### 5.1 Firecrawl Web Scraping
-**What:** Agents crawl websites, extract content as markdown.
-**Install:** `npx -y firecrawl-mcp`
-**Tools:** `firecrawl_scrape(url)`, `firecrawl_crawl(url)`, `firecrawl_search(query)`
-**Test:** Agent scrapes a URL → gets clean markdown content
+### 9.1 Plugin SDK
+**What:** Public SDK for building GhostLink plugins.
+**Effort:** Large
+**How:**
+- `ghostlink-plugin-sdk` npm package with TypeScript types
+- Plugin lifecycle: `setup()`, `teardown()`, `onMessage()`, `onAgentSpawn()`, `onAgentKill()`
+- Plugin config schema (validated at install)
+- Plugin hooks: before/after message send, before/after agent spawn
+- Testing utilities: mock store, mock registry, mock MCP bridge
+- Documentation with examples
+**Test:** Build a sample plugin using the SDK → install → verify hooks fire.
 
-### 5.2 Browser Use CLI
-**What:** Agents control a browser — click, type, screenshot, navigate.
-**Install:** `pip install browser-use`
-**Tools:** `browser_open(url)`, `browser_click(selector)`, `browser_type(text)`, `browser_screenshot()`
-**Test:** Agent fills out a form on a website autonomously
+### 9.2 Plugin Marketplace (GhostHub)
+**What:** Browse, install, and manage community plugins from the UI.
+**Effort:** Large
+**How:**
+- Plugin registry hosted on GitHub (JSON manifest + tarball)
+- Settings > Plugins panel with browse/search/install/update/uninstall
+- `ghostlink plugins install <name>` CLI command
+- Version tracking, update notifications
+- Safety scanning on install (AST analysis, not just string matching)
+- Star ratings, download counts (optional — requires hosted backend)
+- Featured plugins section
+**Test:** Browse marketplace in UI → install plugin → plugin loads on restart.
 
-### 5.3 GitHub MCP Server
-**What:** Full GitHub API — PRs, issues, code search, actions.
-**Install:** Official GitHub MCP server (22K stars)
-**Tools:** `gh_create_pr()`, `gh_list_issues()`, `gh_review_pr()`, `gh_search_code()`
-**Test:** Agent creates a GitHub issue via MCP tool
+### 9.3 Skill Packs (Bundled Plugin Collections)
+**What:** Curated skill packs for common workflows.
+**Effort:** Medium
+**How:**
+- "Developer Pack" — git ops, code review, test runner, dep scanner
+- "Research Pack" — web search, PDF reader, knowledge graph, AI search
+- "Creative Pack" — image gen, diagram gen, screenshot, text transform
+- "DevOps Pack" — Docker, shell exec, API tester, database query
+- One-click install in Skills browser
+**Test:** Install "Developer Pack" → all included skills appear and work.
 
-### 5.4 Apprise Notifications
-**What:** Send alerts to 90+ channels — Slack, Discord, Telegram, Email.
-**Install:** `pip install apprise`
-**Tools:** `notify_send(message, channels)`
-**Test:** Agent sends a Slack notification when a task completes
-
-### 5.5 Knowledge Graph Memory
-**What:** Agents build persistent knowledge graphs — entities, relationships, observations.
-**Install:** Anthropic's official KG Memory MCP server
-**Tools:** `kg_add_entity()`, `kg_add_relation()`, `kg_search()`
-**Test:** Agent remembers "Project X uses React and depends on Service Y" across sessions
-
-### 5.6 Database Access (PostgreSQL/Supabase)
-**What:** Agents query and write to databases.
-**Install:** DBHub universal MCP or Supabase MCP
-**Tools:** `db_query(sql)`, `db_schema()`, `db_insert()`
-**Test:** Agent queries a Postgres table and summarizes results
-
-### 5.7 Docker Management
-**What:** List, start, stop, inspect containers.
-**Tools:** `docker_list()`, `docker_logs(container)`, `docker_exec(container, cmd)`
-**Test:** Agent checks container status and restarts a crashed service
-
-### 5.8 AI-Powered Search (Tavily)
-**What:** Better than DuckDuckGo — AI-synthesized answers with citations.
-**Install:** Tavily MCP server (free tier)
-**Tools:** `ai_search(query)`
-**Test:** Agent researches "best Python testing frameworks 2026" → synthesized answer
+### 9.4 Hook System (Automated Workflows)
+**What:** Event-driven automation hooks.
+**Effort:** Medium
+**How:**
+- `hooks/` directory for user-defined automation
+- Events: on_message, on_agent_join, on_agent_leave, on_approval, on_schedule
+- Hook format: Python or JSON-defined rules
+- UI editor in Settings > Automation
+- Built-in hooks: auto-greet new agents, daily standup prompt, auto-archive old channels
+**Test:** Create "auto-greet" hook → new agent joins → greeting message sent automatically.
 
 ---
 
-## PHASE 6: NEW FEATURES — UX & POLISH
+## PHASE 10: ADVANCED SECURITY & SANDBOXING
 
-> Make the app feel premium and delightful.
+> OpenClaw has enterprise-grade security. GhostLink needs to match and exceed.
 
-### 6.1 Generative UI Cards
-**What:** Agents render interactive cards — charts, forms, tables, progress bars — not just text.
+### 10.1 Docker Sandbox for Agent Execution
+**What:** Run agents in isolated Docker containers instead of bare tmux.
+**Effort:** Large
+**How:**
+- Optional Docker backend (falls back to tmux if Docker not available)
+- Per-agent Dockerfile with minimal image (Python/Node runtime only)
+- Network isolation: agents can only reach GhostLink server + allowed URLs
+- Filesystem isolation: agents only see their workspace, not host filesystem
+- Resource limits: CPU, memory, disk per agent
+- Settings toggle: "Sandbox Mode" on/off per agent
+**Test:** Spawn agent in Docker → agent can read/write workspace → cannot access /etc/passwd.
+
+### 10.2 Secrets Manager
+**What:** Encrypted storage for API keys and tokens.
 **Effort:** Medium
-**How:** Agent sends structured metadata, frontend renders appropriate component dynamically.
+**How:**
+- `~/.ghostlink/secrets.enc` encrypted with user's machine key
+- SecretRef in config: `api_key: "$secret:anthropic_key"` resolved at runtime
+- UI for managing secrets (add/edit/delete with visibility toggle)
+- Never log or expose secret values in UI, exports, or logs
+- Auto-detect secrets in settings and offer to move to secrets manager
+**Test:** Store API key in secrets manager → agent uses it → key never appears in logs.
 
-### 6.2 Command History (Up Arrow)
-**What:** Press Up in input to recall previous messages.
-**Effort:** Tiny
-**How:** Store last 100 messages in localStorage, Up/Down arrows to navigate.
-
-### 6.3 Rich URL Previews
-**What:** URLs auto-expand with title, description, image cards.
+### 10.3 Exec Approval Hardening
+**What:** Prevent agents from executing dangerous commands.
 **Effort:** Medium
-**How:** Backend fetches OpenGraph metadata, frontend renders preview card.
+**How:**
+- Command allowlist/blocklist per agent (configurable in UI)
+- Dangerous command detection: `rm -rf`, `sudo`, `curl | bash`, `eval`, `exec`
+- Approval prompt for any command not on allowlist
+- Log all executed commands with timestamps
+- Rate limiting on command execution (max N commands per minute)
+**Test:** Agent tries `rm -rf /` → blocked with approval prompt → user denies → agent can't execute.
 
-### 6.4 Drag & Drop Files
-**What:** Drag files into chat to share with agents.
-**Effort:** Small
-**How:** Frontend drag handler → upload API → agent gets file path.
+### 10.4 Device Pairing & Multi-User Auth
+**What:** Secure device pairing for remote access.
+**Effort:** Large
+**How:**
+- Setup codes (6-digit) scoped to device profiles
+- QR code + PIN pairing for mobile devices
+- Per-device permissions (read-only, full access, admin)
+- Session tokens with device binding
+- Revoke device access from Settings
+- Audit log of device connections
+**Test:** Pair phone via QR → phone can view chat → cannot spawn agents (read-only).
 
-### 6.5 Onboarding Tour
-**What:** Interactive guided tour for first-time users.
+### 10.5 GDPR Compliance & Data Management
+**What:** Data export, deletion, and consent management.
 **Effort:** Medium
-**How:** Shepherd.js or custom React tooltips highlighting key features.
-
-### 6.6 Voice Chat
-**What:** Push-to-talk voice input, TTS output.
-**Effort:** Medium
-**How:** Web Speech API for STT, browser TTS or ElevenLabs for output.
-
-### 6.7 Multi-Project Support
-**What:** Switch between project workspaces without restart.
-**Effort:** Medium
-**How:** Project selector in sidebar, workspace switching in settings.
-
-### 6.8 Session Snapshots
-**What:** Save/restore entire session state as JSON.
-**Effort:** Small
-**How:** Export/import agents, channels, settings, messages.
+**How:**
+- Export all user data as ZIP (messages, settings, memories, sessions)
+- Delete all data with confirmation (GDPR right to erasure)
+- Consent toggle for analytics/telemetry (currently none, but future-proof)
+- Data retention policies (auto-delete messages older than N days, configurable)
+- Audit trail for data operations
+**Test:** Export data → ZIP contains all messages. Delete all → database is empty.
 
 ---
 
-## PHASE 7: GROWTH & DISTRIBUTION
+## PHASE 11: MODEL PROVIDERS & AI CAPABILITIES
 
-> Make people want to share and use GhostLink.
+> Match OpenClaw's provider breadth and exceed it.
 
-### 7.1 Share Conversations
-**What:** Generate shareable link to a conversation.
-**How:** Export as styled HTML page. Optional: host on ghostlink.dev.
+### 11.1 Additional Model Providers
+**What:** Add more LLM providers.
+**Effort:** Medium per provider
+**Providers to add:**
+- **Mistral** — Mistral Large, Codestral, Pixtral (chat + code + vision)
+- **OpenRouter** — Meta-provider routing to 200+ models with single API key
+- **Azure OpenAI** — Enterprise Azure deployments with Responses API
+- **AWS Bedrock** — Claude, Llama, Titan via AWS credentials
+- **Deepseek** — DeepSeek-V3, DeepSeek-R1 (reasoning)
+- **Cohere** — Command R+, Embed (enterprise RAG)
+- **Perplexity** — Search-augmented generation
+**How:** Add to `providers.py` PROVIDERS dict with env keys, capabilities, models, setup instructions.
+**Test:** Configure Mistral API key → resolve_capability("chat") returns Mistral → agent uses Mistral.
 
-### 7.2 Agent Personalities Library
-**What:** Fun personality presets — "Pirate Claude", "Shakespearean Codex".
-**How:** SOUL template marketplace. Community-contributed.
+### 11.2 Model Routing & Failover
+**What:** Smart model selection with automatic failover.
+**Effort:** Medium
+**How:**
+- Per-capability priority chain (e.g., chat: Claude → GPT → Gemini → Ollama)
+- Automatic failover on provider error (429, 500, timeout)
+- Cost-aware routing (prefer cheaper model for simple tasks)
+- Latency-aware routing (prefer faster model for real-time chat)
+- Manual override per agent (already exists, enhance)
+**Test:** Primary provider returns 429 → automatically switches to fallback → agent continues working.
 
-### 7.3 IDE Extensions
-**What:** VSCode/Cursor/JetBrains panels that connect to GhostLink.
-**How:** Extension with WebSocket connection to the same server.
+### 11.3 Streaming Responses
+**What:** Stream agent responses token-by-token to the chat UI.
+**Effort:** Large
+**How:**
+- WebSocket stream events: `{ type: "stream", data: { agent, token, done } }`
+- Frontend renders tokens as they arrive (typing effect)
+- Backend buffers for MCP tool calls, streams for chat responses
+- Cancel button to stop generation mid-stream
+**Test:** Agent starts responding → tokens appear one-by-one → user sees real-time output.
 
-### 7.4 GhostLink Cloud (SaaS)
-**What:** Hosted version — sign up, connect API keys, go.
-**How:** Docker deployment, multi-tenant, Stripe billing.
+### 11.4 RAG (Retrieval Augmented Generation)
+**What:** Agents can search and reference uploaded documents.
+**Effort:** Large
+**How:**
+- Document upload: PDF, DOCX, TXT, MD, CSV
+- Chunking + embedding (via configured embedding provider)
+- Vector store (SQLite-vec or ChromaDB local)
+- MCP tool: `doc_search(query)` returns relevant chunks
+- Auto-attach relevant context to agent prompts
+- Document management UI (upload, list, delete, re-index)
+**Test:** Upload PDF → ask agent about its contents → agent responds with accurate information from the PDF.
 
-### 7.5 Mobile App
-**What:** iOS/Android for monitoring and quick commands.
-**How:** React Native or PWA via Cloudflare tunnel.
+### 11.5 Advanced Context Management
+**What:** Smarter compaction, caching, and context windows.
+**Effort:** Large
+**How:**
+- User-notified compaction (show "Compacting context..." in chat)
+- Transcript repair after compaction
+- Cache-aware context building (reuse cached prefixes)
+- Per-agent context window tracking (show usage bar in UI)
+- Overflow recovery (truncate oldest messages, preserve system prompts)
+- Split-turn preservation (don't break multi-part messages)
+**Test:** 1000 messages in channel → compaction triggers → agent still has accurate context → user notified.
 
-### 7.6 Plugin Marketplace
-**What:** Community-driven plugins. Browse, install, rate.
-**How:** Plugin registry, npm-style package manager.
+---
+
+## PHASE 12: MOBILE APP
+
+> OpenClaw has an Android app. GhostLink needs cross-platform mobile.
+
+### 12.1 Progressive Web App (PWA)
+**What:** Installable PWA with offline support.
+**Effort:** Medium
+**How:**
+- Service worker for offline caching
+- Web app manifest with icons
+- Push notifications via Web Push API
+- Install prompt on mobile browsers
+- Works via Cloudflare tunnel for remote access
+**Test:** Open on phone → "Add to Home Screen" → app icon on home screen → notifications work.
+
+### 12.2 React Native Mobile App
+**What:** Native iOS + Android app.
+**Effort:** Very Large
+**How:**
+- Shared component library with web UI
+- WebSocket connection to GhostLink server
+- Push notifications (FCM for Android, APNs for iOS)
+- Voice input (native speech recognition)
+- Camera integration (snap and send to agents)
+- Biometric auth (fingerprint/face for security)
+- QR code scanner for pairing
+**Test:** Install on phone → pair with desktop server → full chat functionality.
+
+---
+
+## PHASE 13: OBSERVABILITY & ANALYTICS
+
+> Enterprise-grade monitoring and insights.
+
+### 13.1 Agent Performance Dashboard
+**What:** Real-time metrics for all agents.
+**Effort:** Medium
+**How:**
+- Token usage per agent (input/output tokens tracked per message)
+- Cost estimation with per-provider pricing
+- Response time tracking (time from trigger to first message)
+- Error rate per agent
+- Message volume charts (hourly, daily, weekly)
+- Comparison view (agent A vs agent B performance)
+- Export reports as CSV/PDF
+**Test:** Dashboard shows accurate token counts → cost matches expected pricing.
+
+### 13.2 Langfuse/OpenTelemetry Integration
+**What:** Export traces to external observability platforms.
+**Effort:** Medium
+**How:**
+- OpenTelemetry SDK integration
+- Trace per agent turn (input → tool calls → output)
+- Span for each MCP tool invocation
+- Export to Langfuse, Datadog, Grafana, or custom endpoint
+- Configurable in Settings > Advanced > Telemetry
+**Test:** Configure Langfuse endpoint → agent responds → trace appears in Langfuse.
+
+### 13.3 Health Monitor Enhancements
+**What:** Proactive detection and recovery.
+**Effort:** Medium
+**How:**
+- Configurable stale-event thresholds per agent
+- Auto-restart crashed agents (configurable retry count)
+- Alert notifications when agents go offline
+- Memory/CPU monitoring per agent process
+- Disk space monitoring for data directory
+- Health check endpoint for external monitoring: GET /api/health
+**Test:** Kill agent process → health monitor detects → auto-restarts → agent comes back online.
+
+---
+
+## PHASE 14: ADVANCED UX & POLISH
+
+> Make GhostLink feel premium and delightful.
+
+### 14.1 Canvas/Artifact View
+**What:** Expand agent outputs into full-screen canvas.
+**Effort:** Medium
+**How:**
+- "Expand" button on agent messages → opens full-screen canvas
+- Rich rendering: code with syntax highlighting, markdown, diagrams, tables
+- Edit-in-place for code artifacts
+- Copy/download individual artifacts
+- Side-by-side comparison of agent outputs
+**Test:** Agent generates code → click expand → full-screen editor view.
+
+### 14.2 Agent Workspace Viewer
+**What:** Browse agent workspaces from the UI.
+**Effort:** Medium
+**How:**
+- File tree browser in Agent Info panel
+- Read-only file viewer with syntax highlighting
+- Git status view (modified files, branches)
+- Diff viewer for agent changes
+- "Open in VS Code" button (via `code` CLI)
+**Test:** Browse agent workspace → view file → see git changes.
+
+### 14.3 Drag & Drop Agent Orchestration
+**What:** Visual agent workflow builder.
+**Effort:** Very Large
+**How:**
+- Node-based visual editor (React Flow or similar)
+- Drag agents onto canvas, connect with data flow arrows
+- Trigger nodes: @mention, schedule, webhook, file change
+- Action nodes: send message, run tool, approve, notify
+- Conditional nodes: if/else based on agent output
+- Save workflows as reusable templates
+**Test:** Build workflow: "On PR webhook → Claude reviews → Codex implements → User approves" → workflow executes.
+
+### 14.4 Multi-Language UI
+**What:** Internationalization support.
+**Effort:** Medium
+**How:**
+- i18n framework (react-intl or i18next)
+- English (default), Spanish, French, German, Japanese, Chinese, Korean, Portuguese
+- Language selector in Settings > General
+- All UI text extracted to translation files
+- Community-contributed translations via GitHub
+**Test:** Switch to Japanese → all UI text is Japanese.
+
+### 14.5 Accessibility Audit & WCAG 2.1 AA
+**What:** Full accessibility compliance.
+**Effort:** Medium
+**How:**
+- Screen reader support (ARIA labels on all interactive elements)
+- Keyboard navigation for all features
+- Focus trapping in modals
+- High contrast mode
+- Reduced motion (already partial — complete it)
+- Color-blind safe themes
+- Font scaling support
+**Test:** Navigate entire app with keyboard only → all features accessible.
+
+---
+
+## PHASE 15: ENTERPRISE & CLOUD
+
+> The path to GhostLink Cloud (hosted SaaS).
+
+### 15.1 Multi-User Support
+**What:** Multiple users on one GhostLink instance.
+**Effort:** Very Large
+**How:**
+- User accounts with username/password or OAuth
+- Per-user agent permissions
+- Shared channels + private channels
+- User roles: admin, member, viewer
+- User presence indicators
+- @mention users (not just agents)
+**Test:** Two users log in → both see shared channel → User A's agents are not visible to User B.
+
+### 15.2 Docker Deployment
+**What:** One-command deployment via Docker Compose.
+**Effort:** Medium
+**How:**
+- `docker-compose.yml` with backend, frontend, and optional agent containers
+- Traefik/Caddy reverse proxy with auto-TLS
+- Volume mounts for persistent data
+- Environment variable configuration
+- Health checks and restart policies
+- `docker compose up -d` → GhostLink running with HTTPS
+**Test:** Clone repo → `docker compose up` → access at https://localhost.
+
+### 15.3 GhostLink Cloud (Hosted SaaS)
+**What:** Sign up, connect API keys, go. No install needed.
+**Effort:** Very Large
+**How:**
+- Multi-tenant architecture
+- Stripe billing (free tier, pro tier, team tier)
+- Custom domains
+- SSO (Google, GitHub, Microsoft)
+- Usage-based pricing on token consumption
+- Team management (invite members, set roles)
+- Data residency options (US, EU)
+**Test:** Sign up → paste API key → spawn agent → chat works.
 
 ---
 
@@ -380,28 +462,49 @@ After each phase, verify:
 - [ ] No personal data in `ghostlink/` (grep for owner usernames, hardcoded paths)
 - [ ] All tests pass (fail → fix → smoke → stress)
 - [ ] Visual check: desktop + mobile + light mode
+- [ ] Security review: no new XSS, SSRF, injection vectors
+- [ ] Performance check: page load <2s, API response <200ms
 - [ ] Commit and push to GitHub
 
 ---
 
-## TOTAL ISSUE COUNT
+## TOTAL ROADMAP
 
-| Category | Count | Phase |
-|----------|-------|-------|
-| Critical security/stability bugs | 6 | Phase 0 |
-| Agent identity isolation issues | 6 | Phase 1 |
-| Code quality & reliability | 5 | Phase 2 |
-| Desktop app fixes | 6 | Phase 3 |
-| Agent intelligence features | 5 | Phase 4 |
-| Skills & tools | 8 | Phase 5 |
-| UX & polish features | 8 | Phase 6 |
-| Growth & distribution | 6 | Phase 7 |
-| **TOTAL** | **50** | |
+| Phase | Category | Items | Priority |
+|-------|----------|-------|----------|
+| ~~0-7~~ | ~~Foundation~~ | ~~50~~ | ~~DONE~~ |
+| 8 | Channel Integrations | 5 | **Critical** — biggest competitive gap |
+| 9 | Plugin Marketplace & SDK | 4 | **High** — ecosystem growth |
+| 10 | Security & Sandboxing | 5 | **High** — enterprise readiness |
+| 11 | Model Providers & AI | 5 | **High** — capability breadth |
+| 12 | Mobile App | 2 | **Medium** — reach |
+| 13 | Observability & Analytics | 3 | **Medium** — enterprise value |
+| 14 | Advanced UX & Polish | 5 | **Medium** — delight |
+| 15 | Enterprise & Cloud | 3 | **Future** — revenue |
+| **Total remaining** | | **32** | |
+
+---
+
+## COMPETITIVE ADVANTAGES (Things GhostLink Does That OpenClaw Doesn't)
+
+These are GhostLink's differentiators — protect and enhance them:
+
+1. **Visual multi-agent chatroom** — Agents talk to each other in real-time, not just one agent at a time
+2. **Desktop app with one-click install** — OpenClaw is CLI-only
+3. **Agent hierarchy & orchestration** — Manager/worker/peer roles with handoff cards
+4. **Structured sessions** — Debate, code review, planning templates with phases and turn-taking
+5. **Progress cards & generative UI** — Live-updating visual cards from agents, not just text
+6. **9 premium themes** — Cyberpunk, terminal, ocean, sunset, midnight, rosegold, arctic
+7. **Approval prompt interception** — Catches CLI permission prompts and shows Allow/Deny in chat
+8. **Smart auto-routing** — Keyword classification routes messages to best-fit agent
+9. **Channel summaries** — AI-generated channel activity summaries
+10. **Agent thinking glow** — Visual indicator when agent is working
 
 ---
 
 ## REFERENCES
 
+- [OpenClaw](https://github.com/openclaw/openclaw) — Primary benchmark (247K stars)
 - [Awesome MCP Servers](https://github.com/punkpeye/awesome-mcp-servers) — 5,000+ community MCP servers
 - [Firecrawl](https://www.firecrawl.dev/) — Web scraping API for AI
 - [Browser Use](https://browser-use.com/) — Browser automation for agents
@@ -409,7 +512,9 @@ After each phase, verify:
 - [Apprise](https://github.com/caronc/apprise) — 90+ notification channels
 - [Langfuse](https://langfuse.com/) — Open source LLM analytics
 - [Tavily](https://tavily.com/) — AI-powered search
-- [Knowledge Graph Memory](https://github.com/modelcontextprotocol/servers/tree/main/src/memory) — Anthropic's KG MCP
-- [DBHub](https://github.com/bytebase/dbhub) — Universal database MCP
-- [Agentic UX Patterns 2026](https://www.smashingmagazine.com/2026/02/designing-agentic-ai-practical-ux-patterns/)
-- [AI Observability 2026](https://www.braintrust.dev/articles/best-ai-observability-tools-2026)
+- [OpenRouter](https://openrouter.ai/) — Meta-provider for 200+ models
+- [ChromaDB](https://www.trychroma.com/) — Local vector database for RAG
+- [React Flow](https://reactflow.dev/) — Node-based visual editor
+- [discord.py](https://discordpy.readthedocs.io/) — Discord bot library
+- [python-telegram-bot](https://python-telegram-bot.readthedocs.io/) — Telegram bot library
+- [Baileys](https://github.com/WhiskeySockets/Baileys) — WhatsApp Web API
