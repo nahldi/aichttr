@@ -359,4 +359,19 @@ export const api = {
       first_message?: number;
       last_message?: number;
     }>(`/api/channels/${encodeURIComponent(channel)}/summary`),
+
+  // Bridges (channel integrations)
+  getBridges: () =>
+    request<{ bridges: any[] }>('/api/bridges'),
+
+  configureBridge: (platform: string, config: any) =>
+    request('/api/bridges/' + platform + '/configure', {
+      method: 'POST', body: JSON.stringify(config),
+    }),
+
+  startBridge: (platform: string) =>
+    request('/api/bridges/' + platform + '/start', { method: 'POST' }),
+
+  stopBridge: (platform: string) =>
+    request('/api/bridges/' + platform + '/stop', { method: 'POST' }),
 };

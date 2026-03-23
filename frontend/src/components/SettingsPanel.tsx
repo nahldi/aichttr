@@ -17,13 +17,14 @@ const AGENT_PRESETS: { base: string; label: string; command: string; color: stri
   { base: 'ollama', label: 'Ollama', command: 'ollama', color: '#ffffff', defaultArgs: [] },
 ];
 
-type SettingsTab = 'general' | 'appearance' | 'agents' | 'providers' | 'advanced';
+type SettingsTab = 'general' | 'appearance' | 'agents' | 'providers' | 'integrations' | 'advanced';
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'general', label: 'General', icon: 'tune' },
   { id: 'appearance', label: 'Look', icon: 'palette' },
   { id: 'agents', label: 'Agents', icon: 'smart_toy' },
   { id: 'providers', label: 'AI', icon: 'model_training' },
+  { id: 'integrations', label: 'Bridges', icon: 'hub' },
   { id: 'advanced', label: 'Advanced', icon: 'settings' },
 ];
 
@@ -174,6 +175,9 @@ export function SettingsPanel() {
         )}
         {tab === 'providers' && (
           <ProvidersTab />
+        )}
+        {tab === 'integrations' && (
+          <IntegrationsTab />
         )}
         {tab === 'advanced' && (
           <AdvancedTab display={display} applyInstant={applyInstant} settings={settings} />
@@ -484,6 +488,151 @@ function AgentsTab({
 
       {/* Supported Agents */}
       <SupportedAgentsSection />
+    </>
+  );
+}
+
+/* ── Tab: Integrations (Channel Bridges) ────────────────────────── */
+
+const BRIDGE_INFO: Record<string, { name: string; icon: string; color: string; description: string; tokenLabel: string; placeholder: string }> = {
+  discord: { name: 'Discord', icon: '🎮', color: '#5865F2', description: 'Bidirectional sync with Discord channels. Messages from Discord appear in GhostLink and vice versa.', tokenLabel: 'Bot Token', placeholder: 'Enter Discord bot token...' },
+  telegram: { name: 'Telegram', icon: '✈️', color: '#0088cc', description: 'Connect a Telegram bot. Messages from Telegram chats appear in GhostLink.', tokenLabel: 'Bot Token', placeholder: 'Enter Telegram bot token from @BotFather...' },
+  slack: { name: 'Slack', icon: '💬', color: '#4A154B', description: 'Send GhostLink messages to Slack via incoming webhook.', tokenLabel: 'Webhook URL', placeholder: 'https://hooks.slack.com/services/...' },
+  whatsapp: { name: 'WhatsApp', icon: '📱', color: '#25D366', description: 'Connect via WhatsApp Cloud API (Meta Business).', tokenLabel: 'Access Token', placeholder: 'Enter WhatsApp Cloud API token...' },
+  webhook: { name: 'Webhook', icon: '🔗', color: '#6366f1', description: 'Generic webhook bridge — works with any platform. Sends JSON payloads with HMAC signing.', tokenLabel: 'Outbound URL', placeholder: 'https://your-service.com/webhook' },
+};
+
+function IntegrationsTab() {
+  const [bridges, setBridges] = useState<any[]>([]);
+  const [configuring, setConfiguring] = useState<string | null>(null);
+  const [tokenInput, setTokenInput] = useState('');
+  const [channelMap, setChannelMap] = useState<Record<string, string>>({});
+  const [status, setStatus] = useState<Record<string, string>>({});
+
+  const loadBridges = () => {
+    api.getBridges().then(r => setBridges(r.bridges || [])).catch(() => {});
+  };
+
+  useEffect(() => { loadBridges(); }, []);
+
+  const handleSave = async (platform: string) => {
+    const info = BRIDGE_INFO[platform];
+    const tokenKey = platform === 'slack' || platform === 'webhook' ? 'url' : 'token';
+    await api.configureBridge(platform, {
+      [tokenKey]: tokenInput,
+      enabled: true,
+      channel_map: channelMap,
+    });
+    setStatus(s => ({ ...s, [platform]: 'saved' }));
+    setTokenInput('');
+    setConfiguring(null);
+    setTimeout(() => setStatus(s => ({ ...s, [platform]: '' })), 2000);
+    loadBridges();
+  };
+
+  const handleToggle = async (platform: string, enabled: boolean) => {
+    await api.configureBridge(platform, { enabled });
+    if (enabled) {
+      try { await api.startBridge(platform); } catch {}
+    } else {
+      try { await api.stopBridge(platform); } catch {}
+    }
+    loadBridges();
+  };
+
+  return (
+    <>
+      <div className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider mb-2">Channel Bridges</div>
+      <div className="text-[10px] text-on-surface-variant/40 mb-4">
+        Connect GhostLink to external platforms. Messages sync bidirectionally — your agents respond everywhere.
+      </div>
+      <div className="space-y-2">
+        {Object.entries(BRIDGE_INFO).map(([platform, info]) => {
+          const bridge = bridges.find(b => b.platform === platform);
+          const isConfigured = bridge?.has_token || bridge?.configured;
+          const isConnected = bridge?.connected;
+
+          return (
+            <div key={platform} className={`rounded-xl p-3 border transition-all ${
+              isConnected ? 'bg-green-500/5 border-green-500/15' :
+              isConfigured ? 'bg-primary/5 border-primary/10' :
+              'bg-surface-container/20 border-outline-variant/8'
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{info.icon}</span>
+                  <span className="text-[11px] font-semibold text-on-surface">{info.name}</span>
+                  {isConnected && <span className="text-[8px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 font-medium">CONNECTED</span>}
+                  {status[platform] === 'saved' && <span className="text-[8px] text-green-400">Saved!</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {isConfigured && (
+                    <button
+                      onClick={() => handleToggle(platform, !bridge?.enabled)}
+                      className={`w-8 h-4 rounded-full transition-all relative ${bridge?.enabled ? 'bg-green-500/80' : 'bg-surface-container-highest'}`}
+                    >
+                      <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${bridge?.enabled ? 'left-4' : 'left-0.5'}`} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setConfiguring(configuring === platform ? null : platform); setTokenInput(''); setChannelMap(bridge?.channel_map || {}); }}
+                    className="text-[9px] font-medium text-primary hover:text-primary/80"
+                  >
+                    {configuring === platform ? 'Cancel' : 'Configure'}
+                  </button>
+                </div>
+              </div>
+              <div className="text-[9px] text-on-surface-variant/40 mb-1">{info.description}</div>
+
+              {configuring === platform && (
+                <div className="mt-2 space-y-2 pt-2 border-t border-outline-variant/8">
+                  <div>
+                    <label className="text-[9px] font-semibold text-on-surface-variant/40 uppercase tracking-wider block mb-1">{info.tokenLabel}</label>
+                    <input
+                      value={tokenInput}
+                      onChange={e => setTokenInput(e.target.value)}
+                      type="password"
+                      placeholder={info.placeholder}
+                      className="w-full bg-surface-container/40 border border-outline-variant/10 rounded-md px-2 py-1.5 text-[10px] text-on-surface outline-none focus:border-primary/30 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-semibold text-on-surface-variant/40 uppercase tracking-wider block mb-1">Channel Mapping</label>
+                    <div className="text-[9px] text-on-surface-variant/30 mb-1">Map GhostLink channels to {info.name} channel IDs</div>
+                    <div className="space-y-1">
+                      {['general'].map(ch => (
+                        <div key={ch} className="flex items-center gap-2">
+                          <span className="text-[10px] text-on-surface-variant/50 w-16">#{ch}</span>
+                          <span className="text-on-surface-variant/30">→</span>
+                          <input
+                            value={channelMap[ch] || ''}
+                            onChange={e => setChannelMap(m => ({ ...m, [ch]: e.target.value }))}
+                            placeholder={`${info.name} channel ID`}
+                            className="flex-1 bg-surface-container/40 border border-outline-variant/10 rounded-md px-2 py-1 text-[10px] text-on-surface outline-none focus:border-primary/30 font-mono"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleSave(platform)}
+                    disabled={!tokenInput.trim()}
+                    className="w-full py-1.5 rounded-lg bg-primary/15 text-primary text-[11px] font-semibold hover:bg-primary/25 transition-colors disabled:opacity-40"
+                  >
+                    Save & Enable
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="h-px bg-outline-variant/8" />
+
+      <div className="text-[10px] text-on-surface-variant/30 leading-relaxed">
+        <strong>Inbound webhook:</strong> External platforms can POST to <code className="font-mono bg-surface-container/30 px-1 rounded">/api/bridges/inbound</code> to send messages into GhostLink.
+      </div>
     </>
   );
 }

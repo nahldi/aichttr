@@ -44,6 +44,7 @@ from skills import SkillsRegistry
 from schedules import ScheduleStore, cron_matches
 from sessions import SessionManager
 from providers import ProviderRegistry
+from bridges import BridgeManager
 import mcp_bridge
 import plugin_loader
 
@@ -117,6 +118,7 @@ schedule_store: ScheduleStore
 rule_store: RuleStore
 session_manager: SessionManager
 provider_registry: ProviderRegistry
+bridge_manager: BridgeManager
 registry = AgentRegistry()
 router = MessageRouter(max_hops=MAX_HOPS, default_routing=DEFAULT_ROUTING)
 
@@ -306,7 +308,7 @@ def _deliver_webhooks(event_type: str, data: dict):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global store, job_store, rule_store, schedule_store, skills_registry, session_manager, provider_registry
+    global store, job_store, rule_store, schedule_store, skills_registry, session_manager, provider_registry, bridge_manager
 
     _load_settings()
     _settings["_server_start"] = time.time()
@@ -326,6 +328,7 @@ async def lifespan(_app: FastAPI):
     skills_registry = SkillsRegistry(DATA_DIR)
     session_manager = SessionManager(DATA_DIR)
     provider_registry = ProviderRegistry(DATA_DIR)
+    bridge_manager = BridgeManager(DATA_DIR, store=store, registry=registry)
 
     # Broadcast new messages via WebSocket
     async def on_msg(msg: dict):
@@ -443,6 +446,10 @@ async def lifespan(_app: FastAPI):
     # Load plugins
     plugin_loader.load_plugins(app, store=store, registry=registry, mcp_bridge_module=mcp_bridge)
 
+    # Start enabled channel bridges
+    bridge_manager.start_all_enabled()
+    print("  Channel bridges initialized")
+
     # Plugin management endpoints
     @app.get("/api/plugins")
     async def api_list_plugins():
@@ -477,6 +484,7 @@ async def lifespan(_app: FastAPI):
 
     _schedule_stop.set()
     _health_stop.set()
+    bridge_manager.stop_all()
     await store.close()
     await db.close()
 
@@ -609,8 +617,11 @@ async def send_message(request: Request):
     # Route @mentions to agent wrappers
     _route_mentions(sender, text, channel)
 
-    # Don't force-clear thinking — let the heartbeat activity monitor handle it naturally.
-    # If the agent is still working after sending, glow stays. If idle, heartbeat clears it.
+    # Forward to channel bridges (Discord, Telegram, etc.)
+    try:
+        bridge_manager.handle_ghostlink_message(sender, text, channel)
+    except Exception:
+        pass
 
     return msg
 
@@ -1982,6 +1993,72 @@ async def delete_webhook(wh_id: str):
     before = len(_webhooks)
     _webhooks = [w for w in _webhooks if w["id"] != wh_id]
     return {"ok": len(_webhooks) < before}
+
+
+# ── Channel Bridges (Discord, Telegram, Slack, WhatsApp, Webhook) ────
+
+@app.get("/api/bridges")
+async def list_bridges():
+    """Get all bridge configurations and status."""
+    return {"bridges": bridge_manager.get_all()}
+
+
+@app.post("/api/bridges/{platform}/configure")
+async def configure_bridge(platform: str, request: Request):
+    """Configure a channel bridge."""
+    body = await request.json()
+    if platform not in ("discord", "telegram", "slack", "whatsapp", "webhook"):
+        return JSONResponse({"error": "unknown platform"}, 400)
+    result = bridge_manager.configure(platform, body)
+    return result
+
+
+@app.post("/api/bridges/{platform}/start")
+async def start_bridge(platform: str):
+    """Start a configured bridge."""
+    result = bridge_manager.start_bridge(platform)
+    if result.get("ok"):
+        return result
+    return JSONResponse(result, 400)
+
+
+@app.post("/api/bridges/{platform}/stop")
+async def stop_bridge(platform: str):
+    """Stop a running bridge."""
+    result = bridge_manager.stop_bridge(platform)
+    return result
+
+
+@app.post("/api/bridges/inbound")
+async def bridge_inbound(request: Request):
+    """Receive messages from external platforms via webhook."""
+    body = await request.json()
+    sender = body.get("sender", "external")
+    text = body.get("text", "")
+    channel = body.get("channel", "general")
+    platform = body.get("platform", "webhook")
+
+    if not text.strip():
+        return JSONResponse({"error": "text required"}, 400)
+
+    # Verify webhook secret if configured
+    cfg = bridge_manager.get_config("webhook")
+    secret = cfg.get("secret", "")
+    if secret:
+        import hashlib, hmac
+        sig = request.headers.get("X-GhostLink-Signature", "")
+        raw = await request.body()
+        expected = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return JSONResponse({"error": "invalid signature"}, 403)
+
+    msg = await store.add(
+        sender=f"{platform}:{sender}",
+        text=text,
+        channel=channel,
+    )
+    _route_mentions(f"{platform}:{sender}", text, channel)
+    return msg
 
 
 # ── Inbound Webhooks (external triggers) ─────────────────────────────
