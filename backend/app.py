@@ -45,6 +45,7 @@ from schedules import ScheduleStore, cron_matches
 from sessions import SessionManager
 from providers import ProviderRegistry
 from bridges import BridgeManager
+from plugin_sdk import Marketplace, HookManager, event_bus, EVENTS, SKILL_PACKS, SafetyScanner
 import mcp_bridge
 import plugin_loader
 
@@ -119,6 +120,8 @@ rule_store: RuleStore
 session_manager: SessionManager
 provider_registry: ProviderRegistry
 bridge_manager: BridgeManager
+marketplace: Marketplace
+hook_manager: HookManager
 registry = AgentRegistry()
 router = MessageRouter(max_hops=MAX_HOPS, default_routing=DEFAULT_ROUTING)
 
@@ -308,7 +311,7 @@ def _deliver_webhooks(event_type: str, data: dict):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global store, job_store, rule_store, schedule_store, skills_registry, session_manager, provider_registry, bridge_manager
+    global store, job_store, rule_store, schedule_store, skills_registry, session_manager, provider_registry, bridge_manager, marketplace, hook_manager
 
     _load_settings()
     _settings["_server_start"] = time.time()
@@ -329,6 +332,9 @@ async def lifespan(_app: FastAPI):
     session_manager = SessionManager(DATA_DIR)
     provider_registry = ProviderRegistry(DATA_DIR)
     bridge_manager = BridgeManager(DATA_DIR, store=store, registry=registry)
+    marketplace = Marketplace(DATA_DIR)
+    hook_manager = HookManager(DATA_DIR)
+    hook_manager.register_all()
 
     # Broadcast new messages via WebSocket
     async def on_msg(msg: dict):
@@ -622,6 +628,9 @@ async def send_message(request: Request):
         bridge_manager.handle_ghostlink_message(sender, text, channel)
     except Exception:
         pass
+
+    # Emit event for hooks
+    event_bus.emit("on_message", {"sender": sender, "text": text, "channel": channel, "id": msg.get("id")})
 
     return msg
 
@@ -1993,6 +2002,112 @@ async def delete_webhook(wh_id: str):
     before = len(_webhooks)
     _webhooks = [w for w in _webhooks if w["id"] != wh_id]
     return {"ok": len(_webhooks) < before}
+
+
+# ── GhostHub Marketplace ─────────────────────────────────────────────
+
+@app.get("/api/marketplace")
+async def browse_marketplace(category: str = "", search: str = ""):
+    """Browse available plugins in the GhostHub marketplace."""
+    plugins = marketplace.browse(category, search)
+    categories = marketplace.get_categories()
+    return {"plugins": plugins, "categories": categories}
+
+
+@app.post("/api/marketplace/{plugin_id}/install")
+async def install_marketplace_plugin(plugin_id: str):
+    """Install a plugin from the GhostHub marketplace."""
+    result = marketplace.install(plugin_id)
+    if result.get("ok"):
+        return result
+    return JSONResponse(result, 400)
+
+
+@app.post("/api/marketplace/{plugin_id}/uninstall")
+async def uninstall_marketplace_plugin(plugin_id: str):
+    """Uninstall a marketplace plugin."""
+    result = marketplace.uninstall(plugin_id)
+    return result
+
+
+@app.post("/api/plugins/scan")
+async def scan_plugin_code(request: Request):
+    """Scan plugin code for safety issues (AST-based analysis)."""
+    body = await request.json()
+    code = body.get("code", "")
+    if not code:
+        return JSONResponse({"error": "code required"}, 400)
+    issues = SafetyScanner.scan(code)
+    return {"issues": issues, "safe": len([i for i in issues if i["severity"] == "critical"]) == 0}
+
+
+# ── Skill Packs ──────────────────────────────────────────────────────
+
+@app.get("/api/skill-packs")
+async def list_skill_packs():
+    """List available skill packs."""
+    return {"packs": SKILL_PACKS}
+
+
+@app.post("/api/skill-packs/{pack_id}/apply")
+async def apply_skill_pack(pack_id: str, request: Request):
+    """Apply a skill pack to an agent — enables all skills in the pack."""
+    body = await request.json()
+    agent_name = body.get("agent", "")
+    if not agent_name:
+        return JSONResponse({"error": "agent name required"}, 400)
+
+    pack = next((p for p in SKILL_PACKS if p["id"] == pack_id), None)
+    if not pack:
+        return JSONResponse({"error": "skill pack not found"}, 404)
+
+    for skill_id in pack["skills"]:
+        skills_registry.enable_skill(agent_name, skill_id)
+
+    return {"ok": True, "agent": agent_name, "pack": pack_id, "skills_enabled": pack["skills"]}
+
+
+# ── Hooks (Event-Driven Automation) ─────────────────────────────────
+
+@app.get("/api/hooks")
+async def list_hooks():
+    """List all automation hooks."""
+    return {"hooks": hook_manager.list_hooks(), "events": EVENTS}
+
+
+@app.post("/api/hooks")
+async def create_hook(request: Request):
+    """Create a new automation hook."""
+    body = await request.json()
+    name = body.get("name", "").strip()
+    event = body.get("event", "").strip()
+    action = body.get("action", "message").strip()
+    config = body.get("config", {})
+
+    if not name or not event:
+        return JSONResponse({"error": "name and event required"}, 400)
+
+    result = hook_manager.create_hook(name, event, action, config)
+    if result.get("ok"):
+        return result
+    return JSONResponse(result, 400)
+
+
+@app.patch("/api/hooks/{hook_id}")
+async def update_hook(hook_id: str, request: Request):
+    """Update an automation hook."""
+    body = await request.json()
+    result = hook_manager.update_hook(hook_id, body)
+    if result.get("ok"):
+        return result
+    return JSONResponse(result, 404)
+
+
+@app.delete("/api/hooks/{hook_id}")
+async def delete_hook(hook_id: str):
+    """Delete an automation hook."""
+    result = hook_manager.delete_hook(hook_id)
+    return result
 
 
 # ── Channel Bridges (Discord, Telegram, Slack, WhatsApp, Webhook) ────

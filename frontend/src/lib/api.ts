@@ -374,4 +374,44 @@ export const api = {
 
   stopBridge: (platform: string) =>
     request('/api/bridges/' + platform + '/stop', { method: 'POST' }),
+
+  // GhostHub Marketplace
+  browseMarketplace: (category?: string, search?: string) => {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (search) params.set('search', search);
+    return request<{ plugins: any[]; categories: string[] }>('/api/marketplace?' + params);
+  },
+
+  installMarketplacePlugin: (pluginId: string) =>
+    request('/api/marketplace/' + pluginId + '/install', { method: 'POST' }),
+
+  uninstallMarketplacePlugin: (pluginId: string) =>
+    request('/api/marketplace/' + pluginId + '/uninstall', { method: 'POST' }),
+
+  // Skill Packs
+  getSkillPacks: () =>
+    request<{ packs: any[] }>('/api/skill-packs'),
+
+  applySkillPack: (packId: string, agent: string) =>
+    request('/api/skill-packs/' + packId + '/apply', {
+      method: 'POST', body: JSON.stringify({ agent }),
+    }),
+
+  // Hooks
+  getHooks: () =>
+    request<{ hooks: any[]; events: Record<string, string> }>('/api/hooks'),
+
+  createHook: (name: string, event: string, action: string, config?: any) =>
+    request('/api/hooks', {
+      method: 'POST', body: JSON.stringify({ name, event, action, config }),
+    }),
+
+  updateHook: (hookId: string, updates: any) =>
+    request('/api/hooks/' + hookId, {
+      method: 'PATCH', body: JSON.stringify(updates),
+    }),
+
+  deleteHook: (hookId: string) =>
+    request('/api/hooks/' + hookId, { method: 'DELETE' }),
 };

@@ -488,7 +488,201 @@ function AgentsTab({
 
       {/* Supported Agents */}
       <SupportedAgentsSection />
+
+      <div className="h-px bg-outline-variant/8" />
+
+      {/* GhostHub Marketplace */}
+      <MarketplaceSection />
+
+      <div className="h-px bg-outline-variant/8" />
+
+      {/* Skill Packs */}
+      <SkillPacksSection />
+
+      <div className="h-px bg-outline-variant/8" />
+
+      {/* Automation Hooks */}
+      <HooksSection />
     </>
+  );
+}
+
+/* ── MarketplaceSection ────────────────────────────────────────────── */
+
+function MarketplaceSection() {
+  const [plugins, setPlugins] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [installing, setInstalling] = useState('');
+
+  useEffect(() => {
+    api.browseMarketplace('', search).then(r => setPlugins(r.plugins || [])).catch((e) => console.warn('Marketplace browse:', e instanceof Error ? e.message : String(e)));
+  }, [search]);
+
+  const handleInstall = async (id: string) => {
+    setInstalling(id);
+    try {
+      await api.installMarketplacePlugin(id);
+      api.browseMarketplace('', search).then(r => setPlugins(r.plugins || [])).catch((e) => console.warn('Marketplace refresh:', e instanceof Error ? e.message : String(e)));
+    } catch (e) { console.warn('Install plugin:', e instanceof Error ? e.message : String(e)); }
+    setInstalling('');
+  };
+
+  const handleUninstall = async (id: string) => {
+    try {
+      await api.uninstallMarketplacePlugin(id);
+      api.browseMarketplace('', search).then(r => setPlugins(r.plugins || [])).catch((e) => console.warn('Marketplace refresh:', e instanceof Error ? e.message : String(e)));
+    } catch (e) { console.warn('Uninstall plugin:', e instanceof Error ? e.message : String(e)); }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider">GhostHub Marketplace</span>
+      </div>
+      <input
+        value={search} onChange={e => setSearch(e.target.value)}
+        placeholder="Search plugins..."
+        className="w-full bg-surface-container-highest rounded-md px-2.5 py-1.5 text-[11px] text-on-surface border border-outline-variant/10 focus:border-primary/40 outline-none mb-2"
+      />
+      <div className="space-y-1.5">
+        {plugins.map(p => (
+          <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg bg-surface-container/30 border border-outline-variant/5">
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-semibold text-on-surface">{p.name}</div>
+              <div className="text-[9px] text-on-surface-variant/45">{p.description}</div>
+              <div className="text-[8px] text-on-surface-variant/30 mt-0.5">{p.author} &middot; v{p.version} &middot; {p.category}</div>
+            </div>
+            {p.installed ? (
+              <button onClick={() => handleUninstall(p.id)} className="px-2 py-1 rounded text-[9px] font-medium text-red-400/70 hover:bg-red-400/10 transition-colors">Remove</button>
+            ) : (
+              <button onClick={() => handleInstall(p.id)} disabled={installing === p.id}
+                className="px-2 py-1 rounded text-[9px] font-medium text-primary hover:bg-primary/10 transition-colors disabled:opacity-40">
+                {installing === p.id ? 'Installing...' : 'Install'}
+              </button>
+            )}
+          </div>
+        ))}
+        {plugins.length === 0 && <div className="text-[10px] text-on-surface-variant/30 text-center py-3">No plugins found</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ── SkillPacksSection ─────────────────────────────────────────────── */
+
+function SkillPacksSection() {
+  const [packs, setPacks] = useState<any[]>([]);
+  const [applying, setApplying] = useState('');
+  const agents = useChatStore((s) => s.agents);
+
+  useEffect(() => {
+    api.getSkillPacks().then(r => setPacks(r.packs || [])).catch((e) => console.warn('Skill packs:', e instanceof Error ? e.message : String(e)));
+  }, []);
+
+  const handleApply = async (packId: string) => {
+    const activeAgents = agents.filter(a => a.state !== 'offline');
+    if (activeAgents.length === 0) return;
+    setApplying(packId);
+    try {
+      // Apply to first active agent
+      await api.applySkillPack(packId, activeAgents[0].name);
+    } catch (e) { console.warn('Apply skill pack:', e instanceof Error ? e.message : String(e)); }
+    setApplying('');
+  };
+
+  return (
+    <div>
+      <div className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider mb-2">Skill Packs</div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {packs.map(p => (
+          <button key={p.id} onClick={() => handleApply(p.id)} disabled={applying === p.id}
+            className="text-left p-2.5 rounded-lg bg-surface-container/20 border border-outline-variant/8 hover:border-primary/20 transition-all disabled:opacity-40">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="material-symbols-outlined text-[14px]" style={{ color: p.color }}>{p.icon}</span>
+              <span className="text-[10px] font-semibold text-on-surface">{p.name}</span>
+            </div>
+            <div className="text-[8px] text-on-surface-variant/40 leading-relaxed">{p.description}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── HooksSection ──────────────────────────────────────────────────── */
+
+function HooksSection() {
+  const [hooks, setHooks] = useState<any[]>([]);
+  const [events, setEvents] = useState<Record<string, string>>({});
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [event, setEvent] = useState('');
+  const [action, setAction] = useState('message');
+
+  const load = () => {
+    api.getHooks().then(r => { setHooks(r.hooks || []); setEvents(r.events || {}); }).catch((e) => console.warn('Hooks fetch:', e instanceof Error ? e.message : String(e)));
+  };
+  useEffect(() => { load(); }, []);
+
+  const handleCreate = async () => {
+    if (!name.trim() || !event) return;
+    try {
+      await api.createHook(name.trim(), event, action);
+      setName(''); setEvent(''); setAdding(false);
+      load();
+    } catch (e) { console.warn('Create hook:', e instanceof Error ? e.message : String(e)); }
+  };
+
+  const handleDelete = async (id: string) => {
+    try { await api.deleteHook(id); load(); } catch (e) { console.warn('Delete hook:', e instanceof Error ? e.message : String(e)); }
+  };
+
+  const handleToggle = async (id: string, enabled: boolean) => {
+    try { await api.updateHook(id, { enabled }); load(); } catch (e) { console.warn('Update hook:', e instanceof Error ? e.message : String(e)); }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider">Automation Hooks</span>
+        <button onClick={() => setAdding(!adding)} className="text-[10px] font-medium text-primary hover:text-primary/80">{adding ? 'Cancel' : '+ Add'}</button>
+      </div>
+
+      {adding && (
+        <div className="p-3 rounded-xl bg-surface-container/30 border border-outline-variant/8 space-y-2 mb-2">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Hook name" className="w-full bg-surface-container-highest rounded-md px-2 py-1.5 text-[11px] text-on-surface border border-outline-variant/10 outline-none" />
+          <select value={event} onChange={e => setEvent(e.target.value)} className="w-full bg-surface-container-highest rounded-md px-2 py-1.5 text-[11px] text-on-surface border border-outline-variant/10 outline-none">
+            <option value="">Select event...</option>
+            {Object.entries(events).map(([k, desc]) => <option key={k} value={k}>{k} — {desc}</option>)}
+          </select>
+          <select value={action} onChange={e => setAction(e.target.value)} className="w-full bg-surface-container-highest rounded-md px-2 py-1.5 text-[11px] text-on-surface border border-outline-variant/10 outline-none">
+            <option value="message">Send message</option>
+            <option value="notify">Log notification</option>
+            <option value="trigger">Trigger agent</option>
+          </select>
+          <button onClick={handleCreate} disabled={!name.trim() || !event} className="w-full py-1.5 rounded-lg bg-primary/15 text-primary text-[11px] font-semibold hover:bg-primary/25 transition-colors disabled:opacity-40">Create Hook</button>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        {hooks.map(h => (
+          <div key={h.id} className="flex items-center gap-2 p-2 rounded-lg bg-surface-container/30 border border-outline-variant/5">
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-semibold text-on-surface">{h.name}</div>
+              <div className="text-[8px] text-on-surface-variant/40">{h.event} &rarr; {h.action} &middot; {h.trigger_count || 0} triggers</div>
+            </div>
+            <button onClick={() => handleToggle(h.id, !h.enabled)}
+              className={`w-8 h-4 rounded-full transition-all relative ${h.enabled ? 'bg-green-500/80' : 'bg-surface-container-highest'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${h.enabled ? 'left-4' : 'left-0.5'}`} />
+            </button>
+            <button onClick={() => handleDelete(h.id)} className="p-1 rounded text-on-surface-variant/40 hover:text-red-400 hover:bg-red-400/10 transition-colors">
+              <span className="material-symbols-outlined text-[14px]">close</span>
+            </button>
+          </div>
+        ))}
+        {hooks.length === 0 && !adding && <div className="text-[10px] text-on-surface-variant/30 text-center py-3">No hooks configured. Hooks run automatically when events fire.</div>}
+      </div>
+    </div>
   );
 }
 
