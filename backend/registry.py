@@ -23,6 +23,8 @@ class AgentInstance:
     token_issued_at: float = field(default_factory=time.time)
     token_ttl: float = field(default_factory=lambda: TOKEN_TTL)
     role: str = ""
+    workspace: str = ""
+    responseMode: str = "mentioned"
 
     def to_dict(self) -> dict:
         return asdict(self)

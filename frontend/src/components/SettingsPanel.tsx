@@ -640,8 +640,14 @@ function PersistentAgentsSection() {
     const updated = persistent.filter((_, i) => i !== index);
     updateSettings({ persistentAgents: updated });
     api.saveSettings({ persistentAgents: updated }).then(() => {
+      api.getStatus().then(r => setAgents(r.agents)).catch(() => {
+        // Fallback: resync from server
+        api.getStatus().then(r => setAgents(r.agents)).catch(() => {});
+      });
+    }).catch(() => {
+      // Save failed — still refresh agent list to stay in sync
       api.getStatus().then(r => setAgents(r.agents)).catch(() => {});
-    }).catch(() => {});
+    });
   };
 
   const handlePickFolder = async () => {
