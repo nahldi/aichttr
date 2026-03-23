@@ -22,7 +22,7 @@ export function SessionLauncher({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api.getSessionTemplates().then(r => setTemplates(r.templates)).catch(() => {});
+    api.getSessionTemplates().then(r => setTemplates(r.templates)).catch((e) => console.warn('Session templates fetch:', e.message || e));
   }, []);
 
   const handleSelect = (template: SessionTemplate) => {

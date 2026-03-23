@@ -92,7 +92,7 @@ export function SettingsPanel() {
   // Instant-apply settings (toggles, theme)
   const applyInstant = useCallback((updates: Partial<Settings>) => {
     updateSettings(updates);
-    api.saveSettings(updates).catch(() => {});
+    api.saveSettings(updates).catch((e) => console.warn('Settings save:', e.message || e));
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   }, [updateSettings]);
@@ -510,7 +510,7 @@ function IntegrationsTab() {
   const [status, setStatus] = useState<Record<string, string>>({});
 
   const loadBridges = () => {
-    api.getBridges().then(r => setBridges(r.bridges || [])).catch(() => {});
+    api.getBridges().then(r => setBridges(r.bridges || [])).catch((e) => console.warn('Bridges fetch:', e.message || e));
   };
 
   useEffect(() => { loadBridges(); }, []);
@@ -533,9 +533,9 @@ function IntegrationsTab() {
   const handleToggle = async (platform: string, enabled: boolean) => {
     await api.configureBridge(platform, { enabled });
     if (enabled) {
-      try { await api.startBridge(platform); } catch {}
+      try { await api.startBridge(platform); } catch (e) { console.warn('Start bridge:', (e as any)?.message || e); }
     } else {
-      try { await api.stopBridge(platform); } catch {}
+      try { await api.stopBridge(platform); } catch (e) { console.warn('Stop bridge:', (e as any)?.message || e); }
     }
     loadBridges();
   };
@@ -683,7 +683,7 @@ function ServerConfigSection() {
   const [config, setConfig] = useState<any>(null);
 
   useEffect(() => {
-    fetch('/api/server-config').then(r => r.json()).then(setConfig).catch(() => {});
+    fetch('/api/server-config').then(r => r.json()).then(setConfig).catch((e) => console.warn('Server config fetch:', e.message || e));
   }, []);
 
   if (!config) return null;
@@ -737,7 +737,7 @@ function ServerLogsSection() {
           const r = await fetch(`/api/logs?limit=100${filter ? `&level=${filter}` : ''}`);
           const d = await r.json();
           if (!cancelled) setLogs(d.logs || []);
-        } catch {}
+        } catch (e) { console.warn('Logs poll:', (e as any)?.message || e); }
         await new Promise(r => setTimeout(r, 3000));
       }
     };
@@ -804,7 +804,7 @@ function ProvidersTab() {
   const [testResult, setTestResult] = useState<{ provider: string; ok: boolean; message: string } | null>(null);
 
   useEffect(() => {
-    api.getProviders().then(setStatus).catch(() => {});
+    api.getProviders().then(setStatus).catch((e) => console.warn('Providers fetch:', e.message || e));
   }, []);
 
   const handleSaveKey = async (provider: string) => {
@@ -825,8 +825,8 @@ function ProvidersTab() {
       setConfiguring(null);
       setSaved(provider);
       setTimeout(() => { setSaved(''); setTestResult(null); }, 3000);
-      api.getProviders().then(setStatus).catch(() => {});
-    } catch {}
+      api.getProviders().then(setStatus).catch((e) => console.warn('Providers fetch:', e.message || e));
+    } catch (e) { console.warn('Save provider key:', (e as any)?.message || e); }
   };
 
   if (!status) return <div className="text-xs text-on-surface-variant/40 text-center py-8">Loading providers...</div>;
@@ -1144,8 +1144,8 @@ function PersistentAgentsSection() {
     const updated = [...persistent, agent];
     updateSettings({ persistentAgents: updated });
     api.saveSettings({ persistentAgents: updated }).then(() => {
-      api.getStatus().then(r => setAgents(r.agents)).catch(() => {});
-    }).catch(() => {});
+      api.getStatus().then(r => setAgents(r.agents)).catch((e) => console.warn('Status fetch:', e.message || e));
+    }).catch((e) => console.warn('Settings save:', e.message || e));
     setAdding(false);
     setNewCwd('');
   };
@@ -1154,13 +1154,15 @@ function PersistentAgentsSection() {
     const updated = persistent.filter((_, i) => i !== index);
     updateSettings({ persistentAgents: updated });
     api.saveSettings({ persistentAgents: updated }).then(() => {
-      api.getStatus().then(r => setAgents(r.agents)).catch(() => {
+      api.getStatus().then(r => setAgents(r.agents)).catch((e) => {
+        console.warn('Status fetch:', e.message || e);
         // Fallback: resync from server
-        api.getStatus().then(r => setAgents(r.agents)).catch(() => {});
+        api.getStatus().then(r => setAgents(r.agents)).catch((e2) => console.warn('Status fetch retry:', e2.message || e2));
       });
-    }).catch(() => {
+    }).catch((e) => {
+      console.warn('Settings save:', e.message || e);
       // Save failed — still refresh agent list to stay in sync
-      api.getStatus().then(r => setAgents(r.agents)).catch(() => {});
+      api.getStatus().then(r => setAgents(r.agents)).catch((e2) => console.warn('Status fetch:', e2.message || e2));
     });
   };
 
@@ -1169,7 +1171,7 @@ function PersistentAgentsSection() {
     try {
       const r = await api.pickFolder();
       setNewCwd(r.path);
-    } catch {}
+    } catch (e) { console.warn('Pick folder:', (e as any)?.message || e); }
     setPickingFolder(false);
   };
 
@@ -1203,8 +1205,8 @@ function PersistentAgentsSection() {
               list[i] = updated;
               updateSettings({ persistentAgents: list });
               api.saveSettings({ persistentAgents: list }).then(() => {
-                api.getStatus().then(r => setAgents(r.agents)).catch(() => {});
-              }).catch(() => {});
+                api.getStatus().then(r => setAgents(r.agents)).catch((e) => console.warn('Status fetch:', e.message || e));
+              }).catch((e) => console.warn('Settings save:', e.message || e));
             }}
             onRemove={() => removeAgent(i)}
           />
@@ -1277,7 +1279,7 @@ function SupportedAgentsSection() {
         ...agents.map(a => a.base),
         ...(storeSettings.persistentAgents || []).map(a => a.base),
       ])];
-      api.getAgentTemplates(bases).then(r => setTemplates(r.templates)).catch(() => {});
+      api.getAgentTemplates(bases).then(r => setTemplates(r.templates)).catch((e) => console.warn('Agent templates fetch:', e.message || e));
     }
   }, [open, templates.length, agents, storeSettings.persistentAgents]);
 

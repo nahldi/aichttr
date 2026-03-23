@@ -34,7 +34,7 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
     if (tab === 'skills') {
       api.getAgentSkills(agent.name)
         .then(d => setSkills(d.skills || []))
-        .catch(() => {});
+        .catch((e) => console.warn('Skills fetch:', e.message || e));
     }
   }, [tab, agent.name]);
 
@@ -42,7 +42,7 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
     try {
       await api.toggleAgentSkill(agent.name, skillId, enabled);
       setSkills(prev => prev.map(s => s.id === skillId ? { ...s, enabled } : s));
-    } catch {}
+    } catch (e) { console.warn('Toggle skill:', (e as any)?.message || e); }
   };
 
   const handleLaunch = async () => {
@@ -50,10 +50,10 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
     try {
       await api.spawnAgent(agent.base, agent.label, agent.workspace || '.', agent.args || []);
       setTimeout(async () => {
-        try { const r = await api.getStatus(); setAgents(r.agents); } catch {}
+        try { const r = await api.getStatus(); setAgents(r.agents); } catch (e) { console.warn('Status fetch after launch:', (e as any)?.message || e); }
         onClose();
       }, 3000);
-    } catch { setLaunching(false); }
+    } catch (e) { console.warn('Agent launch:', (e as any)?.message || e); setLaunching(false); }
   };
 
   const handleKill = async () => {
@@ -63,7 +63,7 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
       const r = await api.getStatus();
       setAgents(r.agents);
       onClose();
-    } catch { setKilling(false); }
+    } catch (e) { console.warn('Agent kill:', (e as any)?.message || e); setKilling(false); }
   };
 
   const filteredSkills = skills.filter(s => {
@@ -189,7 +189,7 @@ export function AgentInfoPanel({ agent, onClose }: AgentInfoPanelProps) {
           <div className="px-4 pb-2 flex gap-2 shrink-0">
             <button
               onClick={() => {
-                api.openTerminal(agent.name).catch(() => {});
+                api.openTerminal(agent.name).catch((e) => console.warn('Open terminal:', e.message || e));
               }}
               className="flex-1 py-2 rounded-lg text-xs font-medium text-on-surface-variant/50 hover:text-on-surface-variant hover:bg-surface-container-high border border-outline-variant/10 transition-all flex items-center justify-center gap-1.5"
             >
@@ -243,7 +243,7 @@ function ResponseModeSelector({ agent }: { agent: Agent }) {
             key={m.id}
             onClick={() => {
               setMode(m.id);
-              api.setAgentConfig(agent.name, { responseMode: m.id }).catch(() => {});
+              api.setAgentConfig(agent.name, { responseMode: m.id }).catch((e) => console.warn('Agent config update:', e.message || e));
             }}
             className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[10px] font-medium transition-all ${
               mode === m.id
@@ -340,9 +340,9 @@ function ContextPanel({ agent }: { agent: Agent }) {
 
   // Load soul, notes, memories
   useEffect(() => {
-    api.getAgentSoul(agent.name).then(r => setSoul(r.soul || '')).catch(() => {});
-    api.getAgentNotes(agent.name).then(r => setNotes(r.notes || '')).catch(() => {});
-    api.getAgentMemories(agent.name).then(r => setMemories(r.memories || [])).catch(() => {});
+    api.getAgentSoul(agent.name).then(r => setSoul(r.soul || '')).catch((e) => console.warn('Agent soul fetch:', e.message || e));
+    api.getAgentNotes(agent.name).then(r => setNotes(r.notes || '')).catch((e) => console.warn('Agent notes fetch:', e.message || e));
+    api.getAgentMemories(agent.name).then(r => setMemories(r.memories || [])).catch((e) => console.warn('Agent memories fetch:', e.message || e));
   }, [agent.name]);
 
   const agentMsgs = messages.filter(m => m.sender === agent.name);
@@ -358,21 +358,21 @@ function ContextPanel({ agent }: { agent: Agent }) {
 
   const handleSaveSoul = async () => {
     setSaving(true);
-    await api.setAgentSoul(agent.name, soul).catch(() => {});
+    await api.setAgentSoul(agent.name, soul).catch((e) => console.warn('Save soul:', e.message || e));
     setSaving(false);
   };
 
   const handleSaveNotes = async () => {
     setSaving(true);
-    await api.setAgentNotes(agent.name, notes).catch(() => {});
+    await api.setAgentNotes(agent.name, notes).catch((e) => console.warn('Save notes:', e.message || e));
     setSaving(false);
   };
 
   const handleNewSession = async () => {
     // Kill and re-spawn
-    await api.killAgent(agent.name).catch(() => {});
+    await api.killAgent(agent.name).catch((e) => console.warn('Kill agent for new session:', e.message || e));
     setTimeout(async () => {
-      await api.spawnAgent(agent.base, agent.label, agent.workspace || '.', agent.args || []).catch(() => {});
+      await api.spawnAgent(agent.base, agent.label, agent.workspace || '.', agent.args || []).catch((e) => console.warn('Respawn agent:', e.message || e));
       setTimeout(async () => {
         const r = await api.getStatus();
         setAgents(r.agents);

@@ -111,7 +111,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
       if (available.length > 0) {
         setSelected(available[0].base);
       }
-    }).catch(() => {});
+    }).catch((e) => console.warn('Agent templates fetch:', e.message || e));
   }, []);
 
   const template = templates.find(t => t.base === selected);
@@ -123,7 +123,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
     try {
       const r = await api.pickFolder();
       setCwd(r.path);
-    } catch {}
+    } catch (e) { console.warn('Pick folder:', (e as any)?.message || e); }
     setPickingFolder(false);
   };
 
@@ -166,7 +166,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
         try {
           const r = await api.getStatus();
           setAgents(r.agents);
-        } catch {}
+        } catch (e) { console.warn('Status fetch after spawn:', (e as any)?.message || e); }
         onClose();
       }, 3000);
     } catch (e) {
@@ -178,7 +178,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
         const rolled = existing.filter(a => a.base !== selected);
         if (rolled.length < existing.length) {
           updateSettings({ persistentAgents: rolled });
-          api.saveSettings({ persistentAgents: rolled }).catch(() => {});
+          api.saveSettings({ persistentAgents: rolled }).catch((e) => console.warn('Settings save:', e.message || e));
         }
       }
     }

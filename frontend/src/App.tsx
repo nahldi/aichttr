@@ -78,7 +78,7 @@ function ThinkingBubbles() {
 function ConversationStarters({ channel }: { channel: string }) {
   const settings = useChatStore((s) => s.settings);
   const sendMessage = (text: string) => {
-    api.sendMessage(settings.username, text, channel).catch(() => {});
+    api.sendMessage(settings.username, text, channel).catch((e) => console.warn('Send message:', e.message || e));
   };
   return (
     <div className="flex flex-col items-center justify-center h-full text-center py-12">
@@ -319,9 +319,9 @@ function AppInner() {
       // Ctrl+1-9 — switch channel by number
       if (ctrl && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
-        const idx = parseInt(e.key) - 1;
+        const idx = parseInt(e.key, 10) - 1;
         const channels = useChatStore.getState().channels;
-        if (idx < channels.length) {
+        if (channels.length > 0 && idx >= 0 && idx < channels.length) {
           useChatStore.getState().setActiveChannel(channels[idx].name);
           useChatStore.getState().clearUnread(channels[idx].name);
         }
@@ -331,6 +331,7 @@ function AppInner() {
       if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
         const state = useChatStore.getState();
+        if (state.channels.length === 0) return;
         const idx = state.channels.findIndex(c => c.name === state.activeChannel);
         const next = e.key === 'ArrowDown'
           ? (idx + 1) % state.channels.length
@@ -344,7 +345,7 @@ function AppInner() {
         e.preventDefault();
         const current = useChatStore.getState().settings.notificationSounds;
         useChatStore.getState().updateSettings({ notificationSounds: !current });
-        api.saveSettings({ notificationSounds: !current }).catch(() => {});
+        api.saveSettings({ notificationSounds: !current }).catch((e) => console.warn('Settings save:', e.message || e));
         return;
       }
       // Escape — close panels / exit select mode
@@ -394,23 +395,23 @@ function AppInner() {
   }, [theme]);
 
   useEffect(() => {
-    api.getStatus().then((r) => setAgents(r.agents)).catch(() => {});
-    api.getJobs().then((r) => setJobs(r.jobs)).catch(() => {});
-    api.getRules().then((r) => setRules(r.rules)).catch(() => {});
+    api.getStatus().then((r) => setAgents(r.agents)).catch((e) => console.warn('Status fetch:', e.message || e));
+    api.getJobs().then((r) => setJobs(r.jobs)).catch((e) => console.warn('Jobs fetch:', e.message || e));
+    api.getRules().then((r) => setRules(r.rules)).catch((e) => console.warn('Rules fetch:', e.message || e));
     api.getChannels().then((r) =>
       setChannels(r.channels.map((name) => ({ name, unread: 0 })))
-    ).catch(() => {});
+    ).catch((e) => console.warn('Channels fetch:', e.message || e));
     api.getSettings().then((s) => {
       updateSettings(s);
       if (s.agentSounds) SoundManager.setCustomSounds(s.agentSounds);
-    }).catch(() => {});
+    }).catch((e) => console.warn('Settings fetch:', e.message || e));
   }, [setAgents, setJobs, setRules, setChannels, updateSettings]);
 
   useEffect(() => {
     api.getMessages(activeChannel).then((r) => {
       setMessages(r.messages);
       clearUnread(activeChannel);
-    }).catch(() => {});
+    }).catch((e) => console.warn('Messages fetch:', e.message || e));
   }, [activeChannel, setMessages, clearUnread]);
 
   return (

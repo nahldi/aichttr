@@ -69,7 +69,7 @@ export function RemoteSession() {
     api.getTunnelStatus().then((s) => {
       setActive(s.active);
       setUrl(s.url);
-    }).catch(() => {});
+    }).catch((e) => console.warn('Tunnel status fetch:', e.message || e));
   }, []);
 
   const start = useCallback(async () => {
@@ -88,7 +88,7 @@ export function RemoteSession() {
   const stop = useCallback(async () => {
     try {
       await api.stopTunnel();
-    } catch {}
+    } catch (e) { console.warn('Stop tunnel:', (e as any)?.message || e); }
     setActive(false);
     setUrl(null);
     setShowQR(false);

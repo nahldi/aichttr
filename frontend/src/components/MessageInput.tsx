@@ -170,7 +170,7 @@ export function MessageInput() {
         const current = useChatStore.getState().settings.theme;
         const next = current === 'dark' ? 'light' : 'dark';
         useChatStore.getState().updateSettings({ theme: next });
-        api.saveSettings({ theme: next }).catch(() => {});
+        api.saveSettings({ theme: next }).catch((e) => console.warn('Settings save:', e.message || e));
       },
     },
     {
@@ -233,7 +233,7 @@ export function MessageInput() {
       execute: () => {
         const current = useChatStore.getState().settings.debugMode;
         useChatStore.getState().updateSettings({ debugMode: !current });
-        api.saveSettings({ debugMode: !current }).catch(() => {});
+        api.saveSettings({ debugMode: !current }).catch((e) => console.warn('Settings save:', e.message || e));
         addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: `Debug mode: ${!current ? 'ON' : 'OFF'}`, type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
       },
     },
@@ -256,7 +256,7 @@ export function MessageInput() {
       description: 'Mute notification sounds',
       execute: () => {
         useChatStore.getState().updateSettings({ notificationSounds: false });
-        api.saveSettings({ notificationSounds: false }).catch(() => {});
+        api.saveSettings({ notificationSounds: false }).catch((e) => console.warn('Settings save:', e.message || e));
         addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: 'Notifications muted', type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
       },
     },
@@ -265,7 +265,7 @@ export function MessageInput() {
       description: 'Unmute notification sounds',
       execute: () => {
         useChatStore.getState().updateSettings({ notificationSounds: true });
-        api.saveSettings({ notificationSounds: true }).catch(() => {});
+        api.saveSettings({ notificationSounds: true }).catch((e) => console.warn('Settings save:', e.message || e));
         addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: 'Notifications unmuted', type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
       },
     },
@@ -412,7 +412,7 @@ export function MessageInput() {
         const label = parts[2] || base;
         sysMsg(`Spawning ${base} agent "${label}"...`);
         api.spawnAgent(base, label, '.', []).then(() => {
-          setTimeout(() => api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch(() => {}), 3000);
+          setTimeout(() => api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch((e) => console.warn('Status fetch:', e.message || e)), 3000);
         }).catch(() => sysMsg(`Failed to spawn ${base}`));
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -423,7 +423,7 @@ export function MessageInput() {
         const name = parts[1];
         sysMsg(`Stopping agent "${name}"...`);
         api.killAgent(name).then(() => {
-          api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch(() => {});
+          api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch((e) => console.warn('Status fetch:', e.message || e));
         }).catch(() => sysMsg(`Failed to stop ${name}`));
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -437,7 +437,7 @@ export function MessageInput() {
           sysMsg(`Setting ${agentName} role to ${role}...`);
           api.setAgentConfig(agentName, { role }).then(() => {
             sysMsg(`${agentName} is now a ${role}`);
-            api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch(() => {});
+            api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch((e) => console.warn('Status fetch:', e.message || e));
           }).catch(() => sysMsg(`Failed to set role — agent "${agentName}" may not be registered`));
         } else {
           sysMsg('Invalid role. Use: manager, worker, or peer');
@@ -451,7 +451,7 @@ export function MessageInput() {
         const agentName = parts[1];
         const topic = parts.slice(2).join(' ');
         sysMsg(`Focusing ${agentName}${topic ? ` on "${topic}"` : ''}`);
-        api.sendMessage(settings.username, trimmed, activeChannel).catch(() => {});
+        api.sendMessage(settings.username, trimmed, activeChannel).catch((e) => console.warn('Send message:', e.message || e));
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
         return;
@@ -461,7 +461,7 @@ export function MessageInput() {
         const theme = parts[1] as 'dark' | 'light';
         if (theme === 'dark' || theme === 'light') {
           useChatStore.getState().updateSettings({ theme });
-          api.saveSettings({ theme }).catch(() => {});
+          api.saveSettings({ theme }).catch((e) => console.warn('Settings save:', e.message || e));
           sysMsg(`Theme set to ${theme}`);
         } else {
           sysMsg('Usage: /theme dark|light');
@@ -479,7 +479,7 @@ export function MessageInput() {
         } else {
           sysMsg(`Consensus: asking ${onlineAgents.length} agents — "${question}"`);
           // Send the question @all so every agent gets it
-          api.sendMessage(settings.username, `@all ${question}`, activeChannel).catch(() => {});
+          api.sendMessage(settings.username, `@all ${question}`, activeChannel).catch((e) => console.warn('Consensus send:', e.message || e));
         }
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -492,9 +492,9 @@ export function MessageInput() {
         const topic = parts.slice(3).join(' ');
         sysMsg(`Debate started: @${agent1} (FOR) vs @${agent2} (AGAINST)\nTopic: ${topic}`);
         // Send initial prompts to both agents
-        api.sendMessage(settings.username, `@${agent1} You are arguing FOR the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch(() => {});
+        api.sendMessage(settings.username, `@${agent1} You are arguing FOR the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch((e) => console.warn('Debate send (FOR):', e.message || e));
         setTimeout(() => {
-          api.sendMessage(settings.username, `@${agent2} You are arguing AGAINST the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch(() => {});
+          api.sendMessage(settings.username, `@${agent2} You are arguing AGAINST the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch((e) => console.warn('Debate send (AGAINST):', e.message || e));
         }, 1000);
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';

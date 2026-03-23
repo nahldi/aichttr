@@ -24,10 +24,10 @@ export function SplitView({ channel1, channel2, onClose }: SplitViewProps) {
   useEffect(() => {
     api.getMessages(channel1, 0, 50).then(r => {
       if (r.messages.length > 0) setCh1Msgs(r.messages);
-    }).catch(() => {});
+    }).catch((e) => console.warn('SplitView ch1 fetch:', e.message || e));
     api.getMessages(channel2, 0, 50).then(r => {
       if (r.messages.length > 0) setCh2Msgs(r.messages);
-    }).catch(() => {});
+    }).catch((e) => console.warn('SplitView ch2 fetch:', e.message || e));
   }, [channel1, channel2]);
 
   return (
