@@ -199,40 +199,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
         </div>
 
         <div className="px-6 pb-6 space-y-5">
-          {/* Quick Presets */}
-          <Section label="Quick Presets">
-            <div className="grid grid-cols-2 gap-2">
-              {([
-                { label: 'Code Reviewer', icon: 'rate_review', base: 'claude', desc: 'Reviews PRs and suggests improvements' },
-                { label: 'Project Manager', icon: 'assignment', base: 'claude', desc: 'Tracks tasks, plans work, coordinates' },
-                { label: 'DevOps Engineer', icon: 'cloud', base: 'codex', desc: 'CI/CD, Docker, deployment' },
-                { label: 'Creative Writer', icon: 'edit_note', base: 'gemini', desc: 'Documentation, copy, content' },
-                { label: 'Research Analyst', icon: 'science', base: 'gemini', desc: 'Deep research, analysis' },
-                { label: 'Test Engineer', icon: 'bug_report', base: 'codex', desc: 'Tests, bugs, quality' },
-              ]).map(preset => (
-                <button
-                  key={preset.label}
-                  onClick={() => {
-                    // Fill only the name — let user pick which agent to use
-                    setLabel(preset.label);
-                  }}
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all text-left ${
-                    label === preset.label && selected === preset.base
-                      ? 'bg-primary/8 border-primary/20'
-                      : 'bg-surface-container/30 hover:bg-surface-container/50 border-outline-variant/8 hover:border-primary/15'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[16px] text-primary/60 mt-0.5">{preset.icon}</span>
-                  <div>
-                    <div className="text-[10px] font-semibold text-on-surface">{preset.label}</div>
-                    <div className="text-[8px] text-on-surface-variant/40 mt-0.5">{preset.desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          {/* Agent Selection — only show installed/available agents */}
+          {/* Agent Selection — PRIMARY required step */}
           <Section label="Agent">
             <div className="grid grid-cols-3 gap-2">
               {templates.filter(t => t.available).map((t) => (
@@ -286,6 +253,53 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
               </button>
             </div>
           </Section>
+
+          {/* Role Presets — optional, collapsed */}
+          <details className="group">
+            <summary className="text-[10px] font-semibold text-on-surface-variant/40 uppercase tracking-wider cursor-pointer hover:text-on-surface-variant/60 select-none flex items-center gap-1 py-1">
+              <span className="material-symbols-outlined text-[14px] transition-transform group-open:rotate-90">chevron_right</span>
+              Role Presets
+              <span className="text-[8px] text-on-surface-variant/25 ml-1 font-normal normal-case tracking-normal">optional — pre-configured agent roles</span>
+            </summary>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {([
+                { label: 'Code Reviewer', icon: 'rate_review', base: 'claude', desc: 'Reviews PRs and suggests improvements', perm: 0 },
+                { label: 'Project Manager', icon: 'assignment', base: 'claude', desc: 'Tracks tasks, plans work, coordinates', perm: 0 },
+                { label: 'DevOps Engineer', icon: 'cloud', base: 'codex', desc: 'CI/CD, Docker, deployment', perm: 0 },
+                { label: 'Creative Writer', icon: 'edit_note', base: 'gemini', desc: 'Documentation, copy, content', perm: 0 },
+                { label: 'Research Analyst', icon: 'science', base: 'gemini', desc: 'Deep research, analysis', perm: 0 },
+                { label: 'Test Engineer', icon: 'bug_report', base: 'codex', desc: 'Tests, bugs, quality', perm: 0 },
+              ]).map(preset => {
+                const isAvailable = templates.some(t => t.base === preset.base && t.available);
+                const isActive = label === preset.label && selected === preset.base;
+                return (
+                  <button
+                    key={preset.label}
+                    disabled={!isAvailable}
+                    onClick={() => {
+                      setSelected(preset.base);
+                      setLabel(preset.label);
+                      setPermPreset(preset.perm);
+                      setSelectedModel(0);
+                    }}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all text-left ${
+                      isActive
+                        ? 'bg-primary/8 border-primary/20'
+                        : isAvailable
+                          ? 'bg-surface-container/30 hover:bg-surface-container/50 border-outline-variant/8 hover:border-primary/15'
+                          : 'bg-surface-container/20 border-outline-variant/5 opacity-40 cursor-not-allowed'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px] text-primary/60 mt-0.5">{preset.icon}</span>
+                    <div>
+                      <div className="text-[10px] font-semibold text-on-surface">{preset.label}</div>
+                      <div className="text-[8px] text-on-surface-variant/40 mt-0.5">{preset.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </details>
 
           {/* Advanced Options — collapsed by default */}
           <details className="group">
