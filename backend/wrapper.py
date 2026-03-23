@@ -381,6 +381,29 @@ def _approval_watcher(
                         time.sleep(1)
                         break
 
+                    # Check if auto-approve is enabled for this agent
+                    try:
+                        auto_approve_url = f"http://127.0.0.1:{server_port}/api/agents/{current_name}/config"
+                        req = urllib.request.Request(auto_approve_url, method="GET")
+                        with urllib.request.urlopen(req, timeout=3) as resp:
+                            agent_config = json.loads(resp.read())
+                            if agent_config.get("autoApprove"):
+                                keymap = _APPROVAL_KEYMAPS.get(agent_base, _APPROVAL_KEYMAPS["_default"])
+                                subprocess.run(
+                                    ["tmux", "send-keys", "-t", session_name, keymap["allow_session"]],
+                                    capture_output=True, timeout=3,
+                                )
+                                time.sleep(0.1)
+                                subprocess.run(
+                                    ["tmux", "send-keys", "-t", session_name, "Enter"],
+                                    capture_output=True, timeout=3,
+                                )
+                                last_prompt_hash = prompt_hash
+                                time.sleep(1)
+                                break
+                    except Exception:
+                        pass  # Fall through to manual approval
+
                     # Extract context: last 10 non-empty lines
                     lines = [l for l in pane_text.strip().split('\n') if l.strip()]
                     context = '\n'.join(lines[-10:])

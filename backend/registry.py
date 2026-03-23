@@ -25,6 +25,10 @@ class AgentInstance:
     role: str = ""
     workspace: str = ""
     responseMode: str = "mentioned"
+    thinkingLevel: str = ""  # off, minimal, low, medium, high
+    model: str = ""  # model override for this agent
+    failoverModel: str = ""  # fallback model if primary fails
+    autoApprove: bool = False  # auto-approve all permission prompts
 
     def to_dict(self) -> dict:
         return asdict(self)

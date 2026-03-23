@@ -271,6 +271,31 @@ async def broadcast(event_type: str, data: dict):
             dead.append(ws)
     for ws in dead:
         _ws_clients.discard(ws)
+    # Deliver to active webhooks
+    _deliver_webhooks(event_type, data)
+
+
+def _deliver_webhooks(event_type: str, data: dict):
+    """Fire-and-forget POST to all matching active webhooks."""
+    import urllib.request
+    payload = json.dumps({"event": event_type, "data": data, "timestamp": time.time()}).encode()
+    for wh in _webhooks:
+        if not wh.get("active"):
+            continue
+        events = wh.get("events", [])
+        if events and event_type not in events:
+            continue
+        url = wh.get("url", "")
+        if not url:
+            continue
+        try:
+            req = urllib.request.Request(
+                url, data=payload, method="POST",
+                headers={"Content-Type": "application/json", "User-Agent": "GhostLink-Webhook/1.0"},
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception as e:
+            log.debug("Webhook delivery failed for %s: %s", wh["id"], e)
 
 
 # ── Lifespan ────────────────────────────────────────────────────────
@@ -376,12 +401,44 @@ async def lifespan(_app: FastAPI):
     sched_thread.start()
     print("  Schedule checker started (checks every 60s)")
 
+    # Agent health monitor — detects crashed agents and marks them offline
+    _health_stop = threading.Event()
+    _last_heartbeats: dict[str, float] = {}
+    HEALTH_CHECK_INTERVAL = 30  # seconds
+    HEARTBEAT_STALE_THRESHOLD = 45  # mark offline if no heartbeat for this long
+
+    def _health_monitor():
+        while not _health_stop.is_set():
+            try:
+                for inst in registry.get_all():
+                    last_hb = _last_heartbeats.get(inst.name, inst.registered_at)
+                    elapsed = time.time() - last_hb
+                    if elapsed > HEARTBEAT_STALE_THRESHOLD and inst.state not in ("offline", "pending"):
+                        old_state = inst.state
+                        inst.state = "offline"
+                        log.info("Agent %s marked offline (no heartbeat for %.0fs)", inst.name, elapsed)
+                        try:
+                            asyncio.run_coroutine_threadsafe(
+                                broadcast("status", {"agents": _get_full_agent_list()}),
+                                asyncio.get_event_loop(),
+                            ).result(timeout=5)
+                        except Exception:
+                            pass
+            except Exception as e:
+                log.debug("Health monitor error: %s", e)
+            _health_stop.wait(HEALTH_CHECK_INTERVAL)
+
+    health_thread = threading.Thread(target=_health_monitor, daemon=True)
+    health_thread.start()
+    print("  Health monitor started (checks every 30s)")
+
     # Load plugins
     plugin_loader.load_plugins(app, store=store, registry=registry, mcp_bridge_module=mcp_bridge)
 
     yield
 
     _schedule_stop.set()
+    _health_stop.set()
     await store.close()
     await db.close()
 
@@ -1286,6 +1343,7 @@ async def search_messages(q: str = "", channel: str = "", sender: str = "", limi
 async def heartbeat(agent_name: str, request: Request):
     inst = registry.get(agent_name)
     if inst:
+        _last_heartbeats[agent_name] = time.time()
         old_state = inst.state
         try:
             body = await request.json()
@@ -1892,6 +1950,11 @@ async def get_agent_config(name: str):
         "command": getattr(inst, "command", None),
         "args": getattr(inst, "args", []),
         "role": getattr(inst, "role", None),
+        "responseMode": getattr(inst, "responseMode", "mentioned"),
+        "thinkingLevel": getattr(inst, "thinkingLevel", ""),
+        "model": getattr(inst, "model", ""),
+        "failoverModel": getattr(inst, "failoverModel", ""),
+        "autoApprove": getattr(inst, "autoApprove", False),
     }
 
 
@@ -1901,10 +1964,10 @@ async def set_agent_config(name: str, request: Request):
     if not inst:
         return JSONResponse({"error": "not found"}, 404)
     body = await request.json()
-    for key in ("label", "color", "role", "workspace", "responseMode"):
+    for key in ("label", "color", "role", "workspace", "responseMode", "thinkingLevel", "model", "failoverModel", "autoApprove"):
         if key in body:
             setattr(inst, key, body[key])
-    if "role" in body or "responseMode" in body:
+    if any(k in body for k in ("role", "responseMode", "thinkingLevel", "model", "autoApprove")):
         await broadcast("status", {"agents": _get_full_agent_list()})
     return {"ok": True}
 

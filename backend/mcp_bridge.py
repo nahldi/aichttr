@@ -758,11 +758,104 @@ def chat_claim(sender: str, name: str = "", ctx: Context | None = None) -> str:
     return f"Error: '{sender}' is not registered."
 
 
+# ── Memory tools ─────────────────────────────────────────────────────
+
+def memory_save(sender: str, key: str, content: str) -> str:
+    """Save a memory entry. Use this to remember important information across sessions.
+
+    Args:
+        sender: Your agent name (used to scope the memory to your identity)
+        key: Short descriptive key (e.g. 'project_goals', 'user_preferences')
+        content: The content to remember (text, notes, data)
+
+    Returns:
+        Confirmation of saved memory
+    """
+    identity = _resolve_identity(sender)
+    if identity.startswith("Error"):
+        return identity
+    from agent_memory import get_agent_memory
+    mem = get_agent_memory(_data_dir, identity)
+    result = mem.save(key, content)
+    return f"Saved memory '{key}' ({len(content)} chars)"
+
+
+def memory_search(sender: str, query: str) -> str:
+    """Search your memory entries by keyword. Returns matching entries.
+
+    Args:
+        sender: Your agent name
+        query: Search term to find in memory keys and content
+
+    Returns:
+        JSON array of matching memory entries with key, content preview, and timestamps
+    """
+    identity = _resolve_identity(sender)
+    if identity.startswith("Error"):
+        return identity
+    from agent_memory import get_agent_memory
+    mem = get_agent_memory(_data_dir, identity)
+    results = mem.search(query)
+    if not results:
+        return "No memories match that query."
+    entries = []
+    for r in results[:10]:
+        entries.append({
+            "key": r["key"],
+            "preview": r["content"][:200] + ("..." if len(r["content"]) > 200 else ""),
+            "updated_at": r.get("updated_at"),
+        })
+    return json.dumps(entries, indent=2)
+
+
+def memory_get(sender: str, key: str) -> str:
+    """Retrieve a specific memory entry by its key.
+
+    Args:
+        sender: Your agent name
+        key: The exact key of the memory to retrieve
+
+    Returns:
+        The full content of the memory entry, or error if not found
+    """
+    identity = _resolve_identity(sender)
+    if identity.startswith("Error"):
+        return identity
+    from agent_memory import get_agent_memory
+    mem = get_agent_memory(_data_dir, identity)
+    entry = mem.load(key)
+    if not entry:
+        return f"Memory '{key}' not found."
+    return entry["content"]
+
+
+def memory_list(sender: str) -> str:
+    """List all your memory entries (keys and sizes, not full content).
+
+    Args:
+        sender: Your agent name
+
+    Returns:
+        JSON array of memory keys with sizes
+    """
+    identity = _resolve_identity(sender)
+    if identity.startswith("Error"):
+        return identity
+    from agent_memory import get_agent_memory
+    mem = get_agent_memory(_data_dir, identity)
+    entries = mem.list_all()
+    if not entries:
+        return "No memories stored yet."
+    items = [{"key": e["key"], "size": e.get("size", 0)} for e in entries]
+    return json.dumps(items, indent=2)
+
+
 # ── Server setup ────────────────────────────────────────────────────
 
 _ALL_TOOLS = [
     chat_send, chat_read, chat_join, chat_who, chat_channels,
     chat_rules, chat_progress, chat_propose_job, chat_react, chat_claim,
+    memory_save, memory_search, memory_get, memory_list,
 ]
 
 MCP_HTTP_PORT = 8200
