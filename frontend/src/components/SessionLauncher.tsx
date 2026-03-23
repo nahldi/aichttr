@@ -19,6 +19,7 @@ export function SessionLauncher({ onClose }: { onClose: () => void }) {
   const [cast, setCast] = useState<Record<string, string>>({});
   const [topic, setTopic] = useState('');
   const [starting, setStarting] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     api.getSessionTemplates().then(r => setTemplates(r.templates)).catch(() => {});
@@ -35,14 +36,21 @@ export function SessionLauncher({ onClose }: { onClose: () => void }) {
     setCast(autoCast);
   };
 
+  const allRolesAssigned = selected
+    ? selected.roles.every(role => cast[role] && cast[role].length > 0)
+    : false;
+
   const handleStart = async () => {
-    if (!selected) return;
+    if (!selected || !allRolesAssigned) return;
     setStarting(true);
+    setError('');
     try {
       await api.startSession(activeChannel, selected.id, cast, topic);
       onClose();
-    } catch {}
-    setStarting(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start session');
+      setStarting(false);
+    }
   };
 
   if (selected) {
@@ -110,6 +118,12 @@ export function SessionLauncher({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
+          {error && (
+            <div className="text-xs text-red-400 bg-red-500/5 border border-red-500/10 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button
               onClick={onClose}
@@ -119,10 +133,10 @@ export function SessionLauncher({ onClose }: { onClose: () => void }) {
             </button>
             <button
               onClick={handleStart}
-              disabled={starting || Object.values(cast).filter(Boolean).length === 0}
+              disabled={starting || !allRolesAssigned}
               className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-primary-container text-white hover:brightness-110 transition-all disabled:opacity-40"
             >
-              {starting ? 'Starting...' : 'Start Session'}
+              {starting ? 'Starting...' : !allRolesAssigned ? 'Assign all roles' : 'Start Session'}
             </button>
           </div>
         </div>

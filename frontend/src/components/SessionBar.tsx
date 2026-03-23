@@ -23,7 +23,6 @@ export function SessionBar() {
       .catch(() => setSession(null));
   }, [activeChannel]);
 
-  // Listen for session updates via custom event
   useEffect(() => {
     const handler = (e: CustomEvent) => {
       if (e.detail?.channel === activeChannel) {
@@ -36,9 +35,11 @@ export function SessionBar() {
 
   if (!session || session.status === 'completed') return null;
 
-  const phase = session.phases[session.current_phase];
-  const progress = session.phases.length > 0
-    ? ((session.current_phase / session.phases.length) * 100)
+  const phases = session.phases || [];
+  const phaseIdx = Math.min(session.current_phase, phases.length - 1);
+  const phase = phaseIdx >= 0 ? phases[phaseIdx] : null;
+  const progress = phases.length > 0
+    ? ((session.current_phase / phases.length) * 100)
     : 0;
 
   const handleAdvance = async () => {
@@ -68,15 +69,13 @@ export function SessionBar() {
 
   return (
     <div className="px-4 py-2 glass border-b border-primary/10 flex items-center gap-3">
-      {/* Progress bar */}
       <div className="w-16 h-1.5 bg-surface-container-high rounded-full overflow-hidden shrink-0">
         <div
           className="h-full bg-primary rounded-full transition-all"
-          style={{ width: `${progress}%` }}
+          style={{ width: `${Math.min(progress, 100)}%` }}
         />
       </div>
 
-      {/* Session info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
@@ -88,13 +87,12 @@ export function SessionBar() {
         </div>
         {phase && (
           <div className="text-[9px] text-on-surface-variant/50">
-            Phase {session.current_phase + 1}/{session.phases.length}: {phase.name}
+            Phase {phaseIdx + 1}/{phases.length}: {phase.name}
             {isPaused && <span className="ml-1 text-yellow-400">(paused)</span>}
           </div>
         )}
       </div>
 
-      {/* Controls */}
       <div className="flex items-center gap-1 shrink-0">
         <button
           onClick={handleTogglePause}

@@ -1500,7 +1500,7 @@ async def advance_session(channel: str):
     session = session_manager.advance_turn(channel)
     if session and session["status"] == "completed":
         await store.add("system", f"Session completed: **{session['template_name']}**", "system", channel)
-    elif session and session["current_phase"] != prev_phase:
+    elif session and session["current_phase"] != prev_phase and session["current_phase"] < len(session.get("phases", [])):
         phase = session["phases"][session["current_phase"]]
         await store.add("system", f"**Phase {session['current_phase'] + 1}: {phase['name']}** — {phase.get('prompt', '')}", "system", channel)
     await broadcast("session_update", {"channel": channel, "session": session})

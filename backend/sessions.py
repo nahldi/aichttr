@@ -140,13 +140,17 @@ class SessionManager:
 
         phases = session["phases"]
         current = session["current_phase"]
+        if current >= len(phases):
+            session["status"] = "completed"
+            session["completed_at"] = time.time()
+            self._save()
+            return session
+
         phase = phases[current]
         max_turns = phase.get("turns", 1)
-
         session["current_turn"] += 1
 
         if session["current_turn"] >= max_turns:
-            # Move to next phase
             session["current_phase"] += 1
             session["current_turn"] = 0
             if session["current_phase"] >= len(phases):
@@ -190,10 +194,10 @@ class SessionManager:
             return None
 
         phase = phases[current]
-        roles = list(session["cast"].keys())
-        # Alternate turns between roles
-        role_idx = session["current_turn"] % len(roles) if roles else 0
-        current_role = roles[role_idx] if roles else None
+        roles = [r for r in session["cast"].keys() if session["cast"][r]]
+        # Alternate turns between assigned roles
+        role_idx = session["current_turn"] % len(roles) if len(roles) > 0 else 0
+        current_role = roles[role_idx] if len(roles) > 0 else None
         current_agent = session["cast"].get(current_role, "") if current_role else None
 
         return {

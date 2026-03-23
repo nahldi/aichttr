@@ -8,6 +8,7 @@ export function BulkDeleteBar() {
   const clearSelection = useChatStore((s) => s.clearSelection);
   const deleteMessages = useChatStore((s) => s.deleteMessages);
   const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
 
   if (!selectMode) return null;
 
@@ -16,13 +17,20 @@ export function BulkDeleteBar() {
   const handleDelete = async () => {
     if (count === 0) return;
     setDeleting(true);
+    setError('');
+    const ids = Array.from(selectedIds);
     try {
-      const ids = Array.from(selectedIds);
-      await api.deleteMessages(ids);
-      deleteMessages(ids);
-    } catch {}
+      const result = await api.deleteMessages(ids);
+      if (result.ok) {
+        deleteMessages(result.deleted || ids);
+        clearSelection();
+      } else {
+        setError('Delete failed');
+      }
+    } catch {
+      setError('Delete failed — check connection');
+    }
     setDeleting(false);
-    clearSelection();
   };
 
   return (
@@ -32,6 +40,7 @@ export function BulkDeleteBar() {
         <span className="font-medium">
           {count === 0 ? 'Select messages to delete' : `${count} message${count > 1 ? 's' : ''} selected`}
         </span>
+        {error && <span className="text-[10px] text-red-300/70 ml-1">{error}</span>}
       </div>
       <div className="flex items-center gap-2">
         <button

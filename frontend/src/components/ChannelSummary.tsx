@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 
 interface SummaryData {
@@ -14,11 +14,14 @@ export function ChannelSummary({ channel, onClose }: { channel: string; onClose:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useState(() => {
+  useEffect(() => {
+    setLoading(true);
+    setError('');
+    setData(null);
     api.getChannelSummary(channel)
       .then((r) => { setData(r); setLoading(false); })
       .catch(() => { setError('Failed to load summary'); setLoading(false); });
-  });
+  }, [channel]);
 
   return (
     <div className="absolute top-full left-0 right-0 z-40 mx-4 mt-1 glass-card rounded-xl p-4 shadow-2xl border border-outline-variant/15 max-w-lg">
@@ -45,7 +48,7 @@ export function ChannelSummary({ channel, onClose }: { channel: string; onClose:
         <div className="space-y-3">
           <p className="text-xs text-on-surface/80 leading-relaxed">{data.summary}</p>
 
-          {data.participants.length > 0 && (
+          {data.participants && data.participants.length > 0 && (
             <div>
               <div className="text-[9px] font-semibold text-on-surface-variant/40 uppercase tracking-wider mb-1.5">Participants</div>
               <div className="flex flex-wrap gap-1.5">
@@ -58,7 +61,7 @@ export function ChannelSummary({ channel, onClose }: { channel: string; onClose:
             </div>
           )}
 
-          {data.topics.length > 0 && (
+          {data.topics && data.topics.length > 0 && (
             <div>
               <div className="text-[9px] font-semibold text-on-surface-variant/40 uppercase tracking-wider mb-1.5">Key Topics</div>
               <div className="flex flex-wrap gap-1.5">
