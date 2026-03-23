@@ -556,6 +556,14 @@ async def bookmark_message(msg_id: int, request: Request):
 
 @app.delete("/api/messages/{msg_id}")
 async def delete_message(msg_id: int):
+    # Block deletion of system/join messages
+    if store._db:
+        cursor = await store._db.execute(
+            "SELECT type FROM messages WHERE id = ?", (msg_id,)
+        )
+        row = await cursor.fetchone()
+        if row and row[0] in ("system", "join"):
+            return JSONResponse({"error": "cannot delete system messages"}, 403)
     deleted = await store.delete([msg_id])
     if deleted:
         await broadcast("delete", {"message_ids": deleted})
@@ -580,6 +588,18 @@ async def bulk_delete_messages(request: Request):
             continue
     if not safe_ids:
         return JSONResponse({"error": "no valid ids"}, 400)
+    # Filter out system/join messages — these are structural and should not be deleted
+    if store._db:
+        placeholders = ",".join("?" * len(safe_ids))
+        cursor = await store._db.execute(
+            f"SELECT id FROM messages WHERE id IN ({placeholders}) AND type IN ('system', 'join')",
+            tuple(safe_ids),
+        )
+        protected = {row[0] for row in await cursor.fetchall()}
+        if protected:
+            safe_ids = [i for i in safe_ids if i not in protected]
+        if not safe_ids:
+            return JSONResponse({"error": "cannot delete system messages"}, 403)
     deleted = await store.delete(safe_ids)
     if deleted:
         await broadcast("delete", {"message_ids": deleted})

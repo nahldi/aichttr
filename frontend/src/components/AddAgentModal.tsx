@@ -221,11 +221,16 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
               ))}
             </div>
             {templates.filter(t => t.available).length === 0 && (
-              <div className="text-center text-[11px] text-on-surface-variant/40 py-4">
-                No agents installed. Install a CLI from the launcher to get started.
+              <div className="text-center py-6">
+                <span className="material-symbols-outlined text-[32px] text-on-surface-variant/20 mb-2 block">smart_toy</span>
+                <div className="text-[11px] text-on-surface-variant/40 mb-1">No agents installed</div>
+                <div className="text-[10px] text-on-surface-variant/30">Install a CLI agent from the launcher to get started.</div>
               </div>
             )}
           </Section>
+
+          {/* Only show config form when agents are available */}
+          {!selected ? null : <>
 
           {/* Display Name */}
           <Section label="Name" hint="Give your agent a custom name">
@@ -398,6 +403,8 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
               </span>
             )}
           </button>
+
+          </>}
         </div>
       </div>
     </div>
