@@ -414,4 +414,45 @@ export const api = {
 
   deleteHook: (hookId: string) =>
     request('/api/hooks/' + hookId, { method: 'DELETE' }),
+
+  // Security
+  getSecrets: () =>
+    request<{ secrets: { key: string; preview: string; length: number }[] }>('/api/security/secrets'),
+
+  setSecret: (key: string, value: string) =>
+    request('/api/security/secrets', {
+      method: 'POST', body: JSON.stringify({ key, value }),
+    }),
+
+  deleteSecret: (key: string) =>
+    request('/api/security/secrets/' + encodeURIComponent(key), { method: 'DELETE' }),
+
+  getExecPolicies: () =>
+    request<{ policies: Record<string, any> }>('/api/security/exec-policies'),
+
+  getExecPolicy: (agent: string) =>
+    request<{ policy: any }>('/api/security/exec-policy/' + encodeURIComponent(agent)),
+
+  setExecPolicy: (agent: string, policy: any) =>
+    request('/api/security/exec-policy/' + encodeURIComponent(agent), {
+      method: 'POST', body: JSON.stringify(policy),
+    }),
+
+  getAuditLog: (limit?: number) =>
+    request<{ entries: any[] }>('/api/security/audit-log?limit=' + (limit || 100)),
+
+  getRetention: () =>
+    request<{ policy: any }>('/api/security/retention'),
+
+  setRetention: (policy: any) =>
+    request('/api/security/retention', {
+      method: 'POST', body: JSON.stringify(policy),
+    }),
+
+  exportData: () => fetch('/api/security/export').then(r => r.blob()),
+
+  deleteAllData: () =>
+    request('/api/security/delete-all', {
+      method: 'POST', body: JSON.stringify({ confirm: 'DELETE_ALL_DATA' }),
+    }),
 };

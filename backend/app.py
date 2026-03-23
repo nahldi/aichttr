@@ -46,6 +46,7 @@ from sessions import SessionManager
 from providers import ProviderRegistry
 from bridges import BridgeManager
 from plugin_sdk import Marketplace, HookManager, event_bus, EVENTS, SKILL_PACKS, SafetyScanner
+from security import SecretsManager, ExecPolicy, AuditLog, DataManager
 import mcp_bridge
 import plugin_loader
 
@@ -122,6 +123,10 @@ provider_registry: ProviderRegistry
 bridge_manager: BridgeManager
 marketplace: Marketplace
 hook_manager: HookManager
+secrets_manager: SecretsManager
+exec_policy: ExecPolicy
+audit_log: AuditLog
+data_manager: DataManager
 registry = AgentRegistry()
 router = MessageRouter(max_hops=MAX_HOPS, default_routing=DEFAULT_ROUTING)
 
@@ -311,7 +316,7 @@ def _deliver_webhooks(event_type: str, data: dict):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global store, job_store, rule_store, schedule_store, skills_registry, session_manager, provider_registry, bridge_manager, marketplace, hook_manager
+    global store, job_store, rule_store, schedule_store, skills_registry, session_manager, provider_registry, bridge_manager, marketplace, hook_manager, secrets_manager, exec_policy, audit_log, data_manager
 
     _load_settings()
     _settings["_server_start"] = time.time()
@@ -335,6 +340,11 @@ async def lifespan(_app: FastAPI):
     marketplace = Marketplace(DATA_DIR)
     hook_manager = HookManager(DATA_DIR)
     hook_manager.register_all()
+    secrets_manager = SecretsManager(DATA_DIR)
+    exec_policy = ExecPolicy(DATA_DIR)
+    audit_log = AuditLog(DATA_DIR)
+    data_manager = DataManager(DATA_DIR, store=store)
+    audit_log.log("server_start", {"version": "2.1.0", "port": PORT})
 
     # Broadcast new messages via WebSocket
     async def on_msg(msg: dict):
@@ -2007,6 +2017,117 @@ async def delete_webhook(wh_id: str):
     before = len(_webhooks)
     _webhooks = [w for w in _webhooks if w["id"] != wh_id]
     return {"ok": len(_webhooks) < before}
+
+
+# ── Security — Secrets, Exec Policy, Audit, GDPR ────────────────────
+
+@app.get("/api/security/secrets")
+async def list_secrets():
+    """List stored secret keys (values redacted)."""
+    return {"secrets": secrets_manager.list_keys()}
+
+
+@app.post("/api/security/secrets")
+async def set_secret(request: Request):
+    """Store a secret (API key, token, etc.)."""
+    body = await request.json()
+    key = (body.get("key", "") or "").strip()
+    value = (body.get("value", "") or "").strip()
+    if not key or not value:
+        return JSONResponse({"error": "key and value required"}, 400)
+    if len(key) > 100 or len(value) > 10000:
+        return JSONResponse({"error": "key max 100 chars, value max 10000 chars"}, 400)
+    secrets_manager.set(key, value)
+    audit_log.log("secret_set", {"key": key}, actor="user")
+    return {"ok": True, "key": key}
+
+
+@app.delete("/api/security/secrets/{key}")
+async def delete_secret(key: str):
+    ok = secrets_manager.delete(key)
+    if ok:
+        audit_log.log("secret_delete", {"key": key}, actor="user")
+    return {"ok": ok}
+
+
+@app.get("/api/security/exec-policies")
+async def list_exec_policies():
+    return {"policies": exec_policy.list_policies()}
+
+
+@app.get("/api/security/exec-policy/{agent_name}")
+async def get_exec_policy(agent_name: str):
+    return {"policy": exec_policy.get_policy(agent_name)}
+
+
+@app.post("/api/security/exec-policy/{agent_name}")
+async def set_exec_policy(agent_name: str, request: Request):
+    body = await request.json()
+    policy = exec_policy.set_policy(agent_name, body)
+    audit_log.log("exec_policy_update", {"agent": agent_name}, actor="user")
+    return {"ok": True, "policy": policy}
+
+
+@app.post("/api/security/check-command")
+async def check_command(request: Request):
+    """Check if a command would be allowed for an agent."""
+    body = await request.json()
+    agent = body.get("agent", "")
+    command = body.get("command", "")
+    if not command:
+        return JSONResponse({"error": "command required"}, 400)
+    result = exec_policy.check_command(agent, command)
+    return result
+
+
+@app.get("/api/security/audit-log")
+async def get_audit_log(limit: int = 100, event_type: str = ""):
+    return {"entries": audit_log.get_recent(limit, event_type)}
+
+
+@app.get("/api/security/retention")
+async def get_retention():
+    return {"policy": data_manager.get_retention()}
+
+
+@app.post("/api/security/retention")
+async def set_retention(request: Request):
+    body = await request.json()
+    data_manager.save_retention(body)
+    audit_log.log("retention_update", body, actor="user")
+    return {"ok": True, "policy": data_manager.get_retention()}
+
+
+@app.get("/api/security/export")
+async def export_data():
+    """Export all user data as ZIP (GDPR data portability)."""
+    from fastapi.responses import Response
+    zip_bytes = await data_manager.export_all_data()
+    audit_log.log("data_export", {"size": len(zip_bytes)}, actor="user")
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=ghostlink-export.zip"},
+    )
+
+
+@app.post("/api/security/delete-all")
+async def delete_all_data(request: Request):
+    """Delete all user data (GDPR right to erasure). Requires confirmation."""
+    body = await request.json()
+    if body.get("confirm") != "DELETE_ALL_DATA":
+        return JSONResponse({"error": "Send {confirm: 'DELETE_ALL_DATA'} to confirm"}, 400)
+    result = await data_manager.delete_all_data()
+    return result
+
+
+@app.post("/api/security/apply-retention")
+async def apply_retention():
+    """Apply retention policy — delete old messages."""
+    result = await data_manager.apply_retention()
+    if result.get("ok"):
+        audit_log.log("retention_applied", result, actor="system")
+    return result
 
 
 # ── GhostHub Marketplace ─────────────────────────────────────────────
