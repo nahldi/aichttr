@@ -94,8 +94,10 @@ export const api = {
   pickFolder: () =>
     request<{ windowsPath: string; path: string }>('/api/pick-folder', { method: 'POST' }),
 
-  getAgentTemplates: () =>
-    request<{ templates: import('../types').AgentTemplate[] }>('/api/agent-templates'),
+  getAgentTemplates: (connectedAgents?: string[]) => {
+    const params = connectedAgents?.length ? `?connected=${connectedAgents.join(',')}` : '';
+    return request<{ templates: import('../types').AgentTemplate[] }>(`/api/agent-templates${params}`);
+  },
 
   spawnAgent: (base: string, label: string, cwd: string, args: string[]) =>
     request<{ ok: boolean; pid: number; base: string; message: string }>('/api/spawn-agent', {

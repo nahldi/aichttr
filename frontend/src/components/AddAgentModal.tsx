@@ -94,12 +94,15 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
   const [error, setError] = useState('');
   const [pickingFolder, setPickingFolder] = useState(false);
   const [persistent, setPersistent] = useState(true);
+  const agents = useChatStore((s) => s.agents);
   const setAgents = useChatStore((s) => s.setAgents);
   const updateSettings = useChatStore((s) => s.updateSettings);
   const settings = useChatStore((s) => s.settings);
 
   useEffect(() => {
-    api.getAgentTemplates().then((r) => {
+    // Pass currently known agent base names so backend marks them available
+    const connectedBases = [...new Set(agents.map(a => a.base))];
+    api.getAgentTemplates(connectedBases).then((r) => {
       setTemplates(r.templates);
       const available = r.templates.filter(t => t.available);
       if (available.length > 0) {

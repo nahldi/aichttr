@@ -717,9 +717,12 @@ async def deregister_agent(name: str):
 
 
 @app.get("/api/agent-templates")
-async def agent_templates():
-    """Return available agent CLI templates with defaults."""
+async def agent_templates(connected: str = ""):
+    """Return available agent CLI templates with defaults.
+    Pass connected=claude,gemini,codex to mark agents detected by the desktop auth system."""
     import shutil as _shutil
+    # Agents the desktop auth system has verified as connected
+    _connected_set = set(c.strip() for c in connected.split(",") if c.strip())
 
     # API key env vars that indicate an agent is usable even without CLI
     _API_KEY_ENV = {
@@ -733,7 +736,15 @@ async def agent_templates():
     _available_cache: dict[str, bool] = {}
 
     def _is_available(name: str, cmd: str) -> bool:
-        """Check if agent is available via CLI binary, API key, or WSL."""
+        """Check if agent is available via CLI binary, API key, WSL, or desktop auth."""
+        # Desktop auth already verified this agent is connected
+        if name in _connected_set:
+            return True
+        # Map provider names from auth system to agent base names
+        _PROVIDER_TO_BASE = {"anthropic": "claude", "openai": "codex", "google": "gemini", "github": "copilot"}
+        if _PROVIDER_TO_BASE.get(name, name) in _connected_set or name in [_PROVIDER_TO_BASE.get(c, c) for c in _connected_set]:
+            return True
+
         if name in _available_cache:
             return _available_cache[name]
 
