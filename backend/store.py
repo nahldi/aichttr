@@ -66,7 +66,7 @@ class MessageStore:
         self._on_message: list[MsgCallback] = []
 
     async def init(self):
-        # v3.3.1: Recover from empty/corrupt DB files before connecting
+        # v3.3.2: Recover from empty/corrupt DB files before connecting
         db_file = Path(self.db_path)
         if db_file.exists() and db_file.stat().st_size == 0:
             import logging as _log
@@ -76,10 +76,7 @@ class MessageStore:
                 import shutil
                 _log.getLogger(__name__).info("Restoring from backup: %s", bak)
                 shutil.copy2(str(bak), str(db_file))
-            else:
-                # Remove empty file so SQLite creates a fresh one
-                db_file.unlink()
-                _log.getLogger(__name__).info("Removed empty DB, will create fresh database")
+            # else: leave the 0-byte file — SQLite will initialize it as a fresh DB
 
         self._db = await aiosqlite.connect(self.db_path)
         self._db.row_factory = aiosqlite.Row

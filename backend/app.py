@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "3.3.1"
+__version__ = "3.3.2"
 
 import json
 import os
@@ -167,7 +167,9 @@ def _estimate_cost(provider: str, model: str, input_tok: int, output_tok: int) -
 async def _track_usage(agent: str, provider: str, model: str, input_tokens: int, output_tokens: int):
     """Record token usage for cost tracking. v2.5.0: capped to prevent memory leak."""
     if len(_usage_log) >= _USAGE_LOG_MAX:
-        del _usage_log[:_USAGE_LOG_MAX // 5]
+        dropped = _USAGE_LOG_MAX // 5
+        del _usage_log[:dropped]
+        log.info("Usage log trimmed: dropped %d oldest entries (cap %d)", dropped, _USAGE_LOG_MAX)
     _usage_log.append({
         "ts": datetime.utcnow().isoformat(),
         "agent": agent,
@@ -219,8 +221,6 @@ class _UILogHandler(logging.Handler):
                 "message": self.format(record),
             }
             deps._server_logs.append(entry)
-            if len(deps._server_logs) > _MAX_LOG_ENTRIES:
-                deps._server_logs.pop(0)
         except Exception:
             pass
 
@@ -258,7 +258,7 @@ async def lifespan(_app: FastAPI):
     skills_registry = SkillsRegistry(DATA_DIR)
     session_manager = SessionManager(DATA_DIR)
     provider_registry = ProviderRegistry(DATA_DIR)
-    bridge_manager = BridgeManager(DATA_DIR, store=store, registry=registry)
+    bridge_manager = BridgeManager(DATA_DIR, store=store, registry=registry, server_port=PORT)
     marketplace = Marketplace(DATA_DIR)
     hook_manager = HookManager(DATA_DIR, server_port=PORT)
     hook_manager.register_all()

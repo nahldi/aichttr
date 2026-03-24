@@ -4,6 +4,7 @@ Set by app.py lifespan before any requests are served.
 from __future__ import annotations
 
 import asyncio
+import collections
 import json
 import logging
 import subprocess
@@ -112,8 +113,8 @@ _tunnel_url: Any = None
 
 # ── Activity / server logs ───────────────────────────────────────────
 
-_activity_log: list[dict] = []
-_server_logs: list[dict] = []
+_activity_log: collections.deque[dict] = collections.deque(maxlen=100)
+_server_logs: collections.deque[dict] = collections.deque(maxlen=500)
 
 # ── Agent name validation ────────────────────────────────────────────
 

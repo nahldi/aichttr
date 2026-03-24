@@ -4,7 +4,7 @@
 > **For any AI picking this up: follow the tiers IN ORDER. Each item has test criteria. Do NOT skip ahead.**
 
 **Last updated:** 2026-03-24
-**Current version:** v3.3.0
+**Current version:** v3.3.2
 **Sources:** GAB_ROADMAP.md, GAF_ROADMAP.md, V2.5_BUGFIX_ROADMAP.md, ROADMAP.md, BUGS.md, STATUS.md
 **Owner:** Finn (nahldi)
 
@@ -23,8 +23,10 @@
 - **v3.1.0:** Micro-interactions — motion.button spring, ReactionPicker AnimatePresence, AgentStatusPill color morph (Tier 8)
 - **v3.1.1:** Integration tests — 17 tests covering message pipeline, agent/job lifecycle, secrets, concurrent rules (Tier 9)
 - **v3.2.0/v3.3.0:** Premium effects — StreamingText word reveal, ThinkingParticles SVG orbit, Toast stacking + swipe-dismiss, useLongPress, MobileSidebar drag gesture, mobile CSS fixes (Tiers 10-11)
+- **v3.3.1:** Fix 7 bugs — dependency conflict (fastapi/mcp), version sync, DB recovery, audit log, router constructor, clipboard API
+- **v3.3.2:** Final polish — Tier 0 remaining quick wins (empty_read_count init, memory cache TTL, deque log rotation), desktop pip install fix (missing cryptography), all open bugs resolved or documented
 
-**56+ bugs fixed. ~8 open bugs. 90+ features live. 90+ API endpoints.**
+**72+ bugs fixed. 1 future enhancement open. 90+ features live. 132+ API endpoints.**
 
 ---
 
@@ -518,14 +520,14 @@ These are from ROADMAP.md Phases 11-20. Only begin after Tiers 0-11 are complete
 
 | Bug | Severity | Status |
 |-----|----------|--------|
-| BUG-007: OneDrive paths not accessible from WSL | High | Partially fixed |
-| BUG-011: Frontend dist path mismatch in packaged app | Medium | Partially fixed |
-| BUG-014: Ghost logo broken image in packaged app | Low | Open |
-| BUG-028: Many config tasks require terminal | High | Open |
-| BUG-043: AddAgentModal setTimeout cleanup | Low | Fixed in v2.5.1 |
-| BUG-045: Clipboard API not checked | Low | Open (Tier 0) |
-| BUG-046: No OAuth sign-in for providers | High | Open (future) |
-| ARCH-003: Desktop app requires WSL on Windows | High | Open (future) |
+| BUG-007: OneDrive paths not accessible from WSL | Low | Mitigated — auto-copies to /tmp |
+| ~~BUG-011: Frontend dist path mismatch~~ | — | FIXED (v3.3.0) |
+| ~~BUG-014: Ghost logo broken image~~ | — | NOT A BUG (verified) |
+| ~~BUG-028: Config tasks require terminal~~ | — | Mostly resolved — UI covers 90%+ |
+| ~~BUG-043: AddAgentModal setTimeout~~ | — | FIXED (v3.3.0) |
+| ~~BUG-045: Clipboard API not checked~~ | — | FIXED (v3.3.1) |
+| BUG-046: No OAuth sign-in | Med | Future — requires provider registration |
+| ~~ARCH-003: Desktop requires WSL~~ | — | RESOLVED — native Python supported |
 
 ---
 

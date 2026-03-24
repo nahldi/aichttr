@@ -122,8 +122,5 @@ async def channel_summary(name: str):
 
 
 def _save_settings():
-    """Save settings to disk. Expects DATA_DIR to be set in deps."""
-    import json
-    settings_path = deps.DATA_DIR / "settings.json"
-    with open(settings_path, "w") as f:
-        json.dump(deps._settings, f, indent=2)
+    from app_helpers import save_settings
+    save_settings()

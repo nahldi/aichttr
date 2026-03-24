@@ -14,6 +14,13 @@ import deps
 log = logging.getLogger(__name__)
 
 
+def save_settings():
+    """Persist the in-memory settings dict to disk. Shared across all route modules."""
+    settings_path = deps.DATA_DIR / "settings.json"
+    with open(settings_path, "w") as f:
+        json.dump(deps._settings, f, indent=2)
+
+
 def get_full_agent_list() -> list[dict]:
     """Get ALL agents — live from registry + offline from config. Never loses agents."""
     live = deps.registry.get_public_list()

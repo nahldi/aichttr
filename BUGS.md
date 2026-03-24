@@ -1,8 +1,8 @@
 # GhostLink — Known Bugs & Issues
 
 **Last updated:** 2026-03-24
-**Version:** v3.3.1
-**Source:** Full codebase audit + live API testing + deep code path audit + user-reported bugs + 4 fix rounds
+**Version:** v3.3.2
+**Source:** Full codebase audit + live API testing + deep code path audit + user-reported bugs + automated audit + 5 fix rounds
 
 ---
 
@@ -36,11 +36,9 @@
 **Status:** FIXED
 **Fix:** All `execSync` calls replaced with async `execAsync`. Auth checks run via `Promise.allSettled()`.
 
-### BUG-007: OneDrive paths not accessible from WSL
-**Severity:** High — server can't start if app installed to OneDrive-synced Desktop
-**Where:** Desktop app → Start Server
-**Status:** Partially fixed — server.ts detects "OneDrive" in path and copies to `/tmp/ghostlink-backend/`.
-**Workaround:** Install to a non-OneDrive location (e.g., C:\GhostLink).
+### ~~BUG-007: OneDrive paths not accessible from WSL~~ MITIGATED (v1.0.4+)
+**Status:** MITIGATED — server.ts detects OneDrive paths and auto-copies backend+frontend to `/tmp/` for WSL compatibility. Not a code bug — inherent WSL filesystem limitation.
+**Workaround:** Install to a non-OneDrive location (e.g., C:\GhostLink) for faster startup.
 
 ---
 
@@ -58,10 +56,8 @@
 **Status:** FIXED (v1.0.0)
 **Fix:** electron-builder.yml pointed to correct repo `nahldi/ghostlink`. Updater error handler now gracefully suppresses network errors, 404s, missing releases, and DNS failures — shows "Up to date" instead of scary error text.
 
-### BUG-011: Frontend dist path mismatch in packaged app
-**Severity:** Medium — frontend won't load if /tmp copy fails
-**Where:** Desktop app
-**Status:** Partially fixed in server.ts — checks both `frontend/dist/` and `frontend/` paths.
+### ~~BUG-011: Frontend dist path mismatch in packaged app~~ FIXED (v3.3.0)
+**Status:** FIXED — server.ts checks both `frontend/dist/` (dev) and `frontend/` (packaged) paths. OneDrive copy also handles both layouts. electron-builder.yml copies `frontend/dist/` contents to `frontend/`.
 
 ### ~~BUG-012: Menu bar (File, Edit, View) shows on some windows~~ FIXED
 **Status:** FIXED
@@ -75,9 +71,8 @@
 **Status:** FIXED (v1.0.4)
 **Fix:** Agent bar now uses `flex-1 min-w-0 overflow-hidden` container, tunnel button stays visible with `ml-3 shrink-0`.
 
-### BUG-014: Ghost logo shows as broken image
-**Severity:** Low — cosmetic
-**Root cause:** `/ghostlink.png` path works in dev but may not in packaged app if static serving path differs.
+### ~~BUG-014: Ghost logo shows as broken image~~ VERIFIED NOT A BUG
+**Status:** NOT A BUG — `ghostlink.png` exists in `frontend/public/` and gets copied to `frontend/dist/` on build. SPA middleware in `app.py` serves it from STATIC_DIR. Works in both dev and packaged modes.
 
 ### ~~BUG-015: Stats panel text partially cut off on right edge~~ FIXED
 **Status:** FIXED (v1.0.4)
@@ -87,13 +82,11 @@
 **Status:** FIXED (v1.0.4)
 **Fix:** Light mode chip styles now use stronger color mixing (18% bg, 35% border), added `box-shadow`, and explicit text colors for contrast.
 
-### BUG-017: Electron app installed to OneDrive Desktop by default
-**Severity:** Low — causes BUG-007
-**Workaround:** Choose a non-OneDrive install directory during installation.
+### ~~BUG-017: Electron app installed to OneDrive Desktop by default~~ MITIGATED
+**Status:** MITIGATED — NSIS installer allows choosing install directory (`allowToChangeInstallationDirectory: true`). BUG-007 auto-copy handles OneDrive paths when detected.
 
-### BUG-018: Settings.json persists across uninstall/reinstall
-**Severity:** Low — causes BUG-004
-**Workaround:** Delete `~/.ghostlink/settings.json` before reinstalling.
+### ~~BUG-018: Settings.json persists across uninstall/reinstall~~ FIXED (v1.2.0)
+**Status:** FIXED — Custom NSIS uninstaller script (`assets/uninstaller.nsh`) deletes `settings.json` on explicit uninstall. Preserves settings during silent auto-update upgrades.
 
 ---
 
@@ -115,18 +108,17 @@
 **Fix:** The trigger text injected via tmux was `mcp read #general` which confused Claude into looking for an external MCP command. Replaced with natural language: `"You were @mentioned in #general on GhostLink. Use the chat_read tool with channel="general" to read recent messages, then use chat_send to respond."` This tells Claude to use its available MCP tools instead of interpreting "mcp read" as a literal command.
 **Future feature:** Settings > Integrations panel for external chat bridges (Discord, Slack, Telegram) — bot token input, channel mapping, on/off toggle. Off by default.
 
-### BUG-028: Many config/setup tasks require terminal access — should all be in UI
-**Severity:** High — breaks the "no terminal needed" promise of the desktop app
-**Where:** Various — agent config, integrations, troubleshooting
-**Examples of things that currently require terminal:**
-- Editing `config.toml` for agent commands, ports, or custom args
-- Installing agent CLIs (npm/pip commands)
-- Removing ghost "Offline" agents from persistent list (editing settings.json)
-- Viewing agent tmux output for debugging (Terminal Peek exists but limited)
-- Setting environment variables for API keys
-- Running `wrapper.py` manually for advanced agent configs
-**User expectation:** If the desktop UI is installed, the user should never need to open a terminal. All customization, personalization, agent management, API key entry, integration setup, and troubleshooting should be doable entirely from the UI.
-**Status:** Open
+### ~~BUG-028: Many config/setup tasks require terminal access~~ MOSTLY RESOLVED (v2.4.0+)
+**Status:** MOSTLY RESOLVED — The following are now in the UI:
+- API key entry: Settings > AI > Providers panel (all 13 providers)
+- Agent management: AddAgentModal for spawn, AgentInfoPanel for config/kill/pause
+- Agent config: label, color, role, workspace, model, permissions via UI
+- Agent removal: Kill button in agent chip context menu
+- Terminal Peek: Live tmux output viewer for debugging
+- Bridge config: Settings > Integrations tab
+- Theme/appearance: Settings > Appearance tab
+- Port/server config: Settings > Advanced tab
+**Remaining terminal-only items:** Installing agent CLIs (npm/pip), advanced config.toml editing. These require system-level package management that the UI can't safely execute.
 
 ### BUG-027: Thinking glow not showing — FIXED (v1.7.0)
 **Fix:** Reduced startup delay from 15s to 5s. Heartbeat now checks `_was_triggered` flag from @mentions to activate thinking immediately. Thinking state now activates both from activity detection and from @mention triggers.
@@ -162,10 +154,11 @@
 **Fix:** CodeBlock.tsx already had optional chaining + textarea fallback. Fixed RemoteSession.tsx to also use optional chaining with textarea fallback for insecure contexts. ChatMessage.tsx already uses optional chaining with `.catch()`.
 
 ### BUG-046: OAuth sign-in not available — all providers require manual API key entry
-**Severity:** High — UX friction
+**Severity:** Medium — UX friction, but functional via API keys
 **Where:** Settings > AI > Providers panel
-**Root cause:** All 13 providers (Anthropic, OpenAI, Google, xAI, Mistral, DeepSeek, Perplexity, Cohere, OpenRouter, Groq, Together, HuggingFace, Ollama) require manually pasting API keys. There's no OAuth flow for providers that support it (Google, GitHub). Users with subscriptions (Claude Pro, ChatGPT Plus, Gemini Advanced) can't sign in with their accounts — they must separately obtain API keys. Should offer one-click OAuth where the provider supports it.
-**Status:** Open
+**Root cause:** API key entry is fully functional for all 13 providers. OAuth requires registering OAuth apps with each provider's developer console (Google Cloud, GitHub, etc.) and implementing the OAuth2 flow with redirect URIs. This is a feature enhancement requiring external service registration, not a code bug.
+**Note:** 4 providers (Groq, Together, HuggingFace, Ollama) have free tiers that don't need API keys. Gemini CLI is free with 1000/day limit and doesn't need a key.
+**Status:** Future enhancement — requires OAuth app registration per provider
 
 ---
 
@@ -202,9 +195,8 @@
 ### ~~ARCH-002: Synchronous IPC in Electron main process~~ RESOLVED
 **Fix:** All `execSync` replaced with `execAsync`.
 
-### ARCH-003: Desktop app depends on WSL
-**The server startup flow assumes WSL is available on Windows.** On pure Windows without WSL, or macOS/Linux, the server won't start via the desktop app.
-**Future fix:** Detect platform and use appropriate Python launcher (native Python on Windows/macOS/Linux, WSL only when detected).
+### ~~ARCH-003: Desktop app depends on WSL~~ RESOLVED (v3.3.0+)
+**Status:** RESOLVED — server.ts supports BOTH native Python and WSL. The `isWsl()` check only activates WSL mode when `settings.platform === 'wsl'`. Native path (`getPythonPath()`) finds venv or system Python on Windows/macOS/Linux. The wizard detects platform and sets the appropriate mode. Users on native Windows with Python installed can run without WSL.
 
 ---
 
@@ -319,3 +311,53 @@
 ### ~~BUG-072: 50 modified files uncommitted on master~~ FIXED (v3.3.0)
 **Status:** FIXED
 **Fix:** All 64 files (50 modified + 14 new) committed and pushed as v3.3.0.
+
+---
+
+## HOURLY HEALTH AUDIT — 2026-03-24T12:09 UTC
+
+**Audit type:** Automated scheduled audit (no code edits — issues logged only)
+**Test suite:** 56/56 tests passed (all green)
+**TypeScript:** Compiles clean (0 errors from `tsc -b`)
+**Frontend build:** Succeeds (vite build produces 868KB JS + 102KB CSS). Chunk size warning only — not an error.
+**Frontend vulnerabilities:** 0 (npm audit clean)
+**Git:** On `master`, up to date with `origin/master`. Clean working tree (only 2 untracked: `config.toml.bak`, `ghostlink-frontend-audit.docx`).
+**Python deps:** Install cleanly. No conflicts in project dependencies.
+**Backend server startup:** **FAILS** — critical regression (see BUG-073).
+
+### ~~BUG-073: Server startup crashes — PermissionError in empty DB recovery~~ FIXED (v3.3.2)
+**Status:** FIXED
+**Fix:** Removed `db_file.unlink()` call. On 0-byte DB with no backup, SQLite initializes the empty file as a fresh database during `connect()` + `executescript()`. No unlink needed.
+
+### ~~BUG-074: `_save_settings()` duplicated in 3 locations~~ FIXED (v3.3.2)
+**Status:** FIXED
+**Fix:** Canonical `save_settings()` added to `app_helpers.py`. Route modules `channels.py` and `misc.py` now delegate to it. Single source of truth.
+
+### ~~BUG-075: Duplicate `_VALID_AGENT_NAME` regex~~ FIXED (v3.3.2)
+**Status:** FIXED
+**Fix:** `routes/agents.py` now imports `_VALID_AGENT_NAME` from `deps.py` instead of redeclaring it.
+
+### ~~BUG-076: Hardcoded port fallback in BridgeManager~~ FIXED (v3.3.2)
+**Status:** FIXED
+**Fix:** `BridgeManager()` constructor in `app.py` now passes `server_port=PORT` from config instead of relying on default 8300.
+
+### BUG-077: Silent exception swallowing in multiple backend modules
+**Severity:** Low — observability gap across 23+ bare `except: pass` blocks
+**Status:** Acknowledged — many are intentional (migration checks, optional features). Would require per-site review.
+
+### BUG-078: Frontend build fails on existing dist/ due to EPERM on unlink
+**Severity:** Low — WSL/FUSE filesystem limitation, not a code bug
+**Workaround:** `vite build --outDir /tmp/dist --emptyOutDir` works.
+**Status:** Not fixable in code — OS limitation
+
+### ~~BUG-079: Usage log silently drops entries~~ FIXED (v3.3.2)
+**Status:** FIXED
+**Fix:** Added `log.info()` message when usage log is trimmed.
+
+### ~~BUG-080: FTS5 search fallback has no logging~~ FIXED (v3.3.2)
+**Status:** FIXED
+**Fix:** Added `log.warning()` with exception details when FTS5 fails and LIKE fallback is used.
+
+### BUG-081: `_pending_spawns` brief race window
+**Severity:** Low — theoretical edge case, never observed in practice
+**Status:** Acknowledged — lock protects the critical section, race window is sub-millisecond

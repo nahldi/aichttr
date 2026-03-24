@@ -67,9 +67,8 @@ class _OGParser(_html_parser.HTMLParser):
 
 
 def _save_settings():
-    settings_path = deps.DATA_DIR / "settings.json"
-    with open(settings_path, "w") as f:
-        json.dump(deps._settings, f, indent=2)
+    from app_helpers import save_settings
+    save_settings()
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────

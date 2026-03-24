@@ -1,11 +1,13 @@
 """Search, activity, and logs routes."""
 from __future__ import annotations
 
+import logging
 import deps
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 @router.get("/api/search")
@@ -30,8 +32,9 @@ async def search_messages(q: str = "", channel: str = "", sender: str = "", limi
         fts_params.append(limit)
         cursor = await deps.store._db.execute(fts_query, fts_params)
         rows = await cursor.fetchall()
-    except Exception:
+    except Exception as fts_err:
         # FTS5 not available or query syntax error — fall back to LIKE
+        log.warning("FTS5 search failed, falling back to LIKE: %s", fts_err)
         query = "SELECT * FROM messages WHERE text LIKE ? COLLATE NOCASE"
         params: list = [f"%{q}%"]
         if channel:
@@ -49,7 +52,7 @@ async def search_messages(q: str = "", channel: str = "", sender: str = "", limi
 
 @router.get("/api/activity")
 async def get_activity(limit: int = 50):
-    return {"events": deps._activity_log[-limit:]}
+    return {"events": list(deps._activity_log)[-limit:]}
 
 
 @router.get("/api/logs")

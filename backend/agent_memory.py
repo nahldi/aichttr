@@ -124,15 +124,22 @@ class AgentMemory:
 
 # ── Module-level helpers for multi-agent use ─────────────────────
 
-_memory_cache: dict[str, AgentMemory] = {}
+_memory_cache: dict[str, tuple[AgentMemory, float]] = {}
+_MEMORY_CACHE_TTL = 300.0  # 5 minutes
 
 
 def get_agent_memory(data_dir: Path, agent_name: str) -> AgentMemory:
-    """Get or create an AgentMemory instance for the given agent."""
+    """Get or create an AgentMemory instance for the given agent (cached with TTL)."""
+    import time as _time
     cache_key = f"{data_dir}:{agent_name}"
-    if cache_key not in _memory_cache:
-        _memory_cache[cache_key] = AgentMemory(data_dir, agent_name)
-    return _memory_cache[cache_key]
+    now = _time.monotonic()
+    if cache_key in _memory_cache:
+        mem, created = _memory_cache[cache_key]
+        if now - created < _MEMORY_CACHE_TTL:
+            return mem
+    mem = AgentMemory(data_dir, agent_name)
+    _memory_cache[cache_key] = (mem, now)
+    return mem
 
 
 # ── Soul (identity/personality) helpers ──────────────────────────

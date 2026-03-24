@@ -270,7 +270,7 @@ class ServerManager {
     }
 
     // Check if ALL required deps are installed
-    const requiredModules = ['fastapi', 'uvicorn', 'aiosqlite', 'mcp', 'tomli', 'websockets'];
+    const requiredModules = ['fastapi', 'uvicorn', 'aiosqlite', 'mcp', 'tomli', 'websockets', 'cryptography'];
     let depsOk = true;
     for (const mod of requiredModules) {
       try {
@@ -303,14 +303,14 @@ class ServerManager {
         log.info('Created venv at %s/.venv', wslBackend);
 
         // Install deps into the venv
-        const pipCmd = `source '${wslBackend}/.venv/bin/activate' && pip install fastapi uvicorn aiosqlite python-multipart mcp tomli websockets 2>&1`;
+        const pipCmd = `source '${wslBackend}/.venv/bin/activate' && pip install fastapi uvicorn aiosqlite python-multipart mcp tomli websockets cryptography 2>&1`;
         execSync(`wsl bash -lc "${pipCmd}"`, { stdio: 'pipe', timeout: 120_000 });
         log.info('WSL Python deps installed into venv');
       } catch (pipErr: any) {
         log.error('pip install failed in WSL:', pipErr.message);
         // Try with --break-system-packages as last resort
         try {
-          execSync('wsl bash -lc "pip3 install --break-system-packages fastapi uvicorn aiosqlite python-multipart mcp tomli websockets 2>&1"', { stdio: 'pipe', timeout: 120_000 });
+          execSync('wsl bash -lc "pip3 install --break-system-packages fastapi uvicorn aiosqlite python-multipart mcp tomli websockets cryptography 2>&1"', { stdio: 'pipe', timeout: 120_000 });
           log.info('WSL Python deps installed (system-wide with --break-system-packages)');
         } catch (fallbackErr: any) {
           log.error('All pip install methods failed:', fallbackErr.message);

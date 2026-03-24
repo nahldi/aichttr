@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 router = APIRouter()
 log = logging.getLogger(__name__)
 
-_VALID_AGENT_NAME = re.compile(r'^[a-zA-Z0-9_-]{1,50}$')
+_VALID_AGENT_NAME = deps._VALID_AGENT_NAME
 
 
 def _drain_pipe(pipe, agent_base: str, buf: list | None = None) -> None:
