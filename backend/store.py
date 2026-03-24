@@ -66,11 +66,23 @@ class MessageStore:
         self._on_message: list[MsgCallback] = []
 
     async def init(self):
-        # v3.3.2: Recover from empty/corrupt DB files before connecting
+        # v3.3.3: Recover from empty/corrupt DB files before connecting
         db_file = Path(self.db_path)
         if db_file.exists() and db_file.stat().st_size == 0:
             import logging as _log
             _log.getLogger(__name__).warning("Database file is empty (0 bytes): %s", self.db_path)
+
+            # BUG-082: Remove stale journal/WAL/SHM files that would cause
+            # "disk I/O error" when SQLite tries to replay them on a 0-byte DB
+            for suffix in ("-journal", "-wal", "-shm"):
+                stale = Path(self.db_path + suffix)
+                if stale.exists():
+                    try:
+                        stale.unlink()
+                        _log.getLogger(__name__).info("Removed stale %s file: %s", suffix, stale)
+                    except OSError as e:
+                        _log.getLogger(__name__).warning("Could not remove %s: %s", stale, e)
+
             bak = db_file.with_suffix(".db.bak")
             if bak.exists() and bak.stat().st_size > 0:
                 import shutil
@@ -112,6 +124,21 @@ class MessageStore:
     async def close(self):
         if self._db:
             await self._db.close()
+            # BUG-083: Create backup on clean shutdown
+            self._create_backup()
+
+    def _create_backup(self):
+        """Create a .bak copy of the database for crash recovery."""
+        import shutil
+        import logging as _log
+        db_file = Path(self.db_path)
+        if db_file.exists() and db_file.stat().st_size > 0:
+            bak = db_file.with_suffix(".db.bak")
+            try:
+                shutil.copy2(str(db_file), str(bak))
+                _log.getLogger(__name__).info("Database backup created: %s", bak)
+            except OSError as e:
+                _log.getLogger(__name__).warning("Failed to create backup: %s", e)
 
     def on_message(self, cb: MsgCallback):
         self._on_message.append(cb)

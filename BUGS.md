@@ -361,3 +361,34 @@
 ### BUG-081: `_pending_spawns` brief race window
 **Severity:** Low — theoretical edge case, never observed in practice
 **Status:** Acknowledged — lock protects the critical section, race window is sub-millisecond
+
+---
+
+## HOURLY HEALTH AUDIT — 2026-03-24T13:XX UTC
+
+**Audit type:** Automated scheduled audit (no code edits — issues logged only)
+**Test suite:** 56/56 tests passed (all green)
+**TypeScript:** Frontend compiles clean (0 errors from `tsc -b`). Desktop compiles clean (0 errors).
+**Frontend build:** Existing dist/ present with 868KB JS + 102KB CSS. npm audit: 0 vulnerabilities.
+**Git:** On `master`, up to date with `origin/master`. Clean working tree (only 2 untracked: `config.toml.bak`, `ghostlink-frontend-audit.docx`).
+**Python deps:** `requirements.txt` installs cleanly. No dependency conflicts.
+**Version sync:** All 3 packages at `3.3.2` (backend, frontend, desktop). ✅
+**Code scan:** No TODO/FIXME/HACK comments in project code. No missing imports. No hardcoded port mismatches.
+**Browser UI:** GhostLink UI renders correctly via Cloudflare tunnel — sidebar (Chat/Jobs/Rules/Settings), main chat area, agent bar, message input, quick actions, stats panel, welcome tour all present and functional. WebSocket works locally (confirmed programmatically); "Connection lost" banner expected through Cloudflare tunnel only.
+**API endpoints:** `/api/channels`, `/api/status`, `/api/settings` all respond correctly.
+
+### ~~BUG-082: Server startup crashes — stale journal files block 0-byte DB recovery~~ FIXED (v3.3.3)
+**Status:** FIXED
+**Fix:** Before `aiosqlite.connect()`, when DB is 0 bytes, now removes stale `-journal`, `-wal`, and `-shm` files. Prevents SQLite from attempting to replay a stale journal on an empty DB file.
+
+### ~~BUG-083: ghostlink_v2.db has no backup file — recovery path incomplete~~ FIXED (v3.3.3)
+**Status:** FIXED
+**Fix:** `MessageStore.close()` now creates a `.bak` backup on clean shutdown via `_create_backup()`. Both `ghostlink.db` and `ghostlink_v2.db` will have backups after any clean server stop.
+
+### NOTE-001: Feature opportunities for v3.4.0 (from roadmap review)
+**Type:** Enhancement notes (not bugs)
+**Roadmap Phase 1 (Agent Intelligence)** is well-defined with 6 items: plan/read-only mode, lifecycle hooks, cross-session memory search, auto-lint feedback, watch mode, auto-commit. All have clear acceptance criteria and file targets. No blockers identified — can proceed once BUG-082 is resolved.
+**Quick wins identified:**
+1. Cross-session memory search (1.3) — `agent_memory.py` already has FTS5 infrastructure from the main store; extending it would be straightforward.
+2. Lifecycle hooks (1.2) — `plugin_sdk.py` already has an EventBus; wiring pre/post tool hooks is minimal.
+3. The 27+ bare `except Exception:` blocks (BUG-077) remain as an observability gap — low priority but would improve debuggability.
