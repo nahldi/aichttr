@@ -165,6 +165,15 @@ function ChatFeed() {
     prevMsgCount.current = channelMessages.length;
   }, [activeChannel]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const listVariants = {
+    hidden: {},
+    visible: { transition: { staggerChildren: 0.025, delayChildren: 0 } },
+  };
+  const itemVariants = {
+    hidden:  { opacity: 0, y: 10, scale: 0.98 },
+    visible: { opacity: 1, y: 0,  scale: 1, transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] } },
+  };
+
   return (
     <div ref={feedRef} onScroll={handleScroll} onWheel={handleScroll} data-chat-feed className="flex-1 overflow-y-auto overflow-x-hidden py-3 relative min-h-0">
       <div className="px-4 lg:px-6">
@@ -185,7 +194,19 @@ function ChatFeed() {
           ))}
         </>
       ) : (
-        channelMessages.map((msg) => <ChatMessage key={msg.id} message={msg} />)
+        // v2.9.0: Stagger on initial channel load only — key resets animation on channel switch
+        <motion.div
+          key={activeChannel}
+          variants={listVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          {channelMessages.map((msg) => (
+            <motion.div key={msg.id} variants={itemVariants}>
+              <ChatMessage message={msg} />
+            </motion.div>
+          ))}
+        </motion.div>
       )}
       <ThinkingBubbles />
       </div>

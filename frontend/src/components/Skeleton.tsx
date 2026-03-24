@@ -1,8 +1,7 @@
 /**
  * v2.4.0: Loading skeleton components for premium feel.
- * Replace spinners with these for a smoother loading experience.
+ * v2.9.0: Replaced opacity pulse with CSS gradient shimmer.
  */
-import { motion } from 'framer-motion';
 
 interface SkeletonProps {
   className?: string;
@@ -12,11 +11,9 @@ interface SkeletonProps {
 
 export function Skeleton({ className = '', width = '100%', height = '1rem' }: SkeletonProps) {
   return (
-    <motion.div
-      className={`rounded bg-outline-variant/15 ${className}`}
+    <div
+      className={`rounded skeleton-shimmer ${className}`}
       style={{ width, height }}
-      animate={{ opacity: [0.3, 0.6, 0.3] }}
-      transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
     />
   );
 }
