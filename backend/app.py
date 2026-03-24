@@ -144,7 +144,8 @@ _ws_token = secrets.token_urlsafe(32)
 # v2.4.0: Shared HTTP session for connection pooling
 _http_session: "aiohttp.ClientSession | None" = None
 
-# v2.4.0: Usage tracking
+# v2.4.0: Usage tracking (v2.5.0: capped at 10k entries to prevent memory leak)
+_USAGE_LOG_MAX = 10000
 _usage_log: list[dict] = []
 
 def _estimate_cost(provider: str, model: str, input_tok: int, output_tok: int) -> float:
@@ -164,7 +165,10 @@ def _estimate_cost(provider: str, model: str, input_tok: int, output_tok: int) -
     return round((input_tok * rates["input"] + output_tok * rates["output"]) / 1_000_000, 6)
 
 async def _track_usage(agent: str, provider: str, model: str, input_tokens: int, output_tokens: int):
-    """Record token usage for cost tracking."""
+    """Record token usage for cost tracking. v2.5.0: capped to prevent memory leak."""
+    if len(_usage_log) >= _USAGE_LOG_MAX:
+        # Trim oldest 20% when at capacity
+        del _usage_log[:_USAGE_LOG_MAX // 5]
     _usage_log.append({
         "ts": datetime.utcnow().isoformat(),
         "agent": agent,
@@ -393,7 +397,7 @@ async def lifespan(_app: FastAPI):
     exec_policy = ExecPolicy(DATA_DIR)
     audit_log = AuditLog(DATA_DIR)
     data_manager = DataManager(DATA_DIR, store=store)
-    audit_log.log("server_start", {"version": "2.5.0", "port": PORT})
+    audit_log.log("server_start", {"version": "2.5.1", "port": PORT})
 
     # Broadcast new messages via WebSocket
     async def on_msg(msg: dict):

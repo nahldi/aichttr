@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -109,10 +109,13 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const isSelected = selectedIds.has(message.id);
   const agent = agents.find((a) => a.name === message.sender);
   const agentNames = new Set(agents.map(a => a.name));
-  // Build color map for @mention highlighting (avoid module-level mutation)
-  const colorMap: Record<string, string> = {};
-  agents.forEach(a => { colorMap[a.name] = a.color; colorMap[a.base] = a.color; });
-  _agentColorMap = colorMap;
+  // v2.5.1: Build color map via useMemo instead of module-level mutation (React safety)
+  const colorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    agents.forEach(a => { map[a.name] = a.color; map[a.base] = a.color; });
+    _agentColorMap = map; // Still needed for renderWithMentions helper
+    return map;
+  }, [agents]);
   const isUser = message.sender === settings.username || message.sender === 'You' || (!agentNames.has(message.sender) && message.type === 'chat');
   const isSystem = message.type === 'system' || message.type === 'join';
 

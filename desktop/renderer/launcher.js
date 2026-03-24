@@ -9,12 +9,9 @@
  *   - Window controls (minimize / close)
  */
 
-// IPC bridge — nodeIntegration is enabled for wizard/launcher windows
-const { ipcRenderer } = require('electron');
-const api = {
-  invoke: (ch, ...args) => ipcRenderer.invoke(ch, ...args),
-  on: (ch, cb) => { ipcRenderer.on(ch, (_e, ...args) => cb(...args)); return () => ipcRenderer.removeAllListeners(ch); },
-};
+// v2.5.0: IPC bridge via contextBridge preload (secure — no nodeIntegration)
+// window.api is exposed by preload.ts with channel allowlisting
+const api = window.api;
 // IPC ready
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────

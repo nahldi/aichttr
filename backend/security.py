@@ -358,7 +358,7 @@ class DataManager:
                     pass
 
             zf.writestr("manifest.json", json.dumps({
-                "exported_at": time.time(), "version": "2.5.0", "format": "ghostlink-export-v1",
+                "exported_at": time.time(), "version": "2.5.1", "format": "ghostlink-export-v1",
             }, indent=2))
 
         return buf.getvalue()

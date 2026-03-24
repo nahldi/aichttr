@@ -1,5 +1,20 @@
 # GhostLink Changelog
 
+## v2.5.1 — 2026-03-23
+
+### Security
+- **Electron launcher hardened** (`desktop/main/launcher.ts`): Disabled `nodeIntegration`, enabled `contextIsolation`, and wired up the existing preload script. The launcher renderer now uses `window.api` (exposed via contextBridge with channel allowlisting) instead of direct `require('electron')`. Closes the XSS-to-RCE vector in the launcher window.
+
+### Stability
+- **Usage log memory cap** (`backend/app.py`): `_usage_log` is now capped at 10,000 entries. When full, the oldest 20% is trimmed. Prevents unbounded memory growth over long sessions.
+- **React render mutation fix** (`frontend/src/components/ChatMessage.tsx`): Agent color map building moved from direct module-level mutation during render to `useMemo`. Eliminates a potential React concurrent mode race condition.
+- **Timer cleanup on unmount** (`frontend/src/components/AddAgentModal.tsx`): The spawn status fetch timer is now stored in a ref and cleared on component unmount. Prevents "setState on unmounted component" warnings.
+
+### Desktop
+- **Version bump**: `2.5.0` → `2.5.1`
+
+---
+
 ## v2.5.0 — 2026-03-23
 
 ### Agent Identity (Critical Fix)

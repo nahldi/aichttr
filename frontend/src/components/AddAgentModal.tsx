@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { useChatStore } from '../stores/chatStore';
 import { AgentIcon } from './AgentIcon';
@@ -91,6 +91,14 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
   const [selectedModel, setSelectedModel] = useState(0);
   const [permPreset, setPermPreset] = useState(0);
   const [spawning, setSpawning] = useState(false);
+  const spawnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // v2.5.1: Cleanup spawn timer on unmount to prevent state update on unmounted component
+  useEffect(() => {
+    return () => {
+      if (spawnTimerRef.current) clearTimeout(spawnTimerRef.current);
+    };
+  }, []);
   const [error, setError] = useState('');
   const [pickingFolder, setPickingFolder] = useState(false);
   const [persistent, setPersistent] = useState(true);
@@ -162,7 +170,8 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
       }
 
       await api.spawnAgent(selected, finalLabel, finalCwd, finalArgs);
-      setTimeout(async () => {
+      // v2.5.1: Use ref for cleanup on unmount
+      spawnTimerRef.current = setTimeout(async () => {
         try {
           const r = await api.getStatus();
           setAgents(r.agents);
