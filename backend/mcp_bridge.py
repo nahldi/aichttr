@@ -1539,6 +1539,59 @@ def code_execute(code: str, language: str = "python") -> str:
         return f"Code execution failed: {str(e)[:300]}"
 
 
+# ── Delegation ─────────────────────────────────────────────────────
+
+def delegate(sender: str, agent: str, task: str, channel: str = "general") -> str:
+    """Delegate a task to another agent and trigger them to work on it.
+
+    Creates a job proposal, posts the task as a message mentioning the target
+    agent, and triggers their queue. The target agent will see the task and
+    respond in the channel.
+
+    Args:
+        sender: Your agent name (the delegator)
+        agent: Target agent name to delegate to (e.g., "codex-1")
+        task: Description of what you want the agent to do
+        channel: Channel to post the delegation in (default: general)
+
+    Returns:
+        Confirmation that the task was delegated
+    """
+    identity, err = _resolve_identity(sender, None, field_name="sender", required=True)
+    if err:
+        return err
+
+    if not _registry:
+        return "Error: Agent registry not available"
+
+    # Verify target agent exists
+    target = _registry.get(agent)
+    if not target:
+        available = [inst.name for inst in _registry.get_all()]
+        return f"Error: Agent '{agent}' not found. Available: {', '.join(available) or 'none'}"
+
+    # Post the delegation as a message with @mention
+    msg_text = f"@{agent} [Delegated by {identity}]: {task}"
+    msg = _run_async(_store.add(identity, msg_text, "chat", channel))
+
+    # Trigger the target agent's queue
+    from app_helpers import route_mentions
+    route_mentions(identity, msg_text, channel)
+
+    # Create a job to track the delegation
+    try:
+        _run_async(_job_store.create(
+            title=f"Delegated: {task[:80]}",
+            channel=channel,
+            created_by=identity,
+            assignee=agent,
+        ))
+    except Exception:
+        pass  # Job creation is optional tracking
+
+    return f"Task delegated to {agent} in #{channel}. They will see: {task[:200]}"
+
+
 # ── Server setup ────────────────────────────────────────────────────
 
 _ALL_TOOLS = [
@@ -1551,8 +1604,8 @@ _ALL_TOOLS = [
     web_fetch, web_search, browser_snapshot, image_generate,
     # Gemini AI
     gemini_image, gemini_video, text_to_speech, speech_to_text, code_execute,
-    # Agent control
-    set_thinking, sessions_list, sessions_send,
+    # Agent control & delegation
+    set_thinking, sessions_list, sessions_send, delegate,
 ]
 
 MCP_HTTP_PORT = 8200

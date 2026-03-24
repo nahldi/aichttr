@@ -6,12 +6,20 @@ via WebSocket. Shows which files agents create, modify, or delete.
 
 import json
 import os
+import re
 import threading
 import time
 import logging
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+# v3.4.0: Pattern to detect @ghostlink: comments in source files
+_GHOSTLINK_COMMENT_RE = re.compile(
+    r'(?://|#|/\*\*?|\*)\s*@ghostlink:\s*(.+?)(?:\*/)?$',
+    re.MULTILINE
+)
+_processed_comments: set[str] = set()  # hash of file:line:content to avoid re-triggering
 
 _watchers: dict[str, dict] = {}  # path → watcher state
 _changes: list[dict] = []  # recent changes
@@ -66,7 +74,7 @@ def _watch_loop(directory: str, broadcast_fn, interval: float = 3.0):
 
 
 def _record_change(action: str, filepath: str, directory: str):
-    """Record a file change."""
+    """Record a file change and scan for @ghostlink: comments."""
     change = {
         "action": action,
         "file": os.path.basename(filepath),
@@ -78,6 +86,52 @@ def _record_change(action: str, filepath: str, directory: str):
         _changes.append(change)
         if len(_changes) > MAX_CHANGES:
             _changes.pop(0)
+
+    # v3.4.0: Watch mode — scan modified files for @ghostlink: comments
+    if action in ("created", "modified"):
+        _scan_for_ghostlink_comments(filepath)
+
+
+def _scan_for_ghostlink_comments(filepath: str):
+    """Scan a file for @ghostlink: comments and route them as agent messages."""
+    try:
+        p = Path(filepath)
+        if not p.exists() or p.stat().st_size > 500_000:  # skip large files
+            return
+        if p.suffix not in ('.py', '.ts', '.tsx', '.js', '.jsx', '.css', '.html', '.rs', '.go', '.java', '.c', '.cpp', '.h', '.rb', '.sh'):
+            return
+        content = p.read_text('utf-8', errors='replace')
+        for match in _GHOSTLINK_COMMENT_RE.finditer(content):
+            instruction = match.group(1).strip()
+            # Create a unique key to avoid re-triggering the same comment
+            line_num = content[:match.start()].count('\n') + 1
+            comment_key = f"{filepath}:{line_num}:{instruction}"
+            if comment_key in _processed_comments:
+                continue
+            _processed_comments.add(comment_key)
+            # Route to agents via the message queue
+            log.info("Watch mode: found @ghostlink comment in %s:%d — %s", filepath, line_num, instruction)
+            _route_comment_to_agent(filepath, line_num, instruction)
+    except Exception as e:
+        log.debug("Watch mode scan error for %s: %s", filepath, e)
+
+
+def _route_comment_to_agent(filepath: str, line_num: int, instruction: str):
+    """Route a @ghostlink: comment as a message to the appropriate agent."""
+    try:
+        import deps
+        if not deps.store:
+            return
+        filename = os.path.basename(filepath)
+        text = f"[Watch Mode] `{filename}:{line_num}` — {instruction}"
+        import asyncio
+        from mcp_bridge import _run_async
+        _run_async(deps.store.add("system", text, "system", "general"))
+        # Trigger routing via @mention if instruction contains @agent
+        from app_helpers import route_mentions
+        route_mentions("system", text, "general")
+    except Exception as e:
+        log.debug("Watch mode route error: %s", e)
 
 
 def setup(app, store=None, registry=None, mcp_bridge=None):
