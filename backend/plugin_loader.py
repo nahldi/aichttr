@@ -94,7 +94,8 @@ def list_plugins() -> list[dict]:
         plugin_file = PLUGINS_DIR / f"{name}.py"
         meta = manifest.get("plugins", {}).get(name, {})
         try:
-            module = importlib.import_module(f"plugins.{name}")
+            mod_key = f"plugins.{name}"
+            module = sys.modules.get(mod_key) or importlib.import_module(mod_key)
             doc = getattr(module, "__doc__", "") or ""
             version = getattr(module, "__version__", meta.get("version", "1.0.0"))
             has_setup = hasattr(module, "setup")

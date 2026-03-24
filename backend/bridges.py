@@ -24,11 +24,12 @@ log = logging.getLogger(__name__)
 class BridgeManager:
     """Manages all channel bridge configurations and instances."""
 
-    def __init__(self, data_dir: Path, store=None, registry=None):
+    def __init__(self, data_dir: Path, store=None, registry=None, server_port: int = 8300):
         self._data_dir = data_dir
         self._config_path = data_dir / "bridges.json"
         self._store = store
         self._registry = registry
+        self._server_port = server_port
         self._configs: dict[str, dict] = {}
         self._bridges: dict[str, BaseBridge] = {}
         self._load()
@@ -89,6 +90,7 @@ class BridgeManager:
         if platform in self._bridges:
             self._bridges[platform].stop()
 
+        cfg.setdefault("server_port", self._server_port)
         bridge = _create_bridge(platform, cfg, self._store, self._registry, self._data_dir)
         if not bridge:
             return {"ok": False, "error": f"unknown platform: {platform}"}
@@ -113,7 +115,7 @@ class BridgeManager:
     def start_all_enabled(self):
         """Start all enabled bridges on server startup."""
         for platform, cfg in self._configs.items():
-            if cfg.get("enabled") and cfg.get("token"):
+            if cfg.get("enabled") and (cfg.get("token") or cfg.get("url")):
                 try:
                     self.start_bridge(platform)
                 except Exception as e:
@@ -213,10 +215,10 @@ class DiscordBridge(BaseBridge):
         if not self._token:
             raise ValueError("Discord bot token required")
         self._stop_event.clear()
-        self._connected = True
+        self._connected = False  # Verified after first successful API call
         self._thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._thread.start()
-        log.info("Discord bridge started (polling mode)")
+        log.info("Discord bridge starting (polling mode)")
 
     def stop(self):
         self._stop_event.set()
@@ -244,6 +246,15 @@ class DiscordBridge(BaseBridge):
 
     def _poll_loop(self):
         """Poll Discord channels for new messages."""
+        # Verify token on first iteration
+        if not self._connected:
+            me = self._discord_request("GET", "/users/@me")
+            if me and isinstance(me, dict) and me.get("id"):
+                self._connected = True
+                log.info("Discord bridge connected (bot: %s)", me.get("username", "?"))
+            else:
+                log.error("Discord token verification failed — bridge not connected")
+                return  # Don't poll with bad token
         while not self._stop_event.is_set():
             try:
                 channel_map = self._config.get("channel_map", {})
@@ -537,8 +548,8 @@ class WebhookBridge(BaseBridge):
 
 def _create_bridge(platform: str, config: dict, store, registry, data_dir: Path) -> BaseBridge | None:
     """Create a bridge instance for the given platform."""
-    # Inject server port for inbound posting
-    config.setdefault("server_port", 8300)
+    # Inject server port for inbound posting (passed from BridgeManager)
+    # config["server_port"] should already be set by the caller
     bridges = {
         "discord": DiscordBridge,
         "telegram": TelegramBridge,

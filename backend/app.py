@@ -1,5 +1,7 @@
 """GhostLink — FastAPI backend with WebSocket hub."""
 
+__version__ = "2.6.0"
+
 from __future__ import annotations
 
 import json
@@ -1111,6 +1113,7 @@ async def deregister_agent(name: str):
     ok = registry.deregister(name)
     if ok:
         mcp_bridge.cleanup_agent(name)
+        _thinking_buffers.pop(name, None)
         await broadcast("status", {"agents": _get_full_agent_list()})
     return {"ok": ok}
 
@@ -1491,7 +1494,7 @@ async def shutdown_server():
         await asyncio.sleep(0.5)
         os.kill(os.getpid(), signal.SIGTERM)
 
-    asyncio.get_event_loop().create_task(_do_shutdown())
+    asyncio.get_running_loop().create_task(_do_shutdown())
     return {"ok": True, "message": "Server shutting down"}
 
 
@@ -2010,24 +2013,7 @@ async def get_server_config():
     }
 
 
-# ── Usage tracking ───────────────────────────────────────────────────
-
-_usage: dict[str, int] = {}  # agent -> token count
-
-@app.get("/api/usage")
-async def get_usage():
-    total = sum(_usage.values())
-    # Rough cost estimate: $3 per 1M tokens average
-    return {"total_tokens": total, "by_agent": dict(_usage), "estimated_cost": (total / 1_000_000) * 3}
-
-
-@app.post("/api/usage")
-async def report_usage(request: Request):
-    body = await request.json()
-    agent = body.get("agent", "unknown")
-    tokens = body.get("tokens", 0)
-    _usage[agent] = _usage.get(agent, 0) + tokens
-    return {"ok": True, "agent": agent, "total": _usage[agent]}
+# ── Usage tracking (legacy endpoint removed — see /api/usage at bottom) ──
 
 
 # ── URL Preview (OpenGraph) ──────────────────────────────────────────

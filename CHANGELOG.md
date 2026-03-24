@@ -1,5 +1,22 @@
 # GhostLink Changelog
 
+## v2.6.0 — 2026-03-24
+
+### Bug Fixes
+- **Deduplicated /api/usage** (`backend/app.py`): Removed legacy `/api/usage` GET+POST endpoints (lines ~2015-2030) that wrote to an orphaned `_usage` dict. The v2.4.0 version using `_usage_log` is now the sole endpoint.
+- **Thinking buffer cleanup** (`backend/app.py`): `_thinking_buffers` now cleaned on agent deregister, preventing memory leak from accumulated thinking state of disconnected agents.
+- **Discord token verification** (`backend/bridges.py`): Discord bridge no longer marks `connected=True` before verifying the bot token. Token is validated via `/users/@me` on first poll.
+- **Slack bridge auto-start** (`backend/bridges.py`): `start_all_enabled()` now checks for `url` (webhook) in addition to `token`, so Slack bridges auto-start correctly.
+- **Bridge port configuration** (`backend/bridges.py`): `BridgeManager` now accepts `server_port` parameter, injected into bridge configs. Removes hardcoded 8300 fallback.
+- **Plugin loader optimization** (`backend/plugin_loader.py`): `list_plugins()` now checks `sys.modules` before calling `importlib.import_module`, avoiding unnecessary reimport overhead.
+- **Deprecated asyncio fix** (`backend/app.py`): Replaced `asyncio.get_event_loop()` with `asyncio.get_running_loop()` for Python 3.12+ compatibility.
+- **Dynamic version** (`backend/app.py`): Added `__version__ = "2.6.0"` at module level for programmatic version access.
+
+### Desktop
+- **Version bump**: `2.5.7` → `2.6.0`
+
+---
+
 ## v2.5.2 — 2026-03-24
 
 ### Security
