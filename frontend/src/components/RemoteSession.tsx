@@ -1,58 +1,88 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
+import QRCodeLib from 'qrcode';
 
 function QRCode({ url, onClose }: { url: string; onClose: () => void }) {
-  // Generate QR code locally via canvas — no external API call, URL stays private
   const [qrDataUrl, setQrDataUrl] = useState('');
 
   useEffect(() => {
-    // Render URL as a styled code block in canvas (privacy-safe fallback)
-    const canvas = document.createElement('canvas');
-    canvas.width = 200; canvas.height = 200;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, 200, 200);
-      ctx.fillStyle = '#09090f';
-      ctx.font = 'bold 14px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('GhostLink', 100, 30);
-      ctx.font = '10px monospace';
-      // Wrap URL text
-      const words = url.split(/(?=[/.])/);
-      let y = 60;
-      let line = '';
-      for (const word of words) {
-        if ((line + word).length > 24) {
-          ctx.fillText(line, 100, y);
-          y += 14;
-          line = word;
-        } else {
-          line += word;
+    // Generate real scannable QR code locally — URL never sent to external service
+    QRCodeLib.toDataURL(url, {
+      width: 220,
+      margin: 2,
+      color: { dark: '#09090f', light: '#ffffff' },
+      errorCorrectionLevel: 'M',
+    })
+      .then(setQrDataUrl)
+      .catch(() => {
+        // Fallback: simple text display if QR generation fails
+        const canvas = document.createElement('canvas');
+        canvas.width = 220; canvas.height = 220;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, 220, 220);
+          ctx.fillStyle = '#09090f';
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('Scan failed — copy URL', 110, 110);
         }
-      }
-      if (line) ctx.fillText(line, 100, y);
-      ctx.font = '9px monospace';
-      ctx.fillStyle = '#666';
-      ctx.fillText('Open URL on mobile', 100, 185);
-      setQrDataUrl(canvas.toDataURL('image/png'));
-    }
+        setQrDataUrl(canvas.toDataURL('image/png'));
+      });
   }, [url]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="glass-card rounded-2xl p-6 text-center max-w-xs" onClick={e => e.stopPropagation()}>
-        <div className="text-xs font-bold text-on-surface uppercase tracking-wider mb-3">Scan or copy to connect</div>
-        <div className="bg-white rounded-xl p-3 mb-3 inline-block">
-          {qrDataUrl ? <img src={qrDataUrl} alt="Connection Info" width={200} height={200} className="block" /> : <div className="w-[200px] h-[200px]" />}
-        </div>
-        <div className="text-[10px] text-on-surface-variant/50 break-all mb-3">{url}</div>
-        <button
-          onClick={onClose}
-          className="px-4 py-2 rounded-lg text-xs font-medium text-on-surface-variant/60 hover:bg-surface-container-high transition-colors"
-        >
-          Close
+      <div
+        className="relative rounded-2xl p-6 text-center max-w-xs"
+        style={{
+          background: 'linear-gradient(160deg, #141420 0%, #08080f 100%)',
+          border: '1px solid rgba(167, 139, 250, 0.12)',
+          boxShadow: '0 0 60px rgba(124, 58, 237, 0.08)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 p-1 rounded-lg hover:bg-surface-container-high text-on-surface-variant/40 hover:text-on-surface-variant">
+          <span className="material-symbols-outlined text-lg">close</span>
         </button>
+
+        <div className="flex items-center justify-center gap-1.5 mb-4">
+          <span className="material-symbols-outlined text-primary text-[18px]">phone_iphone</span>
+          <span className="text-xs font-bold text-on-surface uppercase tracking-wider">Mobile Access</span>
+        </div>
+
+        <div className="bg-white rounded-xl p-3 mb-4 inline-block shadow-lg">
+          {qrDataUrl ? (
+            <img src={qrDataUrl} alt="QR Code" width={220} height={220} className="block rounded-lg" />
+          ) : (
+            <div className="w-[220px] h-[220px] flex items-center justify-center">
+              <span className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
+
+        <div className="text-[10px] text-on-surface-variant/40 mb-1">Scan with your phone camera</div>
+        <div className="text-[10px] text-on-surface-variant/30 break-all font-mono px-2 py-1.5 rounded-lg bg-surface-container/40 mb-4 select-all">
+          {url}
+        </div>
+
+        <div className="flex gap-2 justify-center">
+          <button
+            onClick={() => {
+              navigator.clipboard?.writeText(url).catch(() => {});
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-on-surface-variant/60 hover:text-on-surface bg-surface-container/50 hover:bg-surface-container-high transition-colors"
+          >
+            <span className="material-symbols-outlined text-[14px]">content_copy</span>
+            Copy URL
+          </button>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-on-surface-variant/40 hover:text-on-surface-variant/60 transition-colors"
+          >
+            Done
+          </button>
+        </div>
       </div>
     </div>
   );
