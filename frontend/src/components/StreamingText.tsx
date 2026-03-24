@@ -3,7 +3,7 @@
  * Only animates on initial render of NEW messages — not historical ones.
  * Uses requestAnimationFrame batching to prevent layout thrashing.
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface StreamingTextProps {
   text: string;
