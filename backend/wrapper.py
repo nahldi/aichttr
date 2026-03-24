@@ -513,6 +513,46 @@ def _approval_watcher(
 
 # ── Queue watcher ───────────────────────────────────────────────────
 
+def _build_trigger_prompt(channel: str, agent_name: str, server_port: int,
+                          *, get_token_fn=None, job_id=None) -> str:
+    """Build a clean, self-contained trigger prompt with recent message context.
+
+    Fetches the last few messages from the channel so the agent has full context
+    and can respond immediately without needing to call chat_read first.
+    """
+    import urllib.request
+
+    # Fetch recent messages for context
+    recent_msgs = []
+    try:
+        url = f"http://127.0.0.1:{server_port}/api/messages?channel={channel}&limit=5"
+        with urllib.request.urlopen(url, timeout=3) as resp:
+            data = json.loads(resp.read())
+            recent_msgs = data.get("messages", [])[-5:]
+    except Exception:
+        pass
+
+    # Build the context
+    parts = [f"[GhostLink #{channel}]"]
+
+    if recent_msgs:
+        parts.append("Recent messages:")
+        for msg in recent_msgs:
+            sender = msg.get("sender", "?")
+            text = msg.get("text", "")[:300]
+            if sender != agent_name:  # Don't show agent's own messages
+                parts.append(f"  {sender}: {text}")
+    else:
+        parts.append("(Use chat_read to see messages)")
+
+    if job_id:
+        parts.append(f"Action: You were assigned job #{job_id}. Complete the task and report back.")
+    else:
+        parts.append(f"Action: Reply to the above using chat_send with channel=\"{channel}\".")
+
+    return " | ".join(parts)
+
+
 def _queue_watcher(get_identity_fn, inject_fn, *, server_port: int = 8300,
                    trigger_flag=None, agent_name: str = "", get_token_fn=None):
     """Poll queue file for @mention triggers, inject MCP read prompts."""
@@ -556,19 +596,11 @@ def _queue_watcher(get_identity_fn, inject_fn, *, server_port: int = 8300,
                         trigger_flag[0] = True
                     time.sleep(0.5)
 
-                    # v3.9.0: Agent-specific MCP-aware trigger prompt
-                    if job_id:
-                        prompt = (
-                            f"You were mentioned in a job on GhostLink. "
-                            f"Use the chat_read tool with channel=\"{channel}\" to read the messages, "
-                            f"then use chat_send to respond in the same channel."
-                        )
-                    else:
-                        prompt = (
-                            f"You were @mentioned in #{channel} on GhostLink. "
-                            f"Use the chat_read tool with channel=\"{channel}\" to read recent messages, "
-                            f"then use chat_send to respond."
-                        )
+                    # v3.9.1: Fetch recent messages and build a clean context prompt
+                    prompt = _build_trigger_prompt(
+                        channel, agent_name, server_port,
+                        get_token_fn=get_token_fn, job_id=job_id,
+                    )
 
                     inject_fn(prompt.replace("\n", " "))
         except Exception as e:
