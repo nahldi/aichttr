@@ -66,6 +66,8 @@ html {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   max-width: 100vw;
+  /* v3.2.0: smooth theme cross-fade */
+  transition: background-color 0.35s ease, color 0.35s ease;
 }
 
 body {
@@ -424,10 +426,11 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
-/* ── Mobile: hide hover-only elements ── */
+/* ── Mobile: hide hover-only action bars (long-press menu handles touch) ── */
 @media (max-width: 1023px) {
-  .group:hover .opacity-0 {
-    opacity: 0 !important;
+  /* Keep opacity-0 elements hidden on touch (no hover state on mobile) */
+  .group .opacity-0 {
+    display: none;
   }
 }
 

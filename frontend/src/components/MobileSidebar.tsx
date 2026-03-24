@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useChatStore } from '../stores/chatStore';
 import { AgentStatusPill } from './AgentStatusPill';
 import { AddAgentModal } from './AddAgentModal';
@@ -15,18 +16,38 @@ export function MobileSidebar() {
   const sidebarPanel = useChatStore((s) => s.sidebarPanel);
   const [showAddAgent, setShowAddAgent] = useState(false);
 
-  if (!mobileMenuOpen) return null;
-
   return (
+    <AnimatePresence>
+      {mobileMenuOpen && (
     <>
       {showAddAgent && <AddAgentModal onClose={() => setShowAddAgent(false)} />}
-      <div className="lg:hidden fixed inset-0 z-[45] flex">
+      <motion.div
+        className="lg:hidden fixed inset-0 z-[45] flex"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+      >
         <div
           className="absolute inset-0 bg-black/70 backdrop-blur-sm"
           onClick={() => setMobileMenuOpen(false)}
         />
 
-        <aside className="relative w-[280px] h-full glass-strong flex flex-col pt-14 z-10 safe-top">
+        <motion.aside
+          className="relative w-[280px] h-full glass-strong flex flex-col pt-14 z-10 safe-top"
+          initial={{ x: -280 }}
+          animate={{ x: 0 }}
+          exit={{ x: -280 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          drag="x"
+          dragConstraints={{ left: -280, right: 0 }}
+          dragElastic={0.1}
+          onDragEnd={(_, info) => {
+            if (info.offset.x < -60 || info.velocity.x < -200) {
+              setMobileMenuOpen(false);
+            }
+          }}
+        >
           {/* Quick nav */}
           <div className="px-3 py-3 flex gap-1 border-b border-outline-variant/8">
             {(['chat', 'jobs', 'rules', 'settings'] as const).map((id) => {
@@ -101,8 +122,10 @@ export function MobileSidebar() {
               ))}
             </div>
           </div>
-        </aside>
-      </div>
+        </motion.aside>
+      </motion.div>
     </>
+      )}
+    </AnimatePresence>
   );
 }

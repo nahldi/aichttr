@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -12,6 +12,8 @@ import { ApprovalCard } from './ApprovalCard';
 import { UrlPreviews } from './UrlPreview';
 import { GenerativeCard } from './GenerativeCard';
 import { AgentIcon } from './AgentIcon';
+import { StreamingText } from './StreamingText';
+import { useLongPress } from '../hooks/useLongPress';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { timeAgo } from '../lib/timeago';
@@ -100,11 +102,21 @@ interface ChatMessageProps { message: Message; }
 
 const COLLAPSE_THRESHOLD = 600; // characters
 
+// v3.2.0: Track which messages have completed streaming to avoid re-streaming
+const _streamedIds = new Set<number>();
+
 export function ChatMessage({ message }: ChatMessageProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [collapsed, setCollapsed] = useState(message.text.length > COLLAPSE_THRESHOLD);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
+  // Streaming: agent messages <3s old that haven't streamed yet
+  const isNewAgentMsg = !_streamedIds.has(message.id)
+    && (Date.now() / 1000 - message.timestamp) < 3;
+  const [streaming, setStreaming] = useState(isNewAgentMsg);
+  // Mobile long-press action menu
+  const [showMobileActions, setShowMobileActions] = useState(false);
+  const longPress = useLongPress(() => setShowMobileActions(true));
   const agents = useChatStore((s) => s.agents);
   const settings = useChatStore((s) => s.settings);
   const setReplyTo = useChatStore((s) => s.setReplyTo);
@@ -268,7 +280,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className={`group flex gap-3 py-1.5 msg-enter ${isSelected ? 'bg-red-500/5' : ''}`}>
+      className={`group flex gap-3 py-1.5 msg-enter ${isSelected ? 'bg-red-500/5' : ''}`}
+      {...longPress}
+    >
       {selectMode && (
         <button onClick={() => toggleSelected(message.id)} className="shrink-0 self-center">
           <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-red-500 border-red-500' : 'border-outline-variant/30 hover:border-red-400'}`}>
@@ -302,7 +316,17 @@ export function ChatMessage({ message }: ChatMessageProps) {
           }}
         >
           <div className="prose">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ code: MdCode, p: MdParagraph }}>{displayText}</ReactMarkdown>
+            {streaming && !isUser ? (
+              <p className="text-sm leading-relaxed">
+                <StreamingText
+                  text={displayText}
+                  wordsPerMs={15}
+                  onComplete={() => { _streamedIds.add(message.id); setStreaming(false); }}
+                />
+              </p>
+            ) : (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ code: MdCode, p: MdParagraph }}>{displayText}</ReactMarkdown>
+            )}
           </div>
           {message.text.length > COLLAPSE_THRESHOLD && (
             <button
@@ -341,6 +365,33 @@ export function ChatMessage({ message }: ChatMessageProps) {
             <AnimatePresence>{showPicker && <ReactionPicker onPick={handleReact} onClose={() => setShowPicker(false)} />}</AnimatePresence>
           </div>
         )}
+
+        {/* Mobile long-press action menu */}
+        <AnimatePresence>
+          {showMobileActions && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 4 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className="lg:hidden absolute left-8 mt-1 z-50 flex gap-1 bg-surface-container-high border border-outline-variant/20 rounded-xl p-1.5 shadow-xl"
+              onClick={() => setShowMobileActions(false)}
+            >
+              {[
+                { icon: 'add_reaction', fn: () => setShowPicker(true) },
+                { icon: 'reply', fn: () => setReplyTo(message) },
+                { icon: 'content_copy', fn: () => navigator.clipboard?.writeText(message.text).catch(() => {}) },
+                { icon: 'push_pin', fn: handlePin },
+                { icon: 'bookmark', fn: handleBookmark },
+                { icon: 'delete', fn: () => { setSelectMode(true); toggleSelected(message.id); } },
+              ].map(({ icon, fn }) => (
+                <button key={icon} onClick={fn} className="p-2 rounded-lg text-on-surface-variant/60 hover:bg-surface-container-highest active:scale-95 transition-all">
+                  <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );

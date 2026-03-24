@@ -25,6 +25,7 @@ import { BulkDeleteBar } from './components/BulkDeleteBar';
 import { SoundManager } from './lib/sounds';
 import { SessionBar } from './components/SessionBar';
 import { SessionLauncher } from './components/SessionLauncher';
+import { ThinkingParticles } from './components/ThinkingParticles';
 
 const CONVERSATION_STARTERS = [
   { text: 'Ask @claude to review your code', icon: 'code' },
@@ -53,10 +54,11 @@ function ThinkingBubbles() {
 
         return (
           <div key={agentName} className="flex gap-3 py-2 msg-enter">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 agent-chip-thinking"
+            <div className="relative w-8 h-8 rounded-full flex items-center justify-center shrink-0 agent-chip-thinking"
               style={{ background: `${color}20`, '--agent-color': color } as React.CSSProperties}>
               <span className="text-xs font-bold" style={{ color }}>{label[0]}</span>
               <div className="agent-spin-border" />
+              <ThinkingParticles color={color} size={32} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
