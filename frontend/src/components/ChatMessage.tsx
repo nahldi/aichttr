@@ -110,11 +110,10 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const agent = agents.find((a) => a.name === message.sender);
   const agentNames = new Set(agents.map(a => a.name));
   // v2.5.1: Build color map via useMemo instead of module-level mutation (React safety)
-  const colorMap = useMemo(() => {
+  useMemo(() => {
     const map: Record<string, string> = {};
     agents.forEach(a => { map[a.name] = a.color; map[a.base] = a.color; });
     _agentColorMap = map; // Still needed for renderWithMentions helper
-    return map;
   }, [agents]);
   const isUser = message.sender === settings.username || message.sender === 'You' || (!agentNames.has(message.sender) && message.type === 'chat');
   const isSystem = message.type === 'system' || message.type === 'join';
@@ -426,3 +425,4 @@ function MdCode(props: any) {
   if (match) return <CodeBlock code={codeStr} language={match[1]} />;
   return <code className={className} {...rest}>{children}</code>;
 }
+
