@@ -131,14 +131,30 @@
 - [x] **Session replay** — playback stored messages with original timing, speed controls
 - [x] **Plugin system** — drop-in Python modules in plugins/ directory, auto-discovered and loaded on startup
 
-### Desktop (remaining)
-- [ ] **macOS .dmg installer**
-- [ ] **Linux .AppImage installer**
-- [ ] **Native Windows support** — without WSL
+### v3.x Additions
+- [x] **StreamingText** — word-by-word reveal animation for new agent messages (15ms/word)
+- [x] **ThinkingParticles** — SVG orbiting particles around agent chip during thinking
+- [x] **Toast stacking** — spring-animated, swipe-to-dismiss, max 5 visible
+- [x] **Mobile long-press** — 500ms hold for action menu on messages
+- [x] **Mobile sidebar gestures** — swipe-from-edge to open/close
+- [x] **Route split** — 3400→612 line app.py, 13 route modules
+- [x] **Integration tests** — 56 tests across core, integration, modules
+- [x] **DB recovery** — auto-restores from .bak on corrupt/empty SQLite files
+- [x] **Deque log rotation** — O(1) log management with maxlen
+- [x] **Memory cache TTL** — 5-minute TTL on agent memory cache
 
-### Skills (remaining)
-- [x] **Skills marketplace** — browse, install, create, export/import custom skills (plugin-based, no external hosting)
-- [x] **Custom skill creator** — create custom skills via API with name, description, category, implementation type (prompt/script/MCP)
+### Desktop
+- [x] **Windows NSIS installer** — one-click with custom install directory
+- [x] **macOS .dmg installer** — drag to Applications
+- [x] **Linux AppImage + .deb** — universal and Debian packages
+- [x] **Native Windows Python support** — no WSL required when Python is installed natively
+- [x] **Auto-updates** — electron-updater with latest.yml from GitHub Releases
+- [x] **System tray** — quick actions, server control
+
+### Skills
+- [x] **Skills marketplace** — browse, install, create, export/import custom skills
+- [x] **Custom skill creator** — API with name, description, category, implementation type
+- [x] **28 built-in skills** — code review, debugging, testing, documentation, etc.
 
 ---
 
@@ -152,5 +168,5 @@
 ### MCP Tools (17 shipped)
 chat_send, chat_read, chat_join, chat_who, chat_channels, chat_rules, chat_progress, chat_propose_job, chat_react, chat_claim, memory_save, memory_load, memory_list, memory_search, web_search, web_fetch, image_generate
 
-### Components (41)
-ActivityTimeline, AddAgentModal, AgentBar, AgentIcon, AgentInfoPanel, AgentMiniCard, AgentStatusPill, ApprovalCard, BulkDeleteBar, ChannelSummary, ChannelTabs, ChatMessage, CodeBlock, CommandBar, ConnectionBanner, ConsensusCard, DecisionCard, GenerativeCard, HandoffCard, HelpPanel, JobProposal, JobsPanel, KeyboardShortcutsModal, MessageInput, MobileHeader, MobileSidebar, OnboardingTour, ProgressCard, RemoteSession, ReplayViewer, RulesPanel, SearchModal, SessionBar, SessionLauncher, SettingsPanel, Sidebar, SplitView, StatsPanel, TerminalPeek, TypingIndicator, UrlPreview
+### Components (46)
+ActivityTimeline, AddAgentModal, AgentBar, AgentIcon, AgentInfoPanel, AgentMiniCard, AgentStatusPill, ApprovalCard, BulkDeleteBar, ChannelSummary, ChannelTabs, ChatMessage, CodeBlock, CommandBar, ConnectionBanner, ConsensusCard, DecisionCard, EmptyState, GenerativeCard, HandoffCard, HelpPanel, JobProposal, JobsPanel, KeyboardShortcutsModal, MessageInput, MobileHeader, MobileSidebar, MobilePanel, OnboardingTour, ProgressCard, RemoteSession, ReplayViewer, RulesPanel, ScrollArrow, SearchModal, SessionBar, SessionLauncher, SettingsPanel, Sidebar, Skeleton, SplitView, StatsPanel, StreamingText, TerminalPeek, ThinkingParticles, Toast, TypingIndicator, UrlPreview

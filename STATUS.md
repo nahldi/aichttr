@@ -70,8 +70,8 @@ GhostLink is a local-first multi-agent AI chat platform. It puts all your AI age
 
 ### Numbers
 - **90+ completed features** (see FEATURES.md for full list)
-- **46 React components** (+ StreamingText, ThinkingParticles, + routes/)
-- **90+ API endpoints** (split into 13 route modules)
+- **46 React components** (StreamingText, ThinkingParticles, Toast, etc.)
+- **132+ API endpoints** (split into 13 route modules)
 - **17 MCP tools** (chat_send, chat_read, chat_join, chat_who, chat_channels, chat_rules, chat_progress, chat_propose_job, chat_react, chat_claim, memory_save, memory_load, memory_list, memory_search, web_search, web_fetch, image_generate)
 - **13 known AI agents** (Claude, Codex, Gemini, Grok, Copilot, Aider, Goose, Pi, Cursor, Cody, Continue, OpenCode, Ollama)
 - **13 AI providers** (Anthropic, OpenAI, Google, xAI, Mistral, DeepSeek, Perplexity, Cohere, OpenRouter, Groq, Together, HuggingFace, Ollama)
@@ -318,7 +318,7 @@ npm run build:win   # Windows .exe
 
 ## KNOWN ISSUES
 
-See BUGS.md for full list. 52 bugs fixed as of v2.2.0. v2.3.0 adds security hardening (Fernet encryption, localhost guards, SSRF webhook protection, WS token auth, tighter MCP auto-approve). Remaining open items:
+See BUGS.md for full list. 72+ bugs fixed as of v3.3.2. All code bugs resolved. Remaining items are future enhancements (OAuth) and acknowledged edge cases:
 - BUG-007: OneDrive paths need /tmp copy (handled but slow)
 - BUG-011: Frontend dist path mismatch in packaged app (fallback exists)
 - ARCH-003: Desktop app requires WSL on Windows (no native Python support yet)
