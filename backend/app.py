@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "3.0.0"
+__version__ = "3.3.1"
 
 import json
 import os
@@ -266,7 +266,7 @@ async def lifespan(_app: FastAPI):
     exec_policy = ExecPolicy(DATA_DIR)
     audit_log = AuditLog(DATA_DIR)
     data_manager = DataManager(DATA_DIR, store=store)
-    audit_log.log("server_start", {"version": "2.5.1", "port": PORT})
+    audit_log.log("server_start", {"version": __version__, "port": PORT})
 
     # Publish all stores into deps so route modules can access them
     deps.store = store

@@ -1,8 +1,8 @@
-fastapi==0.115.0
-uvicorn[standard]==0.34.0
-aiosqlite==0.20.0
-python-multipart==0.0.18
-tomli==2.0.0
-websockets==14.0
-mcp==1.0.0
-cryptography==43.0.3
+fastapi==0.135.2
+uvicorn[standard]==0.42.0
+aiosqlite==0.22.1
+python-multipart==0.0.22
+tomli==2.4.0
+websockets==16.0
+mcp==1.26.0
+cryptography==46.0.5

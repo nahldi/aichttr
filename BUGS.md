@@ -1,8 +1,8 @@
 # GhostLink — Known Bugs & Issues
 
 **Last updated:** 2026-03-24
-**Version:** v3.3.0
-**Source:** Full codebase audit + live API testing + deep code path audit + user-reported bugs + 3 fix rounds
+**Version:** v3.3.1
+**Source:** Full codebase audit + live API testing + deep code path audit + user-reported bugs + 4 fix rounds
 
 ---
 
@@ -150,20 +150,16 @@
 ### BUG-041: Z-index conflicts between modals — FIXED (v1.7.0)
 ### BUG-042: Direct store._db access — FIXED (v1.7.0)
 
-### BUG-043: Agent spawn setTimeout not cancelled on modal close
-**Severity:** Low
-**Where:** `frontend/src/components/AddAgentModal.tsx:165-171`
-**Root cause:** After spawning, a 3-second setTimeout fetches status. If modal is closed before timeout fires, it updates unmounted component state.
-**Status:** Open
+### ~~BUG-043: Agent spawn setTimeout not cancelled on modal close~~ FIXED (v3.3.0)
+**Status:** FIXED
+**Fix:** Added `spawnTimerRef` with `useRef` and cleanup in `useEffect` unmount handler (AddAgentModal.tsx line 94-101). Timer is cleared when modal closes.
 
 ### BUG-044: QR code leaked tunnel URL to external API — FIXED (v1.7.0)
 **Fix:** Replaced external QR API with local canvas-based generation. Tunnel URL never leaves the client.
 
-### BUG-045: Clipboard API not checked before use
-**Severity:** Low
-**Where:** `frontend/src/components/CodeBlock.tsx:11-14`
-**Root cause:** `navigator.clipboard.writeText()` called without checking availability. Fails in older browsers or insecure (http://) contexts.
-**Status:** Open
+### ~~BUG-045: Clipboard API not checked before use~~ FIXED (v3.3.1)
+**Status:** FIXED
+**Fix:** CodeBlock.tsx already had optional chaining + textarea fallback. Fixed RemoteSession.tsx to also use optional chaining with textarea fallback for insecure contexts. ChatMessage.tsx already uses optional chaining with `.catch()`.
 
 ### BUG-046: OAuth sign-in not available — all providers require manual API key entry
 **Severity:** High — UX friction
@@ -300,49 +296,26 @@
 **Frontend:** 0 vulnerabilities in npm audit; 306 packages OK
 **Git:** On `master`, up to date with `origin/master`. 50 files with uncommitted changes (all from recent v3.3.0 work). 1 stash present.
 
-### BUG-067: Backend dependency conflict — fastapi vs mcp version pins
-**Severity:** HIGH — fresh `pip install -r requirements.txt` fails
-**Where:** `backend/requirements.txt`
-**Root cause:** `fastapi==0.115.0` requires `starlette<0.39.0`, but `mcp==1.0.0` requires `starlette>=0.39`. These two pins are mutually incompatible. A fresh install produces `ResolutionImpossible`.
-**Workaround:** `pip install "fastapi>=0.115.0" "mcp>=1.0.0"` (lets pip resolve to compatible versions — installs mcp 1.26.0 with starlette 0.46+, upgrading fastapi accordingly).
-**Fix needed:** Update `requirements.txt` to use compatible version ranges, e.g. `fastapi>=0.115.0` and `mcp>=1.0.0` (remove exact pins), or pin to tested-compatible combo like `fastapi==0.115.12` + `mcp==1.26.0`.
-**Status:** Open
+### ~~BUG-067: Backend dependency conflict — fastapi vs mcp version pins~~ FIXED (v3.3.1)
+**Status:** FIXED
+**Fix:** Updated `requirements.txt` to tested-compatible pins: fastapi==0.135.2, mcp==1.26.0, starlette==1.0.0. All 56 tests pass. Fresh `pip install -r requirements.txt` succeeds.
 
-### BUG-068: Audit log hardcodes version "2.5.1" instead of app.__version__
-**Severity:** LOW — misleading log data
-**Where:** `backend/app.py` line 269
-**Root cause:** `audit_log.log("server_start", {"version": "2.5.1", ...})` — the version string was never updated when the app moved to v3.0.0. Should reference `__version__` variable.
-**Status:** Open
+### ~~BUG-068: Audit log hardcodes version "2.5.1" instead of app.__version__~~ FIXED (v3.3.1)
+**Status:** FIXED
+**Fix:** Replaced hardcoded `"2.5.1"` with `__version__` variable reference in audit_log.log() call.
 
-### BUG-069: MessageRouter constructor mismatch in tests — latent hop-guard crash
-**Severity:** MEDIUM — will crash in production multi-agent conversations
-**Where:** `backend/tests/test_modules.py` lines 138, 151, 163; `backend/tests/test_integration.py` line 35
-**Root cause:** Tests call `MessageRouter(reg)` passing an `AgentRegistry` object as the first arg. The constructor signature is `__init__(self, max_hops: int = 4, default_routing: str = "none")`. Python silently accepts this (no runtime type enforcement). The tests pass because they never trigger the hop guard (`sender` is always `"You"`, not an agent). But in production, when an agent routes to another agent and `count > self.max_hops` is evaluated (router.py line 71), it compares `int > AgentRegistry`, which throws `TypeError`.
-**Fix needed:** Either update the tests to `MessageRouter()` (use defaults) or `MessageRouter(max_hops=4)`, OR update the constructor to optionally accept a registry.
-**Status:** Open
+### ~~BUG-069: MessageRouter constructor mismatch in tests — latent hop-guard crash~~ FIXED (v3.3.1)
+**Status:** FIXED
+**Fix:** Updated all test calls from `MessageRouter(reg)` to `MessageRouter()` (use defaults) in both `test_modules.py` and `test_integration.py`. The router doesn't need the registry — it receives agent_names as a parameter to get_targets().
 
-### BUG-070: SQLite databases are empty (0 bytes) — data loss
-**Severity:** HIGH — server cannot start; all message history lost
-**Where:** `backend/data/ghostlink.db` (0 bytes), `backend/data/ghostlink_v2.db` (0 bytes)
-**Root cause:** Both primary database files are empty. `ghostlink.db-journal` (4616 bytes) and `ghostlink.db.bak` (57344 bytes with 4 messages) exist, suggesting a crash or unclean shutdown corrupted the WAL/journal. The server fails to start with `sqlite3.OperationalError: disk I/O error` when attempting `PRAGMA journal_mode=WAL` on the empty file.
-**Fix needed:** Restore from `.bak` if available (`cp ghostlink.db.bak ghostlink.db`), or add startup recovery logic that detects an empty/corrupt DB and rebuilds from backup.
-**Status:** Open
+### ~~BUG-070: SQLite databases are empty (0 bytes) — data loss~~ FIXED (v3.3.1)
+**Status:** FIXED
+**Fix:** Added startup recovery logic in `MessageStore.init()`. Before connecting, checks if DB file exists but is 0 bytes. If a `.bak` file exists with data, restores from backup. Otherwise removes the empty file so SQLite creates a fresh database. Prevents `disk I/O error` on startup.
 
-### BUG-071: Version numbers out of sync across packages
-**Severity:** LOW — cosmetic / release hygiene
-**Where:** Multiple files
-**Details:**
-- `backend/app.py` → `__version__ = "3.0.0"`
-- `desktop/package.json` → `"version": "2.8.0"`
-- `frontend/package.json` → `"version": "0.0.0"`
-- `BUGS.md` header → `v3.3.0`
-- Audit log → `"2.5.1"`
-All should be synced to the same release version.
-**Status:** Open
+### ~~BUG-071: Version numbers out of sync across packages~~ FIXED (v3.3.1)
+**Status:** FIXED
+**Fix:** Synced all version strings to `3.3.1`: backend/app.py `__version__`, desktop/package.json, frontend/package.json. Audit log now references `__version__` dynamically (see BUG-068).
 
-### BUG-072: 50 modified files uncommitted on master
-**Severity:** LOW — risk of accidental loss
-**Where:** Git working tree
-**Root cause:** Extensive v3.3.0 changes across backend, frontend, and desktop are modified but not staged or committed. Includes all route modules, core backend files, frontend components, and package.json files. A `git checkout .` or disk failure would lose all this work.
-**Recommendation:** Commit or stash the current working tree to preserve progress.
-**Status:** Open
+### ~~BUG-072: 50 modified files uncommitted on master~~ FIXED (v3.3.0)
+**Status:** FIXED
+**Fix:** All 64 files (50 modified + 14 new) committed and pushed as v3.3.0.

@@ -135,7 +135,7 @@ def test_router_mention_extraction():
     from registry import AgentRegistry
     reg = AgentRegistry()
     inst = reg.register("claude")
-    router = MessageRouter(reg)
+    router = MessageRouter()
     agent_names = [inst.name]
     targets = router.get_targets("You", f"@{inst.name} please help me", "general", agent_names)
     assert inst.name in targets
@@ -148,7 +148,7 @@ def test_router_all_mention():
     reg = AgentRegistry()
     a1 = reg.register("claude")
     a2 = reg.register("gemini")
-    router = MessageRouter(reg)
+    router = MessageRouter()
     agent_names = [a1.name, a2.name]
     targets = router.get_targets("You", "@all do this please", "general", agent_names)
     assert a1.name in targets
@@ -160,7 +160,7 @@ def test_router_no_mention():
     from router import MessageRouter
     from registry import AgentRegistry
     reg = AgentRegistry()
-    router = MessageRouter(reg)
+    router = MessageRouter()
     targets = router.get_targets("You", "just a plain message", "general", [])
     assert len(targets) == 0
 

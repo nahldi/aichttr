@@ -66,6 +66,21 @@ class MessageStore:
         self._on_message: list[MsgCallback] = []
 
     async def init(self):
+        # v3.3.1: Recover from empty/corrupt DB files before connecting
+        db_file = Path(self.db_path)
+        if db_file.exists() and db_file.stat().st_size == 0:
+            import logging as _log
+            _log.getLogger(__name__).warning("Database file is empty (0 bytes): %s", self.db_path)
+            bak = db_file.with_suffix(".db.bak")
+            if bak.exists() and bak.stat().st_size > 0:
+                import shutil
+                _log.getLogger(__name__).info("Restoring from backup: %s", bak)
+                shutil.copy2(str(bak), str(db_file))
+            else:
+                # Remove empty file so SQLite creates a fresh one
+                db_file.unlink()
+                _log.getLogger(__name__).info("Removed empty DB, will create fresh database")
+
         self._db = await aiosqlite.connect(self.db_path)
         self._db.row_factory = aiosqlite.Row
         # v2.4.0: WAL mode for better concurrent read performance

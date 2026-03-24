@@ -32,7 +32,7 @@ async def pipeline(tmp_path: Path):
     ms = MessageStore(tmp_path / "msgs.db")
     await ms.init()
     reg = AgentRegistry()
-    rtr = MessageRouter(reg)
+    rtr = MessageRouter()
 
     yield ms, reg, rtr
 
