@@ -1,21 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useChatStore } from '../stores/chatStore';
 
-export function TypingIndicator() {
+// v2.5.0: Per-channel typing indicators
+export function TypingIndicator({ channel }: { channel?: string }) {
   const typingAgents = useChatStore((s) => s.typingAgents);
+  const activeChannel = useChatStore((s) => s.activeChannel);
   const agents = useChatStore((s) => s.agents);
   const [visible, setVisible] = useState<string[]>([]);
+
+  const targetChannel = channel || activeChannel;
 
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
-      const active = Object.entries(typingAgents)
+      const channelTyping = typingAgents[targetChannel] || {};
+      const active = Object.entries(channelTyping)
         .filter(([, ts]) => now - ts < 3000)
         .map(([name]) => name);
       setVisible(active);
     }, 500);
     return () => clearInterval(interval);
-  }, [typingAgents]);
+  }, [typingAgents, targetChannel]);
 
   if (visible.length === 0) return null;
 

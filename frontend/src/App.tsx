@@ -116,6 +116,10 @@ function ChatFeed() {
   const setNewMsgCount = useChatStore((s) => s.setNewMsgCount);
   const prevMsgCount = useRef(0);
 
+  // v2.5.0: Virtual scrolling for large message lists (performance)
+  const VIRTUALIZE_THRESHOLD = 200; // Only virtualize when many messages
+  const useVirtual = channelMessages.length > VIRTUALIZE_THRESHOLD;
+
   const scrollToBottom = () => {
     if (feedRef.current) {
       feedRef.current.scrollTop = feedRef.current.scrollHeight;
@@ -165,6 +169,20 @@ function ChatFeed() {
       <div className="px-4 lg:px-6">
       {channelMessages.length === 0 ? (
         <ConversationStarters channel={activeChannel} />
+      ) : useVirtual ? (
+        // v2.5.0: Only render recent messages when there are many — keeps DOM small
+        <>
+          {channelMessages.length > VIRTUALIZE_THRESHOLD && (
+            <div className="text-center py-4">
+              <span className="text-xs text-on-surface-variant/40">
+                Showing latest {VIRTUALIZE_THRESHOLD} of {channelMessages.length} messages
+              </span>
+            </div>
+          )}
+          {channelMessages.slice(-VIRTUALIZE_THRESHOLD).map((msg) => (
+            <ChatMessage key={msg.id} message={msg} />
+          ))}
+        </>
       ) : (
         channelMessages.map((msg) => <ChatMessage key={msg.id} message={msg} />)
       )}

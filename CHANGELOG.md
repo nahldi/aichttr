@@ -1,5 +1,35 @@
 # GhostLink Changelog
 
+## v2.5.0 — 2026-03-23
+
+### Agent Identity (Critical Fix)
+- **Agent context injection on spawn** (`backend/wrapper.py`, `backend/agent_memory.py`): Agents now receive a comprehensive `.ghostlink-context.md` file in their workspace when spawning. This tells them they're in GhostLink (not Discord), how to use MCP tools, their identity, and how to respond in chat. Provider-specific injection: Claude gets `.claude/instructions.md`, Codex gets `.codex/instructions.md`, Gemini gets `systemInstruction` in its settings JSON.
+- **Enhanced default SOUL** (`backend/agent_memory.py`): The `GHOSTLINK_CONTEXT_TEMPLATE` provides detailed platform context, available MCP tools, communication rules, and behavioral guidelines.
+- **`generate_agent_context()` function** — programmatic context generation with agent name and soul personality injection.
+
+### Thinking Output (Critical Fix)
+- **ANSI escape code stripping** (`backend/wrapper.py`): Thinking output now strips all terminal escape codes (colors, cursor movement, etc.) before displaying in the UI.
+- **Command line filtering** — Startup commands, flags (`--dangerously-skip-permissions`, `--mcp-config`, etc.), config paths, and env var assignments are filtered out of the thinking stream. Users no longer see raw CLI chrome.
+- **Blank line cleanup** — Empty lines and tmux padding are stripped. Only meaningful content is shown.
+- **`_sanitize_thinking()` function** — centralized sanitization with configurable filter patterns.
+
+### Gemini Spawn Fix
+- **MCP settings format** (`backend/wrapper.py`): Gemini settings JSON now includes both `httpUrl` and `url` fields for maximum compatibility across Gemini CLI versions.
+- **System instruction injection** — Gemini agents receive their SOUL/context via the `systemInstruction` field in the settings JSON.
+
+### Channel & Routing Fixes
+- **Approval prompts target correct channel** (`backend/wrapper.py`): Approval request messages now post to the channel where the agent was last active, instead of always #general. A shared `_last_channel` tracker is updated by the queue watcher and read by the approval watcher.
+- **Per-channel typing indicators** (`frontend/src/stores/chatStore.ts`, `frontend/src/components/TypingIndicator.tsx`): Typing state is now scoped per-channel. When an agent types in #backend, the indicator only shows when viewing #backend — not in every channel.
+
+### Performance
+- **Message list virtualization** (`frontend/src/App.tsx`): When a channel has 200+ messages, only the most recent 200 are rendered in the DOM. Prevents browser slowdown with large message histories while keeping recent messages fully interactive.
+- **@tanstack/react-virtual** added as dependency for future full virtualization support.
+
+### Desktop
+- **Version bump** (`desktop/package.json`): `2.4.0` → `2.5.0`
+
+---
+
 ## v2.4.0 — 2026-03-23
 
 ### Performance

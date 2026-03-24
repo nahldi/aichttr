@@ -33,6 +33,40 @@ except ModuleNotFoundError:
 ROOT = Path(__file__).parent
 SERVER_NAME = "ghostlink"
 
+# ── v2.5.0: ANSI escape code pattern for thinking output cleanup ──
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\x1b\[.*?[@-~]')
+
+# Patterns to filter from thinking output (startup commands, flags, config paths)
+_THINKING_FILTER_PATTERNS = [
+    re.compile(r'--dangerously-skip-permissions', re.IGNORECASE),
+    re.compile(r'--mcp-config\s+\S+'),
+    re.compile(r'--sandbox\s+\S+'),
+    re.compile(r'--full-auto'),
+    re.compile(r'--permission-mode\s+\S+'),
+    re.compile(r'GEMINI_CLI_SYSTEM_SETTINGS_PATH=\S+'),
+    re.compile(r'provider-config/\S+'),
+    re.compile(r'^\s*\$\s*(?:claude|codex|gemini|grok|aider|ollama)\b.*', re.MULTILINE),
+    re.compile(r'^\s*env\s+-u\s+\S+.*$', re.MULTILINE),
+]
+
+
+def _sanitize_thinking(text: str) -> str:
+    """Clean raw tmux pane output for display as thinking content.
+
+    Strips ANSI escape codes, filters startup commands/flags, removes
+    blank lines and terminal artifacts.
+    """
+    # Strip ANSI escape codes
+    text = _ANSI_RE.sub('', text)
+    # Filter out command lines and config paths
+    for pattern in _THINKING_FILTER_PATTERNS:
+        text = pattern.sub('', text)
+    # Remove blank/whitespace-only lines and collapse multiple newlines
+    lines = [line for line in text.split('\n') if line.strip()]
+    text = '\n'.join(lines)
+    # Trim to reasonable length
+    return text[-1500:] if len(text) > 1500 else text
+
 
 # ── Per-instance provider config ────────────────────────────────────
 
@@ -58,7 +92,11 @@ def _write_claude_mcp_config(
 def _write_json_mcp_settings(config_file: Path, url: str, transport: str = "http",
                               *, token: str = "") -> Path:
     """Write/merge a settings-style JSON file with nested mcpServers config.
-    Used by Gemini CLI."""
+    Used by Gemini CLI.
+
+    v2.5.0: Fixed to support both httpUrl and url formats for MCP compatibility.
+    Gemini CLI expects "httpUrl" for HTTP transport, "url" for SSE.
+    """
     config_file.parent.mkdir(parents=True, exist_ok=True)
     existing: dict = {}
     if config_file.exists():
@@ -68,7 +106,8 @@ def _write_json_mcp_settings(config_file: Path, url: str, transport: str = "http
             print(f"  Warning: failed to read existing MCP settings: {e}")
     servers = existing.get("mcpServers", {})
     if transport in ("http", "streamable-http"):
-        entry: dict = {"type": "http", "httpUrl": url, "trust": True}
+        # Gemini CLI uses httpUrl for HTTP-based MCP servers
+        entry: dict = {"type": "http", "httpUrl": url, "url": url, "trust": True}
     else:
         entry = {"type": transport, "url": url, "trust": True}
     if token:
@@ -281,6 +320,22 @@ _APPROVAL_KEYMAPS: dict[str, dict[str, str]] = {
 }
 
 
+# v2.5.0: Shared channel tracking — updated by queue watcher, read by approval watcher
+_last_channel = "general"
+_last_channel_lock = threading.Lock()
+
+
+def _set_last_channel(channel: str):
+    global _last_channel
+    with _last_channel_lock:
+        _last_channel = channel
+
+
+def _get_last_channel() -> str:
+    with _last_channel_lock:
+        return _last_channel
+
+
 def _approval_watcher(
     session_name: str,
     get_identity_fn,
@@ -416,13 +471,13 @@ def _approval_watcher(
                     lines = [l for l in pane_text.strip().split('\n') if l.strip()]
                     context = '\n'.join(lines[-10:])
 
-                    # Post to chat as approval_request message
+                    # Post to chat as approval_request message (v2.5.0: use tracked channel)
                     try:
                         body = json.dumps({
                             "sender": current_name,
                             "text": f"Permission prompt from {current_name}",
                             "type": "approval_request",
-                            "channel": "general",
+                            "channel": _get_last_channel(),
                             "metadata": json.dumps({
                                 "agent": current_name,
                                 "prompt": context,
@@ -491,6 +546,7 @@ def _queue_watcher(get_identity_fn, inject_fn, *, server_port: int = 8300,
                         continue
 
                 if has_trigger:
+                    _set_last_channel(channel)  # v2.5.0: track for approval watcher
                     if trigger_flag is not None:
                         trigger_flag[0] = True
                     time.sleep(0.5)
@@ -658,6 +714,53 @@ def main():
     # Permission/model flags first, then MCP config (CLI parsers expect flags before config)
     launch_args = list(agent_args) + extra + mcp_args
 
+    # ── v2.5.0: Agent identity injection ──────────────────────────────
+    # Write context files so agents know who they are and what GhostLink is
+    from agent_memory import get_soul, generate_agent_context
+    try:
+        soul = get_soul(data_dir, assigned_name)
+        context_content = generate_agent_context(assigned_name, soul)
+
+        # Write .ghostlink-context.md to the agent's workspace
+        context_file = project_dir / ".ghostlink-context.md"
+        context_file.write_text(context_content, "utf-8")
+        print(f"  Context: {context_file}")
+
+        # Provider-specific identity injection
+        if agent in ("claude",):
+            # Claude Code reads .claude/instructions.md automatically
+            claude_dir = project_dir / ".claude"
+            claude_dir.mkdir(parents=True, exist_ok=True)
+            instructions_file = claude_dir / "instructions.md"
+            # Only write if it doesn't exist or is our managed file
+            if not instructions_file.exists() or instructions_file.read_text("utf-8").startswith("# GhostLink Agent Context"):
+                instructions_file.write_text(context_content, "utf-8")
+                print(f"  Claude instructions: {instructions_file}")
+
+        elif agent in ("codex",):
+            # Codex reads .codex/instructions.md
+            codex_dir = project_dir / ".codex"
+            codex_dir.mkdir(parents=True, exist_ok=True)
+            instructions_file = codex_dir / "instructions.md"
+            if not instructions_file.exists() or instructions_file.read_text("utf-8").startswith("# GhostLink Agent Context"):
+                instructions_file.write_text(context_content, "utf-8")
+                print(f"  Codex instructions: {instructions_file}")
+
+        elif agent in ("gemini",):
+            # Gemini: add systemInstruction to the settings JSON if we wrote one
+            if mcp_settings_path and mcp_settings_path.exists():
+                try:
+                    settings = json.loads(mcp_settings_path.read_text("utf-8"))
+                    settings["systemInstruction"] = context_content[:4000]
+                    mcp_settings_path.write_text(json.dumps(settings, indent=2) + "\n", "utf-8")
+                    print(f"  Gemini system instruction injected")
+                except Exception as e:
+                    print(f"  Warning: failed to inject Gemini system instruction: {e}")
+
+    except Exception as e:
+        print(f"  Warning: identity injection failed: {e}")
+    # ── End identity injection ────────────────────────────────────────
+
     print(f"  === {assigned_name.capitalize()} Chat Wrapper ===")
     if not needs_proxy:
         print(f"  MCP: direct connect ({inject_mode}) with bearer auth")
@@ -768,11 +871,12 @@ def main():
                             capture_output=True, timeout=3,
                         )
                         if result.returncode == 0:
-                            pane_text = result.stdout.decode("utf-8", errors="replace").strip()
+                            raw_text = result.stdout.decode("utf-8", errors="replace").strip()
+                            pane_text = _sanitize_thinking(raw_text)
                             if pane_text and pane_text != last_thinking_text:
                                 last_thinking_text = pane_text
                                 current_name, _ = get_identity()
-                                think_body = json.dumps({"text": pane_text[-1500:], "active": True}).encode()
+                                think_body = json.dumps({"text": pane_text, "active": True}).encode()
                                 think_req = urllib.request.Request(
                                     f"http://127.0.0.1:{server_port}/api/agents/{current_name}/thinking",
                                     method="POST", data=think_body,

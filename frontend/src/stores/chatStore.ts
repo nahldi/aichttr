@@ -30,7 +30,7 @@ interface ChatState {
   // Agents
   agents: Agent[];
   setAgents: (agents: Agent[]) => void;
-  typingAgents: Record<string, number>;
+  typingAgents: Record<string, Record<string, number>>;  // v2.5.0: per-channel typing: { channel: { agent: timestamp } }
   setTyping: (sender: string, channel: string) => void;
 
   // Jobs
@@ -161,10 +161,11 @@ export const useChatStore = create<ChatState>((set) => ({
   agents: [],
   setAgents: (agents) => set({ agents }),
   typingAgents: {},
-  setTyping: (sender, _channel) =>
-    set((s) => ({
-      typingAgents: { ...s.typingAgents, [sender]: Date.now() },
-    })),
+  setTyping: (sender, channel) =>
+    set((s) => {
+      const channelTyping = { ...(s.typingAgents[channel] || {}), [sender]: Date.now() };
+      return { typingAgents: { ...s.typingAgents, [channel]: channelTyping } };
+    }),
 
   jobs: [],
   setJobs: (jobs) => set({ jobs }),
