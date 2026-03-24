@@ -40,10 +40,13 @@ async def register_agent(request: Request):
     base = body.get("base", body.get("name", ""))
     label = body.get("label", "")
     color = body.get("color", "")
+    role = body.get("role", "")
     wrapper_pid = body.get("pid")
     if not base:
         return JSONResponse({"error": "base required"}, 400)
     inst = deps.registry.register(base, label, color)
+    if role:
+        inst.role = role
     if hasattr(deps, "worktree_manager") and deps.worktree_manager:
         deps.worktree_manager.create_worktree(inst.name)
     if wrapper_pid is not None:

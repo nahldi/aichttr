@@ -255,11 +255,14 @@ def _apply_mcp_inject(
 
 # ── Registration ────────────────────────────────────────────────────
 
-def _register(server_port: int, base: str, label: str = "") -> dict:
+def _register(server_port: int, base: str, label: str = "", role: str = "") -> dict:
     import urllib.request
     # Include our own pid so the server can link this process to the registered name.
     # This fixes the {base}_{pid} keying race in process tracking.
-    body = json.dumps({"base": base, "label": label, "pid": os.getpid()}).encode()
+    payload = {"base": base, "label": label, "pid": os.getpid()}
+    if role:
+        payload["role"] = role
+    body = json.dumps(payload).encode()
     req = urllib.request.Request(
         f"http://127.0.0.1:{server_port}/api/register",
         method="POST",
@@ -699,9 +702,12 @@ def main():
     # Auto-detect headless
     headless = args.headless or not os.isatty(0)
 
-    # Register with server
+    # Read role description from env (set by routes/agents.py spawn)
+    agent_role_desc = os.environ.get("GHOSTLINK_AGENT_ROLE", "")
+
+    # Register with server — include role so other agents can see it via chat_who
     try:
-        registration = _register(server_port, agent, label)
+        registration = _register(server_port, agent, label, role=agent_role_desc)
     except Exception as exc:
         print(f"  Registration failed: {exc}")
         print(f"  Is the GhostLink server running on port {server_port}?")
@@ -816,26 +822,22 @@ def main():
 
     # ── v2.5.0: Agent identity injection ──────────────────────────────
     # Write context files so agents know who they are and what GhostLink is
-    from agent_memory import get_soul, set_soul, generate_agent_context
+    from agent_memory import set_soul, generate_agent_context
     try:
         # Use label and role from spawn (env vars set by routes/agents.py)
         agent_label = os.environ.get("GHOSTLINK_AGENT_LABEL", "") or label or assigned_name
-        agent_role_desc = os.environ.get("GHOSTLINK_AGENT_ROLE", "")
 
-        # Build a meaningful soul that includes the label and role
-        soul = get_soul(data_dir, assigned_name)
-        default_soul = f"You are {assigned_name}, an AI agent in GhostLink."
-        # If soul is generic (never customized), build a better one from label + role
-        if soul.startswith("You are") and "collaborate with other agents" in soul:
-            soul_parts = [f'You are **{agent_label}** (agent name: @{assigned_name}).']
-            if agent_role_desc:
-                soul_parts.append(f'Your role: {agent_role_desc}.')
-            soul_parts.append('You collaborate with other agents and humans via @mentions in GhostLink.')
-            soul_parts.append('Be helpful, thorough, and proactive. Stay in character for your role.')
-            soul = ' '.join(soul_parts)
-            # Persist so it survives restarts
-            set_soul(data_dir, assigned_name, soul)
-            print(f"  Soul set: {agent_label} — {agent_role_desc or 'general assistant'}")
+        # Always build identity from current label + role (not stale saved soul)
+        # This ensures preset roles like "Code Reviewer" always take effect
+        soul_parts = [f'You are **{agent_label}** (agent name: @{assigned_name}).']
+        if agent_role_desc:
+            soul_parts.append(f'Your role: {agent_role_desc}.')
+        soul_parts.append('You collaborate with other agents and humans via @mentions in GhostLink.')
+        soul_parts.append('Be helpful, thorough, and proactive. Stay in character for your role.')
+        soul = ' '.join(soul_parts)
+        # Persist so it survives restarts
+        set_soul(data_dir, assigned_name, soul)
+        print(f"  Soul set: {agent_label} — {agent_role_desc or 'general assistant'}")
 
         context_content = generate_agent_context(assigned_name, soul)
 
@@ -936,7 +938,7 @@ def main():
             except urllib.error.HTTPError as exc:
                 if exc.code == 409:
                     try:
-                        replacement = _register(server_port, agent, label)
+                        replacement = _register(server_port, agent, label, role=agent_role_desc)
                         set_runtime_identity(replacement["name"], replacement["token"])
                     except Exception as e:
                         import logging

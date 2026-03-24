@@ -468,6 +468,7 @@ _rate_limits: dict[str, collections.deque] = {}
 _RATE_LIMIT_WINDOW = 60
 _RATE_LIMIT_MAX = 300
 _rate_limit_last_cleanup = time.time()
+_RATE_LIMIT_MAX_IPS = 10000  # Max tracked IPs to prevent memory leak
 
 app = FastAPI(title="GhostLink", lifespan=lifespan)
 
@@ -493,11 +494,16 @@ async def rate_limit_middleware(request: Request, call_next):
                     status_code=429,
                 )
             dq.append(now)
-            if now - _rate_limit_last_cleanup > 300:
+            if now - _rate_limit_last_cleanup > 60:
                 _rate_limit_last_cleanup = now
                 stale = [ip for ip, d in _rate_limits.items() if not d or d[-1] < now - _RATE_LIMIT_WINDOW]
                 for ip in stale:
                     _rate_limits.pop(ip, None)
+                # Hard cap to prevent unbounded growth
+                if len(_rate_limits) > _RATE_LIMIT_MAX_IPS:
+                    oldest = sorted(_rate_limits, key=lambda ip: _rate_limits[ip][-1] if _rate_limits[ip] else 0)
+                    for ip in oldest[:len(_rate_limits) - _RATE_LIMIT_MAX_IPS]:
+                        _rate_limits.pop(ip, None)
     return await call_next(request)
 
 

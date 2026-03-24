@@ -471,8 +471,12 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
           </div>
 
           {error && (
-            <div className="text-xs text-error bg-error/5 border border-error/10 rounded-lg px-3 py-2">
-              {error}
+            <div className="text-xs bg-error/5 border border-error/10 rounded-xl px-3 py-2.5 space-y-1">
+              <div className="flex items-center gap-1.5 text-error font-medium">
+                <span className="material-symbols-outlined text-[14px]">error</span>
+                {error.includes('not found') ? `${selected} CLI not installed` : 'Launch failed'}
+              </div>
+              <div className="text-on-surface-variant/50 text-[10px] leading-relaxed">{error}</div>
             </div>
           )}
 

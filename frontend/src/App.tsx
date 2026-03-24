@@ -49,23 +49,26 @@ function ThinkingBubbles() {
         const agent = agents.find(a => a.name === agentName);
         const color = agent?.color || '#a78bfa';
         const label = agent?.label || agentName;
-        // Show last 4 non-empty lines — keep it compact
-        const lines = stream.text.split('\n').filter(l => l.trim()).slice(-4);
+        // Show last 3 non-empty lines — compact and readable
+        const lines = stream.text.split('\n').filter(l => l.trim()).slice(-3);
 
         return (
-          <div key={agentName} className="flex items-start gap-2.5 py-1.5">
-            <div className="relative w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-              style={{ background: `${color}15` }}>
-              <span className="text-[10px] font-bold" style={{ color }}>{label[0]}</span>
-              <div className="absolute inset-0 rounded-full animate-ping opacity-20" style={{ background: color }} />
+          <div key={agentName} className="flex items-start gap-2.5 py-1">
+            <div className="relative w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+              style={{ background: `${color}18` }}>
+              <span className="text-[9px] font-bold" style={{ color }}>{label[0]}</span>
+              <div className="absolute -inset-0.5 rounded-full opacity-40 animate-pulse" style={{ boxShadow: `0 0 6px ${color}` }} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
-                <span className="thinking-dots text-[9px] text-on-surface-variant/30">thinking</span>
+                <span className="text-[10px] font-semibold opacity-70" style={{ color }}>{label}</span>
+                <span className="thinking-dots text-[9px] text-on-surface-variant/25 font-medium">thinking</span>
               </div>
-              <div className="rounded-lg px-2.5 py-1.5 text-[10px] text-on-surface-variant/40 leading-relaxed overflow-hidden max-h-[72px]"
-                style={{ background: `${color}06`, border: `1px solid ${color}10` }}>
+              <div className="rounded-xl px-3 py-2 text-[10px] text-on-surface-variant/35 leading-relaxed overflow-hidden max-h-[60px] font-mono"
+                style={{
+                  background: `color-mix(in srgb, ${color} 3%, rgba(17,17,25,0.4))`,
+                  border: `1px solid color-mix(in srgb, ${color} 6%, transparent)`,
+                }}>
                 {lines.map((line, i) => (
                   <div key={i} className="truncate">{line}</div>
                 ))}

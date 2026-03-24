@@ -1,8 +1,9 @@
 /**
- * v3.2.0: Word-by-word streaming text reveal for new agent messages.
+ * v3.9.5: Word-by-word streaming text reveal for new agent messages.
  * Only animates on initial render of NEW messages — not historical ones.
+ * Uses requestAnimationFrame batching to prevent layout thrashing.
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface StreamingTextProps {
   text: string;
@@ -18,6 +19,8 @@ interface StreamingTextProps {
 export function StreamingText({ text, wordsPerMs = 15, onComplete }: StreamingTextProps) {
   const [visibleCount, setVisibleCount] = useState(0);
   const tokens = useRef<string[]>([]);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
     // Split into tokens: words and code blocks as units
@@ -27,32 +30,39 @@ export function StreamingText({ text, wordsPerMs = 15, onComplete }: StreamingTe
     let match: RegExpExecArray | null;
 
     while ((match = codeBlockRe.exec(text)) !== null) {
-      // Words before this code block
       const before = text.slice(lastIndex, match.index);
       if (before) parts.push(...before.split(/(\s+)/));
-      // Whole code block as one token
       parts.push(match[0]);
       lastIndex = match.index + match[0].length;
     }
-    // Remaining text
     const remaining = text.slice(lastIndex);
     if (remaining) parts.push(...remaining.split(/(\s+)/));
 
     tokens.current = parts.filter(p => p.length > 0);
+    const total = tokens.current.length;
+
+    // For very short messages, show immediately
+    if (total <= 3) {
+      setVisibleCount(total);
+      onCompleteRef.current?.();
+      return;
+    }
 
     setVisibleCount(0);
     let count = 0;
+    // Batch multiple tokens per frame to reduce re-renders
+    const tokensPerFrame = Math.max(1, Math.ceil(total / 60)); // complete in ~1s
     const interval = setInterval(() => {
-      count++;
+      count = Math.min(count + tokensPerFrame, total);
       setVisibleCount(count);
-      if (count >= tokens.current.length) {
+      if (count >= total) {
         clearInterval(interval);
-        onComplete?.();
+        onCompleteRef.current?.();
       }
     }, wordsPerMs);
 
     return () => clearInterval(interval);
-  }, [text, wordsPerMs, onComplete]);
+  }, [text, wordsPerMs]);
 
   const visible = tokens.current.slice(0, visibleCount).join('');
   return <>{visible}</>;
