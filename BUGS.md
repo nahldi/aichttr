@@ -1,7 +1,7 @@
 # GhostLink — Known Bugs & Issues
 
 **Last updated:** 2026-03-24
-**Version:** v3.5.0
+**Version:** v3.7.0
 **Source:** Full codebase audit + live API testing + deep code path audit + user-reported bugs + automated audit + 5 fix rounds
 
 ---
