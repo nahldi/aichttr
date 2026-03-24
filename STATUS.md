@@ -74,7 +74,7 @@ GhostLink is a local-first multi-agent AI chat platform. It puts all your AI age
 - **90+ API endpoints**
 - **17 MCP tools** (chat_send, chat_read, chat_join, chat_who, chat_channels, chat_rules, chat_progress, chat_propose_job, chat_react, chat_claim, memory_save, memory_load, memory_list, memory_search, web_search, web_fetch, image_generate)
 - **13 known AI agents** (Claude, Codex, Gemini, Grok, Copilot, Aider, Goose, Pi, Cursor, Cody, Continue, OpenCode, Ollama)
-- **8 AI providers** (Anthropic, OpenAI, Google, xAI, Groq, Together, HuggingFace, Ollama)
+- **13 AI providers** (Anthropic, OpenAI, Google, xAI, Mistral, DeepSeek, Perplexity, Cohere, OpenRouter, Groq, Together, HuggingFace, Ollama)
 - **5 channel bridges** (Discord, Telegram, Slack, WhatsApp, Generic Webhook)
 - **9 themes** (dark, light, cyberpunk, terminal, ocean, sunset, midnight, rosegold, arctic)
 - **28 built-in skills**

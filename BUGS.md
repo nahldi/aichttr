@@ -168,7 +168,7 @@
 ### BUG-046: OAuth sign-in not available — all providers require manual API key entry
 **Severity:** High — UX friction
 **Where:** Settings > AI > Providers panel
-**Root cause:** All 8 providers (Anthropic, OpenAI, Google, xAI, Groq, Together, HuggingFace, Ollama) require manually pasting API keys. There's no OAuth flow for providers that support it (Google, GitHub). Users with subscriptions (Claude Pro, ChatGPT Plus, Gemini Advanced) can't sign in with their accounts — they must separately obtain API keys. Should offer one-click OAuth where the provider supports it.
+**Root cause:** All 13 providers (Anthropic, OpenAI, Google, xAI, Mistral, DeepSeek, Perplexity, Cohere, OpenRouter, Groq, Together, HuggingFace, Ollama) require manually pasting API keys. There's no OAuth flow for providers that support it (Google, GitHub). Users with subscriptions (Claude Pro, ChatGPT Plus, Gemini Advanced) can't sign in with their accounts — they must separately obtain API keys. Should offer one-click OAuth where the provider supports it.
 **Status:** Open
 
 ---

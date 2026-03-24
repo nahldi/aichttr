@@ -4,7 +4,7 @@
 > For any AI picking this up: follow the phases IN ORDER. Each phase has verification steps. Do NOT skip ahead.
 
 **Last updated:** 2026-03-23
-**Version:** v2.1.4
+**Version:** v2.4.0
 **Benchmark:** OpenClaw v2026.3.22 (247K stars, 125+ features)
 **Source:** Full competitive analysis + codebase audit + user feedback
 
@@ -23,7 +23,7 @@ The following phases from the original roadmap are **DONE**:
 - ~~Phase 6: UX & Polish~~ — Generative UI, command history, URL previews, drag & drop, onboarding, voice input, session snapshots
 - ~~Phase 7: Growth & Distribution~~ — Share conversations, CI/CD builds, Cloudflare tunnel, plugin system
 
-**Current state: 80+ features, 37 components, 80+ API endpoints, 17 MCP tools, 8 providers, 9 themes, 28 skills**
+**Current state: 80+ features, 44 components, 90+ API endpoints, 17 MCP tools, 13 providers, 9 themes, 28 skills**
 
 ---
 

@@ -12,7 +12,7 @@
 
 **[Download the latest installer from Releases](../../releases/latest)**
 
-- **Windows:** `GhostLink-Setup-2.2.0.exe` — one-click install, auto-updates
+- **Windows:** `GhostLink-Setup-2.4.0.exe` — one-click install, auto-updates
 - **Linux:** `.AppImage` / `.deb`
 - **macOS:** `.dmg`
 
@@ -53,7 +53,7 @@ You don't need all of them. Start with just one — even a free option like Gemi
 
 ---
 
-## AI Providers (8)
+## AI Providers (13)
 
 | Provider | Capabilities | Free Tier |
 |----------|-------------|-----------|
@@ -61,12 +61,17 @@ You don't need all of them. Start with just one — even a free option like Gemi
 | OpenAI | Chat, Code, Image, TTS, STT, Embedding | No |
 | Google AI | Chat, Code, Image, Video, TTS, STT, Code Exec, Embedding | No |
 | xAI | Chat | No |
+| Mistral AI | Chat, Code, Vision | No |
+| DeepSeek | Chat, Code, Reasoning | No |
+| Perplexity | Chat, Search | No |
+| Cohere | Chat, Embedding | No |
+| OpenRouter | Chat, Code, Vision, Image (200+ models) | No |
 | Groq | Chat, STT | **Yes** |
 | Together AI | Chat, Image | **Yes** |
 | Hugging Face | Chat, Image, STT | **Yes** |
 | Ollama | Chat, Code, Embedding | **Yes** (local) |
 
-Configure providers in Settings > AI. Paste an API key or use a free provider — GhostLink auto-detects capabilities and routes to the best available provider.
+Configure providers in Settings > AI. Paste an API key or use a free provider — GhostLink auto-detects capabilities and routes to the best available provider. Model failover is automatic — if one provider returns an error, GhostLink switches to the next available.
 
 ---
 
@@ -139,14 +144,16 @@ Configure providers in Settings > AI. Paste an API key or use a free provider �
 
 ### Security
 - Fully local — no telemetry, no analytics, no data leaves your machine
-- Bearer token authentication for all agent MCP calls
-- Token expiration with auto-rotation (1-hour TTL)
+- Fernet encryption (AES-128-CBC) for stored secrets with PBKDF2 key derivation
+- WebSocket token authentication for external connections
+- Localhost-only restrictions on sensitive endpoints
+- Bearer token authentication for all agent MCP calls with 1-hour auto-rotation
 - API rate limiting (300 req/min per IP)
 - MCP proxy prevents identity spoofing
-- SSRF protection on URL previews and web fetch (DNS resolution + ipaddress checks)
+- SSRF protection on URL previews, web fetch, and webhook delivery
+- AST-based plugin safety scanner blocks dangerous code patterns
 - Input validation on all endpoints (sender, text, channel, message type)
 - Webhook signature verification (HMAC-SHA256)
-- Skill content scanning for custom skills
 - Agent name validation prevents path traversal
 
 ---
@@ -230,11 +237,11 @@ Agent CLIs (tmux sessions via wrapper.py)
 
 | | Count |
 |---|---|
-| React components | 41 |
+| React components | 44 |
 | API endpoints | 90+ |
 | MCP tools | 17 |
 | Built-in skills | 28 |
-| AI providers | 8 |
+| AI providers | 13 |
 | Channel bridges | 5 |
 | Themes | 9 |
 | Slash commands | 23 |

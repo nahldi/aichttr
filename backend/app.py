@@ -393,7 +393,7 @@ async def lifespan(_app: FastAPI):
     exec_policy = ExecPolicy(DATA_DIR)
     audit_log = AuditLog(DATA_DIR)
     data_manager = DataManager(DATA_DIR, store=store)
-    audit_log.log("server_start", {"version": "2.1.0", "port": PORT})
+    audit_log.log("server_start", {"version": "2.4.0", "port": PORT})
 
     # Broadcast new messages via WebSocket
     async def on_msg(msg: dict):

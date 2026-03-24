@@ -100,7 +100,7 @@
 
 ### Settings & Configuration (v1.8.0)
 - [x] **Persistent agent editor** — edit label, workspace, CLI args, and color for saved agents
-- [x] **8 AI providers** — Anthropic, OpenAI, Google, xAI, Groq, Together, HuggingFace, Ollama
+- [x] **13 AI providers** — Anthropic, OpenAI, Google, xAI, Mistral, DeepSeek, Perplexity, Cohere, OpenRouter, Groq, Together, HuggingFace, Ollama
 - [x] **Capability-based provider routing** — auto-selects best provider per capability
 - [x] **Free tier detection** — highlights free providers (Groq, Together, HuggingFace, Ollama)
 
