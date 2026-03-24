@@ -29,6 +29,31 @@ const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'advanced', label: 'Advanced', icon: 'settings' },
 ];
 
+/* ── Collapsible Section ─────────────────────────────────────────── */
+
+function Section({ title, icon, defaultOpen = false, children }: {
+  title: string;
+  icon?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="setting-section">
+      <button className="setting-section-header w-full" onClick={() => setOpen(!open)}>
+        {icon && <span className="material-symbols-outlined text-[16px] text-on-surface-variant/50">{icon}</span>}
+        <span className="text-[11px] font-semibold text-on-surface/80 flex-1 text-left">{title}</span>
+        <span className={`material-symbols-outlined text-[16px] text-on-surface-variant/30 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
+      </button>
+      <div className={`setting-section-content ${open ? '' : 'collapsed'}`}>
+        <div className="inner space-y-3">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Reusable Toggle ─────────────────────────────────────────────── */
 
 function Toggle({
@@ -151,13 +176,13 @@ export function SettingsPanel() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-all border-b-2 ${
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-all border-b-2 ${
               tab === t.id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-on-surface-variant/40 hover:text-on-surface-variant/60'
             }`}
           >
-            <span className="material-symbols-outlined text-[16px]">{t.icon}</span>
+            <span className="material-symbols-outlined text-[18px]">{t.icon}</span>
             {t.label}
           </button>
         ))}
@@ -206,158 +231,92 @@ function GeneralTab({
 }) {
   return (
     <>
-      {/* Username */}
-      <SettingField label="Username">
-        <input
-          type="text"
-          value={display.username}
-          onChange={(e) => updateDraft({ username: e.target.value })}
-          className="setting-input"
+      <Section title="Profile" icon="person" defaultOpen>
+        <SettingField label="Username">
+          <input type="text" value={display.username} onChange={(e) => updateDraft({ username: e.target.value })} className="setting-input" />
+        </SettingField>
+      </Section>
+
+      <Section title="Date & Time" icon="schedule">
+        <SettingField label="Timezone">
+          <select value={display.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone} onChange={(e) => applyInstant({ timezone: e.target.value })} className="setting-input text-[12px] w-full">
+            {Intl.supportedValuesOf?.('timeZone')?.map((tz: string) => (
+              <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+            )) ?? (
+              <>
+                <option value="America/New_York">America/New York</option>
+                <option value="America/Chicago">America/Chicago</option>
+                <option value="America/Denver">America/Denver</option>
+                <option value="America/Los_Angeles">America/Los Angeles</option>
+                <option value="Europe/London">Europe/London</option>
+                <option value="Europe/Berlin">Europe/Berlin</option>
+                <option value="Asia/Tokyo">Asia/Tokyo</option>
+                <option value="UTC">UTC</option>
+              </>
+            )}
+          </select>
+        </SettingField>
+        <SettingField label="Time Format">
+          <div className="flex gap-2">
+            {(['12h', '24h'] as const).map(fmt => (
+              <button key={fmt} onClick={() => applyInstant({ timeFormat: fmt })}
+                className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-all ${
+                  (display.timeFormat || '12h') === fmt
+                    ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+                    : 'bg-surface-container/40 text-on-surface-variant/40'
+                }`}>{fmt === '12h' ? '12-hour (AM/PM)' : '24-hour'}</button>
+            ))}
+          </div>
+        </SettingField>
+      </Section>
+
+      <Section title="Voice" icon="mic">
+        <SettingField label="Input Language">
+          <select value={display.voiceLanguage || navigator.language || 'en-US'} onChange={(e) => applyInstant({ voiceLanguage: e.target.value })} className="setting-input text-[12px] w-full">
+            <option value="">Auto-detect</option>
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="es-ES">Spanish</option>
+            <option value="fr-FR">French</option>
+            <option value="de-DE">German</option>
+            <option value="it-IT">Italian</option>
+            <option value="pt-BR">Portuguese</option>
+            <option value="ja-JP">Japanese</option>
+            <option value="ko-KR">Korean</option>
+            <option value="zh-CN">Chinese</option>
+            <option value="ar-SA">Arabic</option>
+            <option value="hi-IN">Hindi</option>
+            <option value="ru-RU">Russian</option>
+          </select>
+        </SettingField>
+      </Section>
+
+      <Section title="Notifications" icon="notifications">
+        <Toggle label="Notification Sounds" checked={!!display.notificationSounds} onChange={() => applyInstant({ notificationSounds: !settings.notificationSounds })} />
+        {display.notificationSounds && <AgentSoundPicker settings={settings} applyInstant={applyInstant} />}
+        <Toggle label="Desktop Notifications" description="Browser notifications for new messages"
+          checked={!!display.desktopNotifications}
+          onChange={() => {
+            if (!settings.desktopNotifications && 'Notification' in window && Notification.permission !== 'granted') {
+              Notification.requestPermission().then(p => { if (p === 'granted') applyInstant({ desktopNotifications: true }); });
+            } else {
+              applyInstant({ desktopNotifications: !settings.desktopNotifications });
+            }
+          }}
         />
-      </SettingField>
-
-      {/* Timezone */}
-      <SettingField label="Timezone">
-        <select
-          value={display.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
-          onChange={(e) => applyInstant({ timezone: e.target.value })}
-          className="setting-input text-[12px] w-full"
-        >
-          {Intl.supportedValuesOf?.('timeZone')?.map((tz: string) => (
-            <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
-          )) ?? (
-            <>
-              <option value="America/New_York">America/New York</option>
-              <option value="America/Chicago">America/Chicago</option>
-              <option value="America/Denver">America/Denver</option>
-              <option value="America/Los_Angeles">America/Los Angeles</option>
-              <option value="Europe/London">Europe/London</option>
-              <option value="Europe/Paris">Europe/Paris</option>
-              <option value="Europe/Berlin">Europe/Berlin</option>
-              <option value="Asia/Tokyo">Asia/Tokyo</option>
-              <option value="Asia/Shanghai">Asia/Shanghai</option>
-              <option value="Asia/Kolkata">Asia/Kolkata</option>
-              <option value="Australia/Sydney">Australia/Sydney</option>
-              <option value="Pacific/Auckland">Pacific/Auckland</option>
-              <option value="UTC">UTC</option>
-            </>
-          )}
-        </select>
-        <p className="text-[9px] text-on-surface-variant/30 mt-1">Controls all timestamps and time displays</p>
-      </SettingField>
-
-      {/* Time Format */}
-      <SettingField label="Time Format">
-        <div className="flex gap-2">
-          {(['12h', '24h'] as const).map(fmt => (
-            <button
-              key={fmt}
-              onClick={() => applyInstant({ timeFormat: fmt })}
-              className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-all ${
-                (display.timeFormat || '12h') === fmt
-                  ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
-                  : 'bg-surface-container/40 text-on-surface-variant/40'
-              }`}
-            >
-              {fmt === '12h' ? '12-hour (AM/PM)' : '24-hour'}
-            </button>
-          ))}
-        </div>
-      </SettingField>
-
-      {/* Voice Language */}
-      <SettingField label="Voice Input Language">
-        <select
-          value={display.voiceLanguage || navigator.language || 'en-US'}
-          onChange={(e) => applyInstant({ voiceLanguage: e.target.value })}
-          className="setting-input text-[12px] w-full"
-        >
-          <option value="">Auto-detect (browser default)</option>
-          <option value="en-US">English (US)</option>
-          <option value="en-GB">English (UK)</option>
-          <option value="en-AU">English (Australia)</option>
-          <option value="es-ES">Spanish (Spain)</option>
-          <option value="es-MX">Spanish (Mexico)</option>
-          <option value="fr-FR">French</option>
-          <option value="de-DE">German</option>
-          <option value="it-IT">Italian</option>
-          <option value="pt-BR">Portuguese (Brazil)</option>
-          <option value="pt-PT">Portuguese (Portugal)</option>
-          <option value="ja-JP">Japanese</option>
-          <option value="ko-KR">Korean</option>
-          <option value="zh-CN">Chinese (Simplified)</option>
-          <option value="zh-TW">Chinese (Traditional)</option>
-          <option value="ar-SA">Arabic</option>
-          <option value="hi-IN">Hindi</option>
-          <option value="ru-RU">Russian</option>
-          <option value="nl-NL">Dutch</option>
-          <option value="sv-SE">Swedish</option>
-          <option value="pl-PL">Polish</option>
-          <option value="tr-TR">Turkish</option>
-          <option value="th-TH">Thai</option>
-          <option value="vi-VN">Vietnamese</option>
-          <option value="id-ID">Indonesian</option>
-          <option value="uk-UA">Ukrainian</option>
-        </select>
-        <p className="text-[9px] text-on-surface-variant/30 mt-1">Language used for push-to-talk voice recognition</p>
-      </SettingField>
-
-      <div className="h-px bg-outline-variant/8" />
-
-      {/* Notification Sounds */}
-      <Toggle
-        label="Notification Sounds"
-        checked={!!display.notificationSounds}
-        onChange={() => applyInstant({ notificationSounds: !settings.notificationSounds })}
-      />
-
-      {/* Per-Agent Sound Selection */}
-      {display.notificationSounds && <AgentSoundPicker settings={settings} applyInstant={applyInstant} />}
-
-      {/* Desktop Notifications */}
-      <Toggle
-        label="Desktop Notifications"
-        description="Show browser notifications for new messages"
-        checked={!!display.desktopNotifications}
-        onChange={() => {
-          if (!settings.desktopNotifications && 'Notification' in window && Notification.permission !== 'granted') {
-            Notification.requestPermission().then(p => {
-              if (p === 'granted') applyInstant({ desktopNotifications: true });
-            });
-          } else {
-            applyInstant({ desktopNotifications: !settings.desktopNotifications });
-          }
-        }}
-      />
-
-      {/* Quiet Hours */}
-      <SettingField label={`Quiet Hours: ${display.quietHoursStart}:00 \u2013 ${display.quietHoursEnd}:00`}>
-        <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <label className="text-[9px] text-on-surface-variant/40 block mb-1">Start</label>
-            <input
-              type="range"
-              min={0}
-              max={23}
-              value={display.quietHoursStart}
-              onChange={(e) => updateDraft({ quietHoursStart: Number(e.target.value) })}
-              className="w-full accent-primary"
-            />
+        <SettingField label={`Quiet Hours: ${display.quietHoursStart}:00 \u2013 ${display.quietHoursEnd}:00`}>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <label className="text-[9px] text-on-surface-variant/40 block mb-1">Start</label>
+              <input type="range" min={0} max={23} value={display.quietHoursStart} onChange={(e) => updateDraft({ quietHoursStart: Number(e.target.value) })} className="w-full accent-primary" />
+            </div>
+            <div className="flex-1">
+              <label className="text-[9px] text-on-surface-variant/40 block mb-1">End</label>
+              <input type="range" min={0} max={23} value={display.quietHoursEnd} onChange={(e) => updateDraft({ quietHoursEnd: Number(e.target.value) })} className="w-full accent-primary" />
+            </div>
           </div>
-          <div className="flex-1">
-            <label className="text-[9px] text-on-surface-variant/40 block mb-1">End</label>
-            <input
-              type="range"
-              min={0}
-              max={23}
-              value={display.quietHoursEnd}
-              onChange={(e) => updateDraft({ quietHoursEnd: Number(e.target.value) })}
-              className="w-full accent-primary"
-            />
-          </div>
-        </div>
-        <p className="text-[9px] text-on-surface-variant/30 mt-1">Mute sounds and desktop notifications during these hours</p>
-      </SettingField>
+        </SettingField>
+      </Section>
     </>
   );
 }
@@ -376,8 +335,7 @@ function AppearanceTab({
 }) {
   return (
     <>
-      {/* Theme */}
-      <SettingField label="Theme">
+      <Section title="Theme" icon="palette" defaultOpen>
         <div className="grid grid-cols-3 gap-1.5">
           {([
             { id: 'dark', label: 'Dark', color: '#a78bfa' },
@@ -390,55 +348,35 @@ function AppearanceTab({
             { id: 'rosegold', label: 'Rose Gold', color: '#f43f5e' },
             { id: 'arctic', label: 'Arctic', color: '#60a5fa' },
           ] as const).map((t) => (
-            <button
-              key={t.id}
-              onClick={() => applyInstant({ theme: t.id as Settings['theme'] })}
+            <button key={t.id} onClick={() => applyInstant({ theme: t.id as Settings['theme'] })}
               className={`py-2 px-1 rounded-lg text-[10px] font-medium transition-all ${
-                display.theme === t.id
-                  ? 'ring-1 ring-primary/30'
-                  : 'bg-surface-container/40 text-on-surface-variant/40 hover:text-on-surface-variant/60'
+                display.theme === t.id ? 'ring-1 ring-primary/30' : 'bg-surface-container/40 text-on-surface-variant/40 hover:text-on-surface-variant/60'
               }`}
-              style={display.theme === t.id ? { background: `${t.color}15`, color: t.color } : undefined}
-            >
+              style={display.theme === t.id ? { background: `${t.color}15`, color: t.color } : undefined}>
               <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ background: t.color }} />
               {t.label}
             </button>
           ))}
         </div>
-      </SettingField>
+      </Section>
 
-      {/* Font size */}
-      <SettingField label={`Font Size: ${display.fontSize}px`}>
-        <input
-          type="range"
-          min={10}
-          max={24}
-          value={display.fontSize}
-          onChange={(e) => updateDraft({ fontSize: Number(e.target.value) })}
-          className="w-full accent-primary"
-        />
-        <div className="flex justify-between text-[9px] text-on-surface-variant/45 mt-1">
-          <span>10px</span><span>24px</span>
-        </div>
-      </SettingField>
+      <Section title="Typography" icon="text_fields">
+        <SettingField label={`Font Size: ${display.fontSize}px`}>
+          <input type="range" min={10} max={24} value={display.fontSize} onChange={(e) => updateDraft({ fontSize: Number(e.target.value) })} className="w-full accent-primary" />
+          <div className="flex justify-between text-[9px] text-on-surface-variant/45 mt-1"><span>10px</span><span>24px</span></div>
+        </SettingField>
+      </Section>
 
-      <div className="h-px bg-outline-variant/8" />
-
-      {/* Stats Panel Toggle */}
-      <Toggle
-        label="Stats Panel"
-        description="Show the right-side info panel on wide screens"
-        checked={display.showStatsPanel !== false}
-        onChange={() => applyInstant({ showStatsPanel: !display.showStatsPanel })}
-      />
-
-      {/* Info Panel Sections */}
-      {display.showStatsPanel !== false && (
-        <InfoPanelSectionsToggle
-          sections={display.statsSections || { session: true, tokens: true, agents: true, activity: true }}
-          onChange={(sections: StatsSections) => applyInstant({ statsSections: sections })}
-        />
-      )}
+      <Section title="Info Panel" icon="info">
+        <Toggle label="Stats Panel" description="Right-side info panel on wide screens"
+          checked={display.showStatsPanel !== false} onChange={() => applyInstant({ showStatsPanel: !display.showStatsPanel })} />
+        {display.showStatsPanel !== false && (
+          <InfoPanelSectionsToggle
+            sections={display.statsSections || { session: true, tokens: true, agents: true, activity: true }}
+            onChange={(sections: StatsSections) => applyInstant({ statsSections: sections })}
+          />
+        )}
+      </Section>
     </>
   );
 }
@@ -457,56 +395,34 @@ function AgentsTab({
 }) {
   return (
     <>
-      {/* Auto-Route Toggle */}
-      <Toggle
-        label="Auto-Route Messages to Agents"
-        description="When ON, agents receive ALL messages (not just @mentions). When OFF, agents only respond when @mentioned."
-        checked={!!(display.autoRoute)}
-        onChange={() => applyInstant({ autoRoute: !(display.autoRoute ?? false) })}
-      />
+      <Section title="Routing" icon="route" defaultOpen>
+        <Toggle label="Auto-Route Messages" description="Agents receive ALL messages, not just @mentions"
+          checked={!!(display.autoRoute)} onChange={() => applyInstant({ autoRoute: !(display.autoRoute ?? false) })} />
+        <SettingField label={`Loop Guard: ${display.loopGuard} hops`}>
+          <input type="range" min={1} max={200} value={display.loopGuard} onChange={(e) => updateDraft({ loopGuard: Number(e.target.value) })} className="w-full accent-primary" />
+          <div className="flex justify-between text-[9px] text-on-surface-variant/45 mt-1"><span>1</span><span>200</span></div>
+        </SettingField>
+      </Section>
 
-      {/* Loop guard */}
-      <SettingField label={`Loop Guard: ${display.loopGuard} hops`}>
-        <input
-          type="range"
-          min={1}
-          max={200}
-          value={display.loopGuard}
-          onChange={(e) => updateDraft({ loopGuard: Number(e.target.value) })}
-          className="w-full accent-primary"
-        />
-        <div className="flex justify-between text-[9px] text-on-surface-variant/45 mt-1">
-          <span>1</span><span>200</span>
-        </div>
-        <p className="text-[10px] text-on-surface-variant/45 mt-1">
-          Max agent-to-agent hops before pausing the conversation
-        </p>
-      </SettingField>
+      <Section title="Persistent Agents" icon="smart_toy" defaultOpen>
+        <PersistentAgentsSection />
+      </Section>
 
-      <div className="h-px bg-outline-variant/8" />
+      <Section title="Supported Agents" icon="devices">
+        <SupportedAgentsSection />
+      </Section>
 
-      {/* Persistent Agents */}
-      <PersistentAgentsSection />
+      <Section title="Marketplace" icon="store">
+        <MarketplaceSection />
+      </Section>
 
-      <div className="h-px bg-outline-variant/8" />
+      <Section title="Skill Packs" icon="extension">
+        <SkillPacksSection />
+      </Section>
 
-      {/* Supported Agents */}
-      <SupportedAgentsSection />
-
-      <div className="h-px bg-outline-variant/8" />
-
-      {/* GhostHub Marketplace */}
-      <MarketplaceSection />
-
-      <div className="h-px bg-outline-variant/8" />
-
-      {/* Skill Packs */}
-      <SkillPacksSection />
-
-      <div className="h-px bg-outline-variant/8" />
-
-      {/* Automation Hooks */}
-      <HooksSection />
+      <Section title="Hooks" icon="webhook">
+        <HooksSection />
+      </Section>
     </>
   );
 }
@@ -845,13 +761,18 @@ function IntegrationsTab() {
 function SecurityTab() {
   return (
     <>
-      <SecretsSection />
-      <div className="h-px bg-outline-variant/8" />
-      <RetentionSection />
-      <div className="h-px bg-outline-variant/8" />
-      <DataManagementSection />
-      <div className="h-px bg-outline-variant/8" />
-      <AuditLogSection />
+      <Section title="Secrets" icon="key" defaultOpen>
+        <SecretsSection />
+      </Section>
+      <Section title="Data Retention" icon="schedule">
+        <RetentionSection />
+      </Section>
+      <Section title="Data Management" icon="database">
+        <DataManagementSection />
+      </Section>
+      <Section title="Audit Log" icon="history">
+        <AuditLogSection />
+      </Section>
     </>
   );
 }
@@ -1075,29 +996,22 @@ function AdvancedTab({
 }) {
   return (
     <>
-      {/* Debug Mode */}
-      <Toggle
-        label="Debug Mode"
-        description="Show raw message data and WebSocket events"
-        checked={!!display.debugMode}
-        onChange={() => applyInstant({ debugMode: !settings.debugMode })}
-        activeColor="bg-yellow-500/80"
-      />
+      <Section title="Debug" icon="bug_report" defaultOpen>
+        <Toggle label="Debug Mode" description="Show raw message data and WebSocket events"
+          checked={!!display.debugMode} onChange={() => applyInstant({ debugMode: !settings.debugMode })} activeColor="bg-yellow-500/80" />
+      </Section>
 
-      <div className="h-px bg-outline-variant/8" />
+      <Section title="Server Config" icon="dns">
+        <ServerConfigSection />
+      </Section>
 
-      {/* Server Config */}
-      <ServerConfigSection />
+      <Section title="Server Logs" icon="terminal">
+        <ServerLogsSection />
+      </Section>
 
-      <div className="h-px bg-outline-variant/8" />
-
-      {/* Server Logs */}
-      <ServerLogsSection />
-
-      <div className="h-px bg-outline-variant/8" />
-
-      {/* Maintenance / Cleanup */}
-      <CleanupSection />
+      <Section title="Maintenance" icon="build">
+        <CleanupSection />
+      </Section>
     </>
   );
 }
@@ -1263,9 +1177,7 @@ function ProvidersTab() {
 
   return (
     <>
-      {/* Capabilities overview */}
-      <div>
-        <div className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider mb-2">AI Capabilities</div>
+      <Section title="Capabilities" icon="auto_awesome" defaultOpen>
         <div className="grid grid-cols-2 gap-1.5">
           {Object.entries(status.capabilities).map(([cap, info]: [string, any]) => (
             <div key={cap} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[10px] ${
@@ -1277,13 +1189,9 @@ function ProvidersTab() {
             </div>
           ))}
         </div>
-      </div>
+      </Section>
 
-      <div className="h-px bg-outline-variant/8" />
-
-      {/* Provider list */}
-      <div>
-        <div className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider mb-2">Providers</div>
+      <Section title="Providers" icon="cloud" defaultOpen>
         <div className="space-y-2">
           {status.providers.map((p: any) => (
             <div key={p.id} className={`rounded-xl p-3 border transition-all ${
@@ -1356,16 +1264,12 @@ function ProvidersTab() {
             </div>
           ))}
         </div>
-      </div>
-
       {status.free_options.length > 0 && (
-        <>
-          <div className="h-px bg-outline-variant/8" />
-          <div className="text-[10px] text-on-surface-variant/40 leading-relaxed">
-            Free providers available: {status.free_options.map((p: any) => p.name).join(', ')}. Configure them above to unlock more AI capabilities at no cost.
-          </div>
-        </>
+        <div className="text-[10px] text-on-surface-variant/40 leading-relaxed mt-2">
+          Free: {status.free_options.map((p: any) => p.name).join(', ')}
+        </div>
       )}
+      </Section>
     </>
   );
 }
@@ -1859,7 +1763,7 @@ function AgentSoundPicker({ settings, applyInstant }: { settings: Settings; appl
 function SettingField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-[10px] font-semibold text-on-surface-variant/50 uppercase tracking-wider mb-2 block">
+      <label className="text-[11px] font-semibold text-on-surface-variant/50 uppercase tracking-wider mb-2 block">
         {label}
       </label>
       {children}

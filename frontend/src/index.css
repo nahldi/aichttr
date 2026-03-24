@@ -477,6 +477,43 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 12px rgba(167, 139, 250, 0.06);
 }
 
+/* ── Settings section card ── */
+.setting-section {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.setting-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.setting-section-header:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+.setting-section-content {
+  padding: 0 14px 14px;
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+  opacity: 1;
+}
+.setting-section-content.collapsed {
+  grid-template-rows: 0fr;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+}
+.setting-section-content > .inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* ── Light theme ── */
 [data-theme="light"] {
   --color-surface: #f5f5fa;
