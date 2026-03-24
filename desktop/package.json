@@ -1,7 +1,7 @@
 {
   "name": "ghostlink",
-  "version": "2.5.2",
-  "description": "GhostLink — Multi-Agent AI Chat Platform",
+  "version": "2.5.3",
+  "description": "GhostLink \u2014 Multi-Agent AI Chat Platform",
   "main": "main/index.js",
   "scripts": {
     "dev": "tsc && electron .",
@@ -29,4 +29,3 @@
     "electron-log": "^5.2.0"
   }
 }
-
