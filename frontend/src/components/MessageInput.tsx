@@ -804,6 +804,7 @@ export function MessageInput() {
           onPaste={handlePaste}
           onClick={handleInput}
           placeholder={`Message #${activeChannel}...`}
+          aria-label={`Message input for #${activeChannel}`}
           rows={1}
           className="flex-1 bg-surface-container/60 rounded-xl px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/30 resize-none max-h-40 outline-none border border-outline-variant/8 focus:border-primary/25 focus:shadow-[0_0_16px_rgba(167,139,250,0.08)] transition-all"
         />
@@ -816,6 +817,7 @@ export function MessageInput() {
                 : 'text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high'
             }`}
             title={voice.listening ? 'Stop recording' : 'Voice input'}
+            aria-label={voice.listening ? 'Stop recording' : 'Voice input'}
           >
             <span className="material-symbols-outlined text-xl">
               {voice.listening ? 'mic_off' : 'mic'}

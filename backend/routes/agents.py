@@ -829,3 +829,90 @@ async def peek_terminal(name: str, lines: int = 30):
         return {"name": name, "output": result.stdout, "active": True}
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return {"name": name, "output": "", "active": False}
+
+
+# ── Workspace viewer (v3.8.0) ──────────────────────────────────────
+
+@router.get("/api/agents/{name}/workspace")
+async def get_agent_workspace(name: str):
+    """List files in an agent's workspace directory."""
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
+
+    # Find agent's workspace
+    inst = deps.registry.get(name) if deps.registry else None
+    workspace = getattr(inst, 'workspace', None) if inst else None
+    if not workspace:
+        # Check persistent agents
+        for pa in deps._settings.get("persistentAgents", []):
+            if pa.get("base") == name or name.startswith(pa.get("base", "")):
+                workspace = pa.get("cwd", ".")
+                break
+    if not workspace:
+        workspace = "."
+
+    from pathlib import Path
+    ws = Path(workspace).resolve()
+    if not ws.is_dir():
+        return {"files": [], "workspace": str(ws), "git_status": ""}
+
+    files = []
+    try:
+        for entry in sorted(ws.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())):
+            if entry.name.startswith('.') and entry.name not in ('.gitignore',):
+                continue
+            if entry.name in ('node_modules', '__pycache__', '.venv', 'venv', '.git', 'dist'):
+                continue
+            files.append({
+                "name": entry.name,
+                "path": str(entry.relative_to(ws)),
+                "type": "directory" if entry.is_dir() else "file",
+                "size": entry.stat().st_size if entry.is_file() else None,
+            })
+    except PermissionError:
+        pass
+
+    # Git status
+    git_status = ""
+    try:
+        result = subprocess.run(
+            ["git", "log", "--oneline", "-1"],
+            cwd=str(ws), capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            git_status = result.stdout.strip()
+    except Exception:
+        pass
+
+    return {"files": files, "workspace": str(ws), "git_status": git_status}
+
+
+@router.get("/api/agents/{name}/workspace/file")
+async def get_agent_workspace_file(name: str, path: str = ""):
+    """Read a file from an agent's workspace."""
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
+    if not path:
+        return JSONResponse({"error": "path required"}, 400)
+
+    # Resolve workspace
+    inst = deps.registry.get(name) if deps.registry else None
+    workspace = getattr(inst, 'workspace', None) if inst else "."
+
+    from pathlib import Path
+    ws = Path(workspace).resolve()
+    file_path = (ws / path).resolve()
+
+    # Path traversal guard
+    if not file_path.is_relative_to(ws):
+        return JSONResponse({"error": "path traversal blocked"}, 403)
+    if not file_path.is_file():
+        return JSONResponse({"error": "file not found"}, 404)
+    if file_path.stat().st_size > 500_000:
+        return JSONResponse({"error": "file too large (>500KB)"}, 413)
+
+    try:
+        content = file_path.read_text("utf-8", errors="replace")
+        return {"path": path, "content": content, "size": len(content)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, 500)
