@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "3.5.0"
+__version__ = "3.6.0"
 
 import json
 import os
@@ -266,6 +266,11 @@ async def lifespan(_app: FastAPI):
     exec_policy = ExecPolicy(DATA_DIR)
     audit_log = AuditLog(DATA_DIR)
     data_manager = DataManager(DATA_DIR, store=store)
+    # v3.6.0: Worktree manager for agent isolation + automation manager
+    from worktree import WorktreeManager
+    from automations import AutomationManager
+    worktree_manager = WorktreeManager(str(BASE_DIR))
+    automation_manager = AutomationManager(DATA_DIR)
     audit_log.log("server_start", {"version": __version__, "port": PORT})
 
     # Publish all stores into deps so route modules can access them
@@ -283,6 +288,8 @@ async def lifespan(_app: FastAPI):
     deps.exec_policy = exec_policy
     deps.audit_log = audit_log
     deps.data_manager = data_manager
+    deps.worktree_manager = worktree_manager
+    deps.automation_manager = automation_manager
 
     # Broadcast new messages via WebSocket
     async def on_msg(msg: dict):

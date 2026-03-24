@@ -22,7 +22,7 @@ def _git_diff_summary(workspace: str) -> str | None:
     """Get a short summary of uncommitted changes."""
     try:
         result = subprocess.run(
-            ["git", "diff", "--stat", "--no-color"],
+            ["git", "diff", "--cached", "--stat", "--no-color"],
             cwd=workspace,
             capture_output=True,
             text=True,

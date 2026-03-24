@@ -1,7 +1,7 @@
 # GhostLink — Known Bugs & Issues
 
 **Last updated:** 2026-03-24
-**Version:** v3.3.2
+**Version:** v3.5.0
 **Source:** Full codebase audit + live API testing + deep code path audit + user-reported bugs + automated audit + 5 fix rounds
 
 ---
@@ -392,3 +392,50 @@
 1. Cross-session memory search (1.3) — `agent_memory.py` already has FTS5 infrastructure from the main store; extending it would be straightforward.
 2. Lifecycle hooks (1.2) — `plugin_sdk.py` already has an EventBus; wiring pre/post tool hooks is minimal.
 3. The 27+ bare `except Exception:` blocks (BUG-077) remain as an observability gap — low priority but would improve debuggability.
+
+---
+
+## HOURLY HEALTH AUDIT — 2026-03-24T18:XX UTC
+
+**Audit type:** Automated scheduled audit (no code edits — issues logged only)
+**Test suite:** 57/57 tests passed (all green, +1 from previous audits)
+**TypeScript:** Frontend compiles clean (0 errors from `tsc -b`)
+**Frontend vulnerabilities:** 0 (npm audit clean)
+**Frontend dist:** Present — 864KB JS + 103KB CSS (index-DGEnHsSL.js, index-DSTF8e6N.css)
+**Git:** On `master`, up to date with `origin/master`. Clean working tree. 7 untracked files (screenshots, config backup, audit docx — all non-critical).
+**Python deps:** Install cleanly. No dependency conflicts.
+**Version sync:** All 3 packages at `3.5.0` (backend `__version__`, frontend `package.json`, desktop `package.json`). ✅
+**All Python files:** Parse cleanly (AST check). All 18 backend modules import without errors.
+**Backend server startup:** Starts successfully. `/api/status`, `/api/channels`, `/api/settings`, `/api/providers`, `/api/jobs`, `/api/rules`, `/api/hooks` all respond 200.
+**WebSocket:** Connects and accepts messages. ✅
+**Code scan:** No TODO/FIXME/HACK/XXX/BROKEN comments. No missing imports. No hardcoded port mismatches (all read from config with 8300/8200/8201 defaults).
+**v3.5.0 features:** auto_lint, auto_commit, file_watcher (watch mode), worktree.py, delegate MCP tool all present and syntactically valid.
+
+### BUG-084: Auto-commit `_git_diff_summary()` uses wrong git diff command after staging
+**Severity:** Medium — auto-commit will silently generate no commit message after `git add -u`
+**Where:** `backend/plugins/auto_commit.py` line 25 and 83
+**Root cause:** `_do_auto_commit()` calls `git add -u` (line 76-80) to stage changes, then calls `_git_diff_summary()` which runs `git diff --stat`. After staging, `git diff --stat` shows *unstaged* changes only — which is now empty. The diff summary returns `None`, causing the function to return without committing (line 84-85).
+**Fix needed:** Change `git diff --stat --no-color` to `git diff --cached --stat --no-color` in `_git_diff_summary()` to show staged changes.
+**Status:** OPEN
+
+### BUG-085: WorktreeManager not wired into agent spawn/deregister lifecycle
+**Severity:** Low — feature is defined but not active; no regression, just dead code
+**Where:** `backend/worktree.py` — `WorktreeManager` class
+**Root cause:** `WorktreeManager` is fully implemented (create, remove, merge, cleanup) but is not imported or instantiated anywhere in `app.py`, `deps.py`, or `routes/agents.py`. Agent spawn does not call `create_worktree()` and deregister does not call `merge_changes()` / `remove_worktree()`. The feature described in the v3.5.0 commit message ("Git worktree isolation") exists as code but is not integrated.
+**Fix needed:** Import `WorktreeManager` in `deps.py`, instantiate on startup, call `create_worktree()` during agent spawn and `merge_changes()` + `remove_worktree()` during deregister. Add `cleanup_all()` to shutdown handler.
+**Status:** OPEN
+
+### BUG-086: Auto-lint and auto-commit only trigger on `code_execute` tool
+**Severity:** Low — may miss file edits from other MCP tools
+**Where:** `backend/plugins/auto_lint.py` line 84, `backend/plugins/auto_commit.py` line 123
+**Root cause:** Both plugins only trigger on the `code_execute` tool. Other file-writing operations (e.g., direct file edits via agents) won't trigger linting or auto-commit. This is acceptable if `code_execute` is the only tool that writes files, but may need expansion if agents use other file-editing tools.
+**Status:** Acknowledged — acceptable for v3.5.0, may need expansion in future
+
+### NOTE-002: Feature/update opportunities for v3.6.0
+**Type:** Enhancement notes (not bugs)
+1. **Wire WorktreeManager** (BUG-085) — integrate into agent lifecycle for true file isolation between concurrent agents.
+2. **Fix auto-commit diff** (BUG-084) — simple one-line fix to use `--cached` flag.
+3. **Expand tool triggers** (BUG-086) — if new file-writing MCP tools are added, update auto-lint/auto-commit trigger lists.
+4. **_processed_comments memory growth** — `file_watcher.py` line 22: `_processed_comments` set grows unbounded as more @ghostlink comments are found. Consider periodic pruning or LRU cache.
+5. **BUGS.md version header** still says `v3.3.2` at top of file — should be updated to `v3.5.0`.
+6. The 27+ bare `except Exception:` blocks (BUG-077) remain as an observability gap.

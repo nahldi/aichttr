@@ -750,3 +750,80 @@ async def trigger_agent(agent_name: str, request: Request):
     route_mentions("system", msg_text, channel)
 
     return {"ok": True, "message_id": msg.get("id"), "agent": agent_name}
+
+
+# ── Automations (v3.6.0) ─────────────────────────────────────────
+
+@router.get("/api/automations")
+async def list_automations():
+    """List all automation rules."""
+    if not hasattr(deps, 'automation_manager') or not deps.automation_manager:
+        return {"rules": []}
+    return {"rules": deps.automation_manager.list_rules()}
+
+
+@router.post("/api/automations")
+async def create_automation(request: Request):
+    """Create a new automation rule."""
+    if not hasattr(deps, 'automation_manager') or not deps.automation_manager:
+        return JSONResponse({"error": "Automations not initialized"}, 500)
+    body = await request.json()
+    rule = deps.automation_manager.add_rule(body)
+    return rule
+
+
+@router.patch("/api/automations/{rule_id}")
+async def update_automation(rule_id: str, request: Request):
+    body = await request.json()
+    if not hasattr(deps, 'automation_manager') or not deps.automation_manager:
+        return JSONResponse({"error": "Automations not initialized"}, 500)
+    result = deps.automation_manager.update_rule(rule_id, body)
+    if not result:
+        return JSONResponse({"error": "Rule not found"}, 404)
+    return result
+
+
+@router.delete("/api/automations/{rule_id}")
+async def delete_automation(rule_id: str):
+    if not hasattr(deps, 'automation_manager') or not deps.automation_manager:
+        return JSONResponse({"error": "Automations not initialized"}, 500)
+    ok = deps.automation_manager.delete_rule(rule_id)
+    return {"ok": ok}
+
+
+@router.post("/api/automations/webhook/{source}")
+async def receive_automation_webhook(source: str, request: Request):
+    """Receive an incoming webhook and process matching automation rules."""
+    if not hasattr(deps, 'automation_manager') or not deps.automation_manager:
+        return JSONResponse({"error": "Automations not initialized"}, 500)
+
+    body = await request.body()
+    try:
+        payload = json.loads(body)
+    except (json.JSONDecodeError, ValueError):
+        return JSONResponse({"error": "Invalid JSON"}, 400)
+
+    # Verify signature if configured
+    signature = request.headers.get("x-hub-signature-256", request.headers.get("x-signature", ""))
+    if signature and not deps.automation_manager.verify_signature(source, body, signature):
+        return JSONResponse({"error": "Invalid signature"}, 403)
+
+    # Determine event type from headers
+    event_type = request.headers.get("x-github-event", request.headers.get("x-event-type", payload.get("type", "unknown")))
+
+    # Process matching rules
+    actions = deps.automation_manager.process_webhook(source, event_type, payload)
+
+    for action in actions:
+        msg_text = action["message"]
+        if action["agent"]:
+            msg_text = f"@{action['agent']} {msg_text}"
+
+        msg = await deps.store.add("system", msg_text, "system", action["channel"])
+        await deps.broadcast("message", msg)
+
+        if action["agent"]:
+            from app_helpers import route_mentions
+            route_mentions("system", msg_text, action["channel"])
+
+    return {"processed": len(actions), "actions": actions}

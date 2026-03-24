@@ -45,6 +45,8 @@ secrets_manager: "SecretsManager | None" = None
 exec_policy: "ExecPolicy | None" = None
 audit_log: "AuditLog | None" = None
 data_manager: "DataManager | None" = None
+worktree_manager: "WorktreeManager | None" = None  # v3.6.0
+automation_manager: "AutomationManager | None" = None  # v3.6.0
 
 # ── Process tracking (set by spawn/register routes) ──────────────────
 
