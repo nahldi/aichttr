@@ -506,9 +506,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Fetch auth statuses
   api.invoke('auth:check-all');
 
-  // Fetch version
-  const ver = await api.invoke('app:get-version');
-  if (ver) $version.textContent = 'v' + ver;
+  // Fetch version (v2.5.4: hardened with try/catch — never show stale fallback)
+  try {
+    const ver = await api.invoke('app:get-version');
+    if (ver) $version.textContent = 'v' + ver;
+    else $version.textContent = 'v?';
+  } catch (e) {
+    console.warn('Failed to fetch app version:', e);
+    $version.textContent = 'v?';
+  }
 
   // Check for updates
   api.invoke('update:check');
