@@ -184,6 +184,7 @@ async def spawn_agent(request: Request):
     label = body.get("label", "").strip()
     cwd = body.get("cwd", "").strip()
     extra_args = body.get("args", [])
+    role_description = body.get("roleDescription", "").strip()
 
     if not base:
         return JSONResponse({"error": "base is required"}, 400)
@@ -260,6 +261,10 @@ async def spawn_agent(request: Request):
         spawn_env = os.environ.copy()
         if cwd:
             spawn_env["GHOSTLINK_AGENT_CWD"] = cwd
+        if role_description:
+            spawn_env["GHOSTLINK_AGENT_ROLE"] = role_description
+        if label:
+            spawn_env["GHOSTLINK_AGENT_LABEL"] = label
         proc = subprocess.Popen(
             spawn_args,
             cwd=str(deps.BASE_DIR),

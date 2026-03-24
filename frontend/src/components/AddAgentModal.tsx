@@ -87,6 +87,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
   const [templates, setTemplates] = useState<AgentTemplate[]>([]);
   const [selected, setSelected] = useState('');
   const [label, setLabel] = useState('');
+  const [roleDescription, setRoleDescription] = useState('');
   const [cwd, setCwd] = useState('');
   const [selectedModel, setSelectedModel] = useState(0);
   const [permPreset, setPermPreset] = useState(0);
@@ -171,7 +172,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
         }
       }
 
-      await api.spawnAgent(selected, finalLabel, finalCwd, finalArgs);
+      await api.spawnAgent(selected, finalLabel, finalCwd, finalArgs, roleDescription);
 
       // v3.7.0: Configure bridge if selected
       if (bridgePlatform && bridgeToken) {
@@ -315,6 +316,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
                     onClick={() => {
                       setSelected(preset.base);
                       setLabel(preset.label);
+                      setRoleDescription(preset.desc);
                       setPermPreset(preset.perm);
                       setSelectedModel(0);
                     }}

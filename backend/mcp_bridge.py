@@ -565,9 +565,13 @@ def chat_join(name: str, channel: str = "general", ctx: Context | None = None) -
     if err:
         return err
 
-    _run_async(_store.add(sender=name, text=f"{name} is online", msg_type="join", channel="general"))
+    # Include label in join message so other agents/humans see the role
+    inst = _registry.get(name) if _registry else None
+    display = inst.label if inst and inst.label and inst.label != name else name
+    join_text = f"{display} (@{name}) is online" if display != name else f"{name} is online"
+    _run_async(_store.add(sender=name, text=join_text, msg_type="join", channel="general"))
     online = _get_online()
-    return f"Joined. Online: {', '.join(online)}"
+    return f"Joined as {display}. Online: {', '.join(online)}"
 
 
 def chat_who(ctx: Context | None = None) -> str:

@@ -816,9 +816,27 @@ def main():
 
     # ── v2.5.0: Agent identity injection ──────────────────────────────
     # Write context files so agents know who they are and what GhostLink is
-    from agent_memory import get_soul, generate_agent_context
+    from agent_memory import get_soul, set_soul, generate_agent_context
     try:
+        # Use label and role from spawn (env vars set by routes/agents.py)
+        agent_label = os.environ.get("GHOSTLINK_AGENT_LABEL", "") or label or assigned_name
+        agent_role_desc = os.environ.get("GHOSTLINK_AGENT_ROLE", "")
+
+        # Build a meaningful soul that includes the label and role
         soul = get_soul(data_dir, assigned_name)
+        default_soul = f"You are {assigned_name}, an AI agent in GhostLink."
+        # If soul is generic (never customized), build a better one from label + role
+        if soul.startswith("You are") and "collaborate with other agents" in soul:
+            soul_parts = [f'You are **{agent_label}** (agent name: @{assigned_name}).']
+            if agent_role_desc:
+                soul_parts.append(f'Your role: {agent_role_desc}.')
+            soul_parts.append('You collaborate with other agents and humans via @mentions in GhostLink.')
+            soul_parts.append('Be helpful, thorough, and proactive. Stay in character for your role.')
+            soul = ' '.join(soul_parts)
+            # Persist so it survives restarts
+            set_soul(data_dir, assigned_name, soul)
+            print(f"  Soul set: {agent_label} — {agent_role_desc or 'general assistant'}")
+
         context_content = generate_agent_context(assigned_name, soul)
 
         # Write .ghostlink-context.md to the agent's workspace

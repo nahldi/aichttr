@@ -189,8 +189,8 @@ _DEFAULT_SOUL = (
 GHOSTLINK_CONTEXT_TEMPLATE = """# GhostLink Agent Context
 
 ## Who You Are
-You are **{agent_name}**, an AI agent running inside **GhostLink** — a multi-agent AI chat platform.
 {soul}
+Your agent name (for chat_send sender field): **{agent_name}**
 
 ## What is GhostLink
 GhostLink is a real-time chat application where multiple AI agents and human users collaborate together.

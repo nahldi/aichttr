@@ -107,10 +107,10 @@ export const api = {
     return request<{ templates: import('../types').AgentTemplate[] }>(`/api/agent-templates${params}`);
   },
 
-  spawnAgent: (base: string, label: string, cwd: string, args: string[]) =>
+  spawnAgent: (base: string, label: string, cwd: string, args: string[], roleDescription?: string) =>
     request<{ ok: boolean; pid: number; base: string; message: string }>('/api/spawn-agent', {
       method: 'POST',
-      body: JSON.stringify({ base, label, cwd, args }),
+      body: JSON.stringify({ base, label, cwd, args, ...(roleDescription ? { roleDescription } : {}) }),
     }),
 
   killAgent: (name: string) =>
