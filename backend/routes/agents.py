@@ -150,9 +150,9 @@ async def agent_templates(connected: str = ""):
     KNOWN_AGENTS = [
         ("claude", "claude", "Claude", "#e8734a", "Anthropic", ["--dangerously-skip-permissions"]),
         ("codex", "codex", "Codex", "#10a37f", "OpenAI", ["--sandbox", "danger-full-access", "-a", "never"]),
-        ("gemini", "gemini", "Gemini", "#4285f4", "Google", ["-y"]),
+        ("gemini", "gemini", "Gemini", "#4285f4", "Google", ["--sandbox", "none", "-y"]),
         ("grok", "grok", "Grok", "#ff6b35", "xAI", []),
-        ("copilot", "gh", "Copilot", "#6cc644", "GitHub", ["copilot"]),
+        ("copilot", "gh", "Copilot", "#6cc644", "GitHub", ["copilot", "chat"]),
         ("aider", "aider", "Aider", "#14b8a6", "Aider", ["--yes"]),
         ("goose", "goose", "Goose", "#f59e0b", "Block", []),
         ("pi", "pi", "Pi", "#8b5cf6", "Inflection", []),

@@ -85,9 +85,9 @@ def run_agent(
     _check_tmux()
 
     session_name = session_name or f"ghostlink-{agent}"
-    agent_cmd = " ".join(
-        [shlex.quote(command)] + [shlex.quote(a) for a in extra_args]
-    )
+
+    # Build the full command as a proper shell command string
+    cmd_parts = [shlex.quote(command)] + [shlex.quote(a) for a in extra_args]
 
     # Build env(1) prefix for vars inside the tmux session
     env_parts = []
@@ -98,8 +98,11 @@ def run_agent(
             f"{shlex.quote(k)}={shlex.quote(v)}"
             for k, v in inject_env.items()
         )
+
     if env_parts:
-        agent_cmd = f"env {' '.join(env_parts)} {agent_cmd}"
+        agent_cmd = f"env {' '.join(env_parts)} {' '.join(cmd_parts)}"
+    else:
+        agent_cmd = " ".join(cmd_parts)
 
     from pathlib import Path
     abs_cwd = str(Path(cwd).resolve())
@@ -108,6 +111,7 @@ def run_agent(
     start_watcher(inject_fn)
 
     print(f"  Using tmux session: {session_name}")
+    print(f"  Command: {agent_cmd}")
     if not headless:
         print(f"  Detach: Ctrl+B, D  (agent keeps running)")
         print(f"  Reattach: tmux attach -t {session_name}\n")
@@ -120,9 +124,11 @@ def run_agent(
                 capture_output=True,
             )
 
+            # v3.9.0: Use shell command format so tmux properly passes all args
+            # to the agent CLI (not as tmux send-keys input)
             result = subprocess.run(
                 ["tmux", "new-session", "-d", "-s", session_name,
-                 "-c", abs_cwd, agent_cmd],
+                 "-c", abs_cwd, "bash", "-c", agent_cmd],
                 env=env,
             )
             if result.returncode != 0:

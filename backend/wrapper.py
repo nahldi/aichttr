@@ -310,7 +310,9 @@ _APPROVAL_PATTERNS = [
 _GHOSTLINK_MCP_RE = re.compile(
     r'ghostlink[/.](?:chat_read|chat_send|chat_join|chat_who|chat_channels|chat_rules|'
     r'chat_progress|chat_propose_job|chat_react|chat_claim|'
-    r'memory_save|memory_load|memory_list|memory_search|web_search|web_fetch|image_generate)',
+    r'memory_save|memory_load|memory_list|memory_search|memory_search_all|'
+    r'web_search|web_fetch|image_generate|delegate|'
+    r'set_thinking|sessions_list|sessions_send)',
     re.IGNORECASE,
 )
 
@@ -554,10 +556,19 @@ def _queue_watcher(get_identity_fn, inject_fn, *, server_port: int = 8300,
                         trigger_flag[0] = True
                     time.sleep(0.5)
 
+                    # v3.9.0: Agent-specific MCP-aware trigger prompt
                     if job_id:
-                        prompt = f"Read job #{job_id} and respond."
+                        prompt = (
+                            f"You were mentioned in a job on GhostLink. "
+                            f"Use the chat_read tool with channel=\"{channel}\" to read the messages, "
+                            f"then use chat_send to respond in the same channel."
+                        )
                     else:
-                        prompt = f"Read #{channel} and respond."
+                        prompt = (
+                            f"You were @mentioned in #{channel} on GhostLink. "
+                            f"Use the chat_read tool with channel=\"{channel}\" to read recent messages, "
+                            f"then use chat_send to respond."
+                        )
 
                     inject_fn(prompt.replace("\n", " "))
         except Exception as e:
