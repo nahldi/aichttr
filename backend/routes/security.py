@@ -72,6 +72,30 @@ async def get_audit_log(limit: int = 100, event_type: str = ""):
     return {"entries": deps.audit_log.get_recent(limit, event_type)}
 
 
+@router.get("/api/security/tool-log")
+async def get_tool_log(limit: int = 100, agent: str = ""):
+    """Get MCP tool usage log — every tool call with agent, tool name, timestamps."""
+    entries = deps.audit_log.get_recent(limit * 2, "tool_use")
+    if agent:
+        entries = [e for e in entries if e.get("actor") == agent]
+    return {"entries": entries[-limit:]}
+
+
+@router.get("/api/security/permission-presets")
+async def get_permission_presets():
+    """List available permission presets for agents."""
+    from sandbox import list_presets
+    return {"presets": list_presets()}
+
+
+@router.get("/api/security/sandbox-modes")
+async def get_sandbox_modes():
+    """List available sandbox modes based on installed tools."""
+    from sandbox import SandboxManager
+    mgr = SandboxManager()
+    return {"modes": mgr.get_available_modes()}
+
+
 @router.get("/api/security/retention")
 async def get_retention():
     return {"policy": deps.data_manager.get_retention()}

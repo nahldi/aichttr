@@ -1636,11 +1636,26 @@ def _wrap_tool_with_hooks(func):
         # Execute the actual tool
         result = func(*args, **kwargs)
 
-        # Fire post_tool_use hook
+        # Fire post_tool_use hook + audit trail
         try:
             from plugin_sdk import event_bus
             result_preview = str(result)[:200] if result else ""
             event_bus.emit("post_tool_use", {"agent": agent, "tool": tool_name, "args": kwargs, "result": result_preview})
+        except Exception:
+            pass
+
+        # v3.7.0: Log to audit trail for security accountability
+        try:
+            import deps as _deps
+            if _deps.audit_log:
+                import hashlib
+                result_hash = hashlib.sha256(str(result).encode()).hexdigest()[:16] if result else ""
+                _deps.audit_log.log("tool_use", {
+                    "tool": tool_name,
+                    "args_keys": list(kwargs.keys()) if kwargs else [],
+                    "result_hash": result_hash,
+                    "result_length": len(str(result)) if result else 0,
+                }, actor=str(agent))
         except Exception:
             pass
 
