@@ -1,7 +1,7 @@
 # GhostLink — Project Status & Handoff
 
-**Last updated:** 2026-03-23
-**Version:** v2.3.0
+**Last updated:** 2026-03-24
+**Version:** v3.3.0
 **Owner:** Finn (FinnTheDogg / nahldi / nahlidify)
 **GitHub:** https://github.com/nahldi/ghostlink (public)
 **License:** MIT
@@ -66,12 +66,12 @@ GhostLink is a local-first multi-agent AI chat platform. It puts all your AI age
 
 ---
 
-## CURRENT STATE (v2.3.0)
+## CURRENT STATE (v3.3.0)
 
 ### Numbers
 - **90+ completed features** (see FEATURES.md for full list)
-- **41 React components**
-- **90+ API endpoints**
+- **46 React components** (+ StreamingText, ThinkingParticles, + routes/)
+- **90+ API endpoints** (split into 13 route modules)
 - **17 MCP tools** (chat_send, chat_read, chat_join, chat_who, chat_channels, chat_rules, chat_progress, chat_propose_job, chat_react, chat_claim, memory_save, memory_load, memory_list, memory_search, web_search, web_fetch, image_generate)
 - **13 known AI agents** (Claude, Codex, Gemini, Grok, Copilot, Aider, Goose, Pi, Cursor, Cody, Continue, OpenCode, Ollama)
 - **13 AI providers** (Anthropic, OpenAI, Google, xAI, Mistral, DeepSeek, Perplexity, Cohere, OpenRouter, Groq, Together, HuggingFace, Ollama)

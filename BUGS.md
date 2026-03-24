@@ -1,7 +1,7 @@
 # GhostLink — Known Bugs & Issues
 
-**Last updated:** 2026-03-23
-**Version:** v2.3.0
+**Last updated:** 2026-03-24
+**Version:** v3.3.0
 **Source:** Full codebase audit + live API testing + deep code path audit + user-reported bugs + 3 fix rounds
 
 ---
@@ -257,3 +257,35 @@
 ### ~~SEC-010: Plugin safety scanner only checked 3 patterns~~ FIXED
 **Status:** FIXED (v2.3.0)
 **Fix:** `install_plugin` now uses `SafetyScanner` (AST-based) from `plugin_sdk` first. Falls back to 8-pattern string check if unavailable.
+
+---
+
+## BACKEND FIXES (v2.9.0)
+
+### ~~BUG-C5: Agent process tracking race condition~~ FIXED (v2.9.0)
+**Where:** `backend/app.py` — agent spawn/kill handlers
+**Root cause:** `_agent_processes` dict accessed from both the spawn endpoint and the kill endpoint without an asyncio lock. Concurrent spawns for the same agent name could overwrite each other's process handle, making one process un-killable (leaked process).
+**Fix:** All reads and writes to `_agent_processes` now happen inside `async with deps._agent_lock`. Moved to `deps.py` so all route modules share the same lock instance.
+
+### ~~BUG-H2: Settings concurrent mutation~~ FIXED (v2.9.0)
+**Where:** `backend/app.py` — `save_settings` / `get_settings`
+**Root cause:** Settings JSON file written and read from multiple async tasks without a lock. Concurrent requests could read a partially-written file or produce a torn write.
+**Fix:** `_settings_lock = asyncio.Lock()` in `deps.py`. All settings load/save operations acquire the lock.
+
+### ~~BUG-H4: SIGKILL not escalated when SIGTERM is ignored~~ FIXED (v2.9.0)
+**Where:** `backend/app.py` — agent kill endpoint
+**Root cause:** Kill endpoint sent `SIGTERM` but never followed up with `SIGKILL` if process remained alive. Agents that ignored SIGTERM would stay running.
+**Fix:** After SIGTERM, a 3-second grace period check is added. If process is still alive, `SIGKILL` is sent.
+
+### ~~BUG-H5: Approval file write race (non-atomic)~~ FIXED (v2.9.0)
+**Where:** `backend/app.py` — approval file creation
+**Root cause:** Approval result written by opening the file and writing directly. Concurrent readers could see a partial file.
+**Fix:** Write to a temp file then `os.replace()` (atomic on POSIX). Readers always see either the old file or the complete new file.
+
+---
+
+## ARCHITECTURE FIXES (v3.0.0)
+
+### ~~ARCH-004: 3400-line monolithic app.py~~ RESOLVED (v3.0.0)
+**Root cause:** All 90+ API endpoints lived in a single `app.py` file, making it impossible to navigate, test in isolation, or extend without merge conflicts.
+**Fix:** Split into `backend/deps.py` (shared state) + 13 `backend/routes/` modules: `agents.py`, `bridges.py`, `channels.py`, `jobs.py`, `messages.py`, `misc.py`, `plugins.py`, `providers.py`, `rules.py`, `schedules.py`, `search.py`, `security.py`, `sessions.py`. `app.py` reduced from 3401 → 612 lines.

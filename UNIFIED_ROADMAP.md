@@ -4,7 +4,7 @@
 > **For any AI picking this up: follow the tiers IN ORDER. Each item has test criteria. Do NOT skip ahead.**
 
 **Last updated:** 2026-03-24
-**Current version:** v2.5.1
+**Current version:** v3.3.0
 **Sources:** GAB_ROADMAP.md, GAF_ROADMAP.md, V2.5_BUGFIX_ROADMAP.md, ROADMAP.md, BUGS.md, STATUS.md
 **Owner:** Finn (nahldi)
 
@@ -17,8 +17,14 @@
 - **v2.4.0:** WAL mode, 5 new providers, model failover, Framer Motion, skeletons, toasts, usage tracking
 - **v2.5.0:** Agent identity injection, thinking output cleanup, channel fixes, virtualization
 - **v2.5.1:** Electron security hardening, usage log cap, React render fixes
+- **v2.6.0:** Backend fixes — deduplicate usage, thinking cleanup, bridge fixes
+- **v2.9.0/v2.9.1:** Backend hardening — agent process lock, settings lock, SIGKILL escalation, atomic approval writes; CSS shimmer + stagger animations (Tiers 5-6)
+- **v3.0.0:** Route split — 3401-line app.py → 13 route modules + deps.py (Tier 7)
+- **v3.1.0:** Micro-interactions — motion.button spring, ReactionPicker AnimatePresence, AgentStatusPill color morph (Tier 8)
+- **v3.1.1:** Integration tests — 17 tests covering message pipeline, agent/job lifecycle, secrets, concurrent rules (Tier 9)
+- **v3.2.0/v3.3.0:** Premium effects — StreamingText word reveal, ThinkingParticles SVG orbit, Toast stacking + swipe-dismiss, useLongPress, MobileSidebar drag gesture, mobile CSS fixes (Tiers 10-11)
 
-**52 bugs fixed. ~10 open bugs. 90+ features live. 95+ API endpoints.**
+**56+ bugs fixed. ~8 open bugs. 90+ features live. 90+ API endpoints.**
 
 ---
 
