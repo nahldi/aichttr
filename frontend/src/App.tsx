@@ -28,6 +28,7 @@ const RemoteSession = lazy(() => import('./components/RemoteSession').then(m => 
 const OnboardingTour = lazy(() => import('./components/OnboardingTour').then(m => ({ default: m.OnboardingTour })));
 const HelpPanel = lazy(() => import('./components/HelpPanel').then(m => ({ default: m.HelpPanel })));
 const SessionLauncher = lazy(() => import('./components/SessionLauncher').then(m => ({ default: m.SessionLauncher })));
+const FirstRunWizard = lazy(() => import('./components/FirstRunWizard').then(m => ({ default: m.FirstRunWizard })));
 
 const CONVERSATION_STARTERS = [
   { text: 'Ask @claude to review your code', icon: 'code' },
@@ -336,6 +337,9 @@ function AppInner() {
   const title = useChatStore((s) => s.settings.title);
   const theme = useChatStore((s) => s.settings.theme);
   const showStatsPanel = useChatStore((s) => s.settings.showStatsPanel);
+  const showAgentBar = useChatStore((s) => s.settings.showAgentBar) !== false;
+  const showChannelTabs = useChatStore((s) => s.settings.showChannelTabs) !== false;
+  const showTypingIndicator = useChatStore((s) => s.settings.showTypingIndicator) !== false;
 
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -486,18 +490,22 @@ function AppInner() {
         {/* Top bar: agents + channels */}
         <header className="sticky top-0 z-20 glass max-lg:mt-14">
           {/* Agent bar — desktop only */}
-          <div className="hidden lg:flex items-center px-6 py-2.5 border-b border-outline-variant/6 w-full min-w-0">
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <AgentBar />
+          {showAgentBar && (
+            <div className="hidden lg:flex items-center px-6 py-2.5 border-b border-outline-variant/6 w-full min-w-0">
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <AgentBar />
+              </div>
+              <div className="ml-3 shrink-0">
+                <Suspense fallback={null}><RemoteSession /></Suspense>
+              </div>
             </div>
-            <div className="ml-3 shrink-0">
-              <Suspense fallback={null}><RemoteSession /></Suspense>
-            </div>
-          </div>
+          )}
           {/* Channel tabs */}
-          <div className="hidden lg:block py-1.5 px-2 w-full">
-            <ChannelTabs />
-          </div>
+          {showChannelTabs && (
+            <div className="hidden lg:block py-1.5 px-2 w-full">
+              <ChannelTabs />
+            </div>
+          )}
         </header>
         {/* Remote session — mobile */}
         <div className="lg:hidden flex items-center justify-end px-4 py-1 border-b border-outline-variant/6">
@@ -511,7 +519,7 @@ function AppInner() {
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <div className="flex-1 flex flex-col min-w-0 min-h-0 relative overflow-hidden">
             <ChatFeed />
-            <TypingIndicator />
+            {showTypingIndicator && <TypingIndicator />}
             <ScrollArrow />
             <BulkDeleteBar />
             <div className="sticky bottom-0 z-20 input-float">
@@ -540,6 +548,7 @@ function AppInner() {
         )}
       </AnimatePresence>
       <ConnectionBanner />
+      <Suspense fallback={null}><FirstRunWizard /></Suspense>
       <Suspense fallback={null}><OnboardingTour /></Suspense>
       <AnimatePresence>
         {showHelp && (

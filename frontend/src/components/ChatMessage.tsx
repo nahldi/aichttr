@@ -242,10 +242,12 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <AnimatePresence>{showPicker && <ReactionPicker onPick={handleReact} onClose={() => setShowPicker(false)} />}</AnimatePresence>
         </div>
         <div className="max-w-[70%] lg:max-w-[55%]">
-          <div className="flex items-center justify-end gap-2 mb-0.5">
-            <span className="text-[10px] text-on-surface-variant/30" title={message.time}>{timeAgo(message.timestamp)}</span>
-            <span className="text-[11px] font-semibold text-[#38bdf8]">{settings.username}</span>
-          </div>
+          {(settings.showTimestamps !== false || settings.showSenderLabels !== false) && (
+            <div className="flex items-center justify-end gap-2 mb-0.5">
+              {settings.showTimestamps !== false && <span className="text-[10px] text-on-surface-variant/30" title={message.time}>{timeAgo(message.timestamp)}</span>}
+              {settings.showSenderLabels !== false && <span className="text-[11px] font-semibold text-[#38bdf8]">{settings.username}</span>}
+            </div>
+          )}
           <div
             className="p-3 rounded-2xl rounded-tr-md text-sm text-on-surface leading-relaxed"
             style={{
@@ -317,10 +319,12 @@ export function ChatMessage({ message }: ChatMessageProps) {
       </div>
       <div className="max-w-[80%] lg:max-w-[70%] min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-[11px] font-bold" style={{ color: agentColor, textShadow: `0 0 10px ${agentColor}40` }}>
-            {agent?.label || message.sender}
-          </span>
-          <span className="text-[10px] text-on-surface-variant/30" title={message.time}>{timeAgo(message.timestamp)}</span>
+          {settings.showSenderLabels !== false && (
+            <span className="text-[11px] font-bold" style={{ color: agentColor, textShadow: `0 0 10px ${agentColor}40` }}>
+              {agent?.label || message.sender}
+            </span>
+          )}
+          {settings.showTimestamps !== false && <span className="text-[10px] text-on-surface-variant/30" title={message.time}>{timeAgo(message.timestamp)}</span>}
           {message.pinned && <span className="material-symbols-outlined text-[10px] text-tertiary">push_pin</span>}
         </div>
 

@@ -214,6 +214,11 @@ export const useChatStore = create<ChatState>((set) => ({
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     timeFormat: '12h' as const,
     voiceLanguage: 'en-US',
+    showAgentBar: true,
+    showChannelTabs: true,
+    showTypingIndicator: true,
+    showTimestamps: true,
+    showSenderLabels: true,
   },
   updateSettings: (updates) =>
     set((s) => ({ settings: { ...s.settings, ...updates } })),

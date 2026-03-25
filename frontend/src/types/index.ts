@@ -85,6 +85,8 @@ export interface PersistentAgent {
   args: string[];
   cwd: string;
   color: string;
+  nickname?: string;
+  defaultPrompt?: string;
 }
 
 export interface StatsSections {
@@ -114,6 +116,14 @@ export interface Settings {
   timeFormat?: '12h' | '24h';
   voiceLanguage?: string;
   agentSounds?: Record<string, string>;
+  // Layout toggles
+  showAgentBar?: boolean;
+  showChannelTabs?: boolean;
+  showTypingIndicator?: boolean;
+  showTimestamps?: boolean;
+  showSenderLabels?: boolean;
+  // First-run
+  setupComplete?: boolean;
 }
 
 export interface AgentTemplate {

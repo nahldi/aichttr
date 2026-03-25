@@ -367,6 +367,19 @@ function AppearanceTab({
         </SettingField>
       </Section>
 
+      <Section title="Layout" icon="dashboard">
+        <Toggle label="Agent Bar" description="Show agent status chips at the top"
+          checked={display.showAgentBar !== false} onChange={() => applyInstant({ showAgentBar: !(display.showAgentBar !== false) })} />
+        <Toggle label="Channel Tabs" description="Show channel tab bar below agent bar"
+          checked={display.showChannelTabs !== false} onChange={() => applyInstant({ showChannelTabs: !(display.showChannelTabs !== false) })} />
+        <Toggle label="Typing Indicator" description="Show when agents are typing"
+          checked={display.showTypingIndicator !== false} onChange={() => applyInstant({ showTypingIndicator: !(display.showTypingIndicator !== false) })} />
+        <Toggle label="Timestamps" description="Show time on each message"
+          checked={display.showTimestamps !== false} onChange={() => applyInstant({ showTimestamps: !(display.showTimestamps !== false) })} />
+        <Toggle label="Sender Labels" description="Show sender name on messages"
+          checked={display.showSenderLabels !== false} onChange={() => applyInstant({ showSenderLabels: !(display.showSenderLabels !== false) })} />
+      </Section>
+
       <Section title="Info Panel" icon="info">
         <Toggle label="Stats Panel" description="Right-side info panel on wide screens"
           checked={display.showStatsPanel !== false} onChange={() => applyInstant({ showStatsPanel: !display.showStatsPanel })} />
@@ -1379,6 +1392,8 @@ function PersistentAgentCard({ agent, onUpdate, onRemove }: {
   const [editColor, setEditColor] = useState(agent.color || '#a78bfa');
   const [editCwd, setEditCwd] = useState(agent.cwd || '.');
   const [editLabel, setEditLabel] = useState(agent.label || '');
+  const [editNickname, setEditNickname] = useState(agent.nickname || '');
+  const [editPrompt, setEditPrompt] = useState(agent.defaultPrompt || '');
 
   const handleSave = () => {
     onUpdate({
@@ -1387,6 +1402,8 @@ function PersistentAgentCard({ agent, onUpdate, onRemove }: {
       args: editArgs.split(/\s+/).filter(Boolean),
       color: editColor,
       cwd: editCwd,
+      nickname: editNickname || undefined,
+      defaultPrompt: editPrompt || undefined,
     });
     setExpanded(false);
   };
@@ -1396,7 +1413,7 @@ function PersistentAgentCard({ agent, onUpdate, onRemove }: {
       <div className="flex items-center gap-2 p-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <AgentIcon base={agent.base} color={agent.color} size={28} />
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-semibold" style={{ color: agent.color }}>{agent.label}</div>
+          <div className="text-[11px] font-semibold" style={{ color: agent.color }}>{agent.nickname || agent.label}</div>
           <div className="text-[9px] text-on-surface-variant/45 font-mono truncate">{agent.command} {(agent.args || []).join(' ')}</div>
         </div>
         <span className="material-symbols-outlined text-[14px] text-on-surface-variant/30">{expanded ? 'expand_less' : 'expand_more'}</span>
@@ -1432,6 +1449,19 @@ function PersistentAgentCard({ agent, onUpdate, onRemove }: {
                 className="w-8 h-8 rounded-lg cursor-pointer border-0 bg-transparent" />
               <span className="text-[10px] text-on-surface-variant/50 font-mono">{editColor}</span>
             </div>
+          </div>
+          <div>
+            <label className="text-[9px] font-semibold text-on-surface-variant/40 uppercase tracking-wider block mb-1">Nickname</label>
+            <input value={editNickname} onChange={e => setEditNickname(e.target.value)}
+              className="w-full bg-surface-container-highest rounded-md px-2 py-1.5 text-[11px] text-on-surface border border-outline-variant/10 focus:border-primary/40 outline-none"
+              placeholder="Custom display name (optional)" />
+          </div>
+          <div>
+            <label className="text-[9px] font-semibold text-on-surface-variant/40 uppercase tracking-wider block mb-1">Default System Prompt</label>
+            <textarea value={editPrompt} onChange={e => setEditPrompt(e.target.value)}
+              className="w-full bg-surface-container-highest rounded-md px-2 py-1.5 text-[11px] text-on-surface border border-outline-variant/10 focus:border-primary/40 outline-none resize-y min-h-[60px]"
+              rows={3}
+              placeholder="Custom instructions injected as agent identity on spawn (optional)" />
           </div>
           <div className="text-[9px] text-on-surface-variant/30 font-mono bg-surface-container-lowest rounded px-2 py-1.5">
             {agent.command} {editArgs}
