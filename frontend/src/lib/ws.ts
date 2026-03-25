@@ -9,6 +9,7 @@ export class WebSocketClient {
   private stateListeners: Set<(s: WSState) => void> = new Set();
   private reconnectListeners: Set<() => void> = new Set();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectDelay = 1000;
   private maxDelay = 30000;
   private shouldReconnect = true;
@@ -30,6 +31,26 @@ export class WebSocketClient {
     });
   }
 
+  private startPing() {
+    this.stopPing();
+    // Send a lightweight ping every 25s to keep the connection alive
+    // (cloudflared and many proxies drop idle WS connections after 30-60s)
+    this.pingTimer = setInterval(() => {
+      try {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          this.ws.send('{"type":"ping"}');
+        }
+      } catch {}
+    }, 25000);
+  }
+
+  private stopPing() {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+  }
+
   connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
     this.setState('connecting');
@@ -40,6 +61,7 @@ export class WebSocketClient {
         const isReconnect = this.wasConnected;
         this.wasConnected = true;
         this.setState('connected');
+        this.startPing();
         if (isReconnect) {
           this.reconnectListeners.forEach((cb) => {
             try { cb(); } catch {}
@@ -52,6 +74,7 @@ export class WebSocketClient {
         });
       };
       this.ws.onclose = () => {
+        this.stopPing();
         this.setState('disconnected');
         if (this.shouldReconnect) this.scheduleReconnect();
       };
@@ -98,6 +121,7 @@ export class WebSocketClient {
 
   disconnect() {
     this.shouldReconnect = false;
+    this.stopPing();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     try { this.ws?.close(); } catch {}
     this.setState('disconnected');

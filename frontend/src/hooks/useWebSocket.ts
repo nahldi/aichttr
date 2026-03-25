@@ -171,6 +171,12 @@ export function useWebSocket() {
             // Dispatch custom event for SessionBar to pick up
             window.dispatchEvent(new CustomEvent('ghostlink:session-update', { detail: parsed.data }));
             break;
+          case 'system':
+            // Handle server shutdown — stop reconnecting and notify user
+            if (parsed.data?.event === 'server_shutdown') {
+              client.disconnect();
+            }
+            break;
         }
 
         // Update favicon badge with total unread count

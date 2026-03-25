@@ -524,7 +524,10 @@ async def ws_endpoint(ws: WebSocket):
             data = await ws.receive_text()
             try:
                 parsed = json.loads(data)
-                if parsed.get("type") == "typing":
+                msg_type = parsed.get("type", "")
+                if msg_type == "ping":
+                    await ws.send_text('{"type":"pong"}')
+                elif msg_type == "typing":
                     await deps.broadcast("typing", {
                         "sender": parsed.get("sender", ""),
                         "channel": parsed.get("channel", "general"),

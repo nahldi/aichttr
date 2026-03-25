@@ -424,7 +424,11 @@ async def shutdown_server():
 
     async def _do_shutdown():
         await asyncio.sleep(0.5)
-        os.kill(os.getpid(), signal.SIGTERM)
+        # Use os._exit on Windows since SIGTERM doesn't work reliably there
+        if os.name == 'nt':
+            os._exit(0)
+        else:
+            os.kill(os.getpid(), signal.SIGTERM)
 
     asyncio.get_running_loop().create_task(_do_shutdown())
     return {"ok": True, "message": "Server shutting down"}
