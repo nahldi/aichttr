@@ -262,7 +262,24 @@ async def spawn_agent(request: Request):
             except Exception:
                 pass
         if not found_in_wsl:
-            return JSONResponse({"error": f"'{command}' not found on PATH or in WSL. Install it first: check the agent's documentation for install instructions."}, 400)
+            # Provide specific install instructions per agent
+            _INSTALL_HINTS = {
+                "claude": "npm install -g @anthropic-ai/claude-code",
+                "codex": "npm install -g @openai/codex",
+                "gemini": "npm install -g @google/gemini-cli",
+                "grok": "npm install -g grok (requires xAI subscription)",
+                "copilot": "gh extension install github/gh-copilot",
+                "aider": "pip install aider-chat",
+                "goose": "brew install goose (or pip install goose-ai)",
+                "pi": "npm install -g @inflection/pi",
+                "cursor": "Download from cursor.com (IDE-based agent)",
+                "cody": "Download from sourcegraph.com/cody",
+                "continue": "Install from continue.dev (VS Code extension)",
+                "opencode": "curl -fsSL https://opencode.ai/install | bash",
+                "ollama": "curl -fsSL https://ollama.ai/install.sh | sh",
+            }
+            hint = _INSTALL_HINTS.get(base, "check the agent's documentation")
+            return JSONResponse({"error": f"'{base}' is not installed. Install: {hint}"}, 400)
 
     # Update in-memory config for this session
     if cwd or extra_args:

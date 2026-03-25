@@ -241,7 +241,17 @@ class ProviderRegistry:
             has_key = any(os.environ.get(k) for k in pdef["env_keys"])
             user_key = self._user_config.get(f"{pid}_api_key", "")
             is_local = pdef.get("local", False)
-            is_available = has_key or bool(user_key) or is_local
+            # For local providers, verify the service is actually running
+            if is_local and pid == "ollama":
+                try:
+                    import urllib.request
+                    urllib.request.urlopen("http://localhost:11434/api/version", timeout=2)
+                    is_local_running = True
+                except Exception:
+                    is_local_running = False
+            else:
+                is_local_running = is_local
+            is_available = has_key or bool(user_key) or is_local_running
 
             available.append({
                 "id": pid,
