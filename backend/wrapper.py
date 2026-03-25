@@ -688,8 +688,14 @@ def main():
 
     agent = args.agent
     agent_cfg = config.get("agents", {}).get(agent, {})
-    # Fall back to agent name as command if not in config
-    command = agent_cfg.get("command", agent)
+    # Fall back to known command mapping, then agent name
+    _KNOWN_COMMANDS = {
+        "claude": "claude", "codex": "codex", "gemini": "gemini", "grok": "grok",
+        "copilot": "gh", "aider": "aider", "goose": "goose", "pi": "pi",
+        "cursor": "cursor", "cody": "cody", "continue": "continue",
+        "opencode": "opencode", "ollama": "ollama",
+    }
+    command = agent_cfg.get("command") or _KNOWN_COMMANDS.get(agent, agent)
     agent_args = agent_cfg.get("args", [])
     cwd = os.environ.get("GHOSTLINK_AGENT_CWD") or agent_cfg.get("cwd", ".")
     color = agent_cfg.get("color", "")

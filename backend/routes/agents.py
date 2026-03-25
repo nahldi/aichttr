@@ -209,10 +209,17 @@ async def spawn_agent(request: Request):
             return JSONResponse({"error": "workspace path not allowed"}, 400)
         cwd = cwd_str
 
-    # Resolve the agent command
+    # Resolve the agent command — check config.toml first, then known agent defaults
     agents_cfg = deps.CONFIG.get("agents", {})
     cfg = agents_cfg.get(base, {})
-    command = cfg.get("command", base)
+    # Known agent command mappings (base → actual CLI command)
+    _KNOWN_COMMANDS = {
+        "claude": "claude", "codex": "codex", "gemini": "gemini", "grok": "grok",
+        "copilot": "gh", "aider": "aider", "goose": "goose", "pi": "pi",
+        "cursor": "cursor", "cody": "cody", "continue": "continue",
+        "opencode": "opencode", "ollama": "ollama",
+    }
+    command = cfg.get("command") or _KNOWN_COMMANDS.get(base, base)
 
     import shutil as _shutil
     if not _shutil.which(command):
