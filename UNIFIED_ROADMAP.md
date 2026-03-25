@@ -3,8 +3,8 @@
 > Single source of truth for all development. Supersedes GAB_ROADMAP, GAF_ROADMAP, V2.5_BUGFIX_ROADMAP, ROADMAP.md.
 > **For any AI picking this up: follow the phases IN ORDER within each track. Each item has acceptance criteria.**
 
-**Last updated:** 2026-03-24
-**Current version:** v3.9.4
+**Last updated:** 2026-03-25
+**Current version:** v3.9.7
 **Owner:** Finn (nahldi)
 
 ---
@@ -23,7 +23,10 @@ Route split (3400→612 line app.py), 13 route modules, micro-interactions, inte
 ### UX & Agent Identity (v3.9.2–v3.9.4)
 Thinking bubbles redesign (compact dots, no SVG clutter). Message shake/glitch fix (removed triple animation conflict: CSS + Framer Motion + component motion.div). Agent identity: `chat_who` returns label/role/base, trigger prompts inject teammate info, preset labels/roles written to agent soul on spawn. Settings panel redesign with collapsible Section cards (7 tabs restructured). MCP defaults added for grok/aider/goose/copilot. Identity injection for aider/grok + generic fallback. Enhanced WSL agent detection. Thread safety fix (`_empty_read_count` lock). Frontend audit fixes (AgentBar error handling, TypingIndicator perf, MessageInput stale closure).
 
-**Stats:** 72+ bugs fixed | 132+ API endpoints | 17 MCP tools | 13 agents | 13 providers | 51 React components | 56 tests | 9 themes
+### Bug Fixes & Hardening (v3.9.5–v3.9.7)
+Agent identity: role now flows through registration to server registry (Code Reviewer knows it's a Code Reviewer). Thinking bubbles: subtle pulse glow, glass styling. StreamingText: batch token rendering prevents layout thrashing. Real scannable QR code for mobile (qrcode library, client-side only). WebSocket keepalive ping/pong every 25s (fixes cloudflared tunnel drops). Server stop on Windows uses os._exit (SIGTERM unreliable). Plan mode enforcement: `_check_execution_mode()` now wired into tool wrapper (was dead code). cleanup_agent() race condition fixed (single lock acquisition). Bare except:pass blocks replaced with debug logging across mcp_bridge and app.py. TTS play button on agent messages (OpenAI TTS via /api/tts). Electron wizard/launcher: webSecurity + allowRunningInsecureContent flags added. Rate limiter: 60s cleanup cycle, 10K IP hard cap.
+
+**Stats:** 80+ bugs fixed | 132+ API endpoints | 17 MCP tools | 13 agents | 13 providers | 51 React components | 56 tests | 9 themes
 
 ---
 

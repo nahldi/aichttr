@@ -171,6 +171,12 @@ export const api = {
   getTunnelStatus: () =>
     request<{ active: boolean; url: string | null }>('/api/tunnel/status'),
 
+  textToSpeech: (text: string, voice?: string) =>
+    request<{ audio: string; provider: string }>('/api/tts', {
+      method: 'POST',
+      body: JSON.stringify({ text: text.slice(0, 4096), voice: voice || 'alloy' }),
+    }),
+
   // Skills
   getSkills: (category?: string, search?: string) => {
     const params = new URLSearchParams();

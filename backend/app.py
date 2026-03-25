@@ -222,7 +222,7 @@ class _UILogHandler(logging.Handler):
             }
             deps._server_logs.append(entry)
         except Exception:
-            pass
+            pass  # Log handler must never raise — would cause infinite recursion
 
 
 # Attach log handler
@@ -390,8 +390,8 @@ async def lifespan(_app: FastAPI):
                                 deps.broadcast("status", {"agents": get_full_agent_list()}),
                                 _main_loop,
                             ).result(timeout=5)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            log.debug("Health monitor broadcast failed: %s", e)
             except Exception as e:
                 log.debug("Health monitor error: %s", e)
             _health_stop.wait(HEALTH_CHECK_INTERVAL)

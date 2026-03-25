@@ -116,6 +116,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const [streaming, setStreaming] = useState(isNewAgentMsg);
   // Mobile long-press action menu
   const [showMobileActions, setShowMobileActions] = useState(false);
+  // TTS playback
+  const [ttsPlaying, setTtsPlaying] = useState(false);
   const longPress = useLongPress(() => setShowMobileActions(true));
   const agents = useChatStore((s) => s.agents);
   const settings = useChatStore((s) => s.settings);
@@ -180,6 +182,24 @@ export function ChatMessage({ message }: ChatMessageProps) {
     if (!trimmed || trimmed === message.text) { setEditing(false); return; }
     try { await api.editMessage(message.id, trimmed); editMessageInStore(message.id, trimmed); } catch {}
     setEditing(false);
+  };
+
+  const handleTTS = async () => {
+    if (ttsPlaying) return;
+    setTtsPlaying(true);
+    try {
+      const r = await api.textToSpeech(message.text);
+      if (r.audio) {
+        const audio = new Audio(r.audio);
+        audio.onended = () => setTtsPlaying(false);
+        audio.onerror = () => setTtsPlaying(false);
+        audio.play().catch(() => setTtsPlaying(false));
+      } else {
+        setTtsPlaying(false);
+      }
+    } catch {
+      setTtsPlaying(false);
+    }
   };
 
   const handleDoubleClick = () => {
@@ -353,6 +373,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
             <MsgAction icon="add_reaction" title="React" onClick={() => setShowPicker(!showPicker)} />
             <MsgAction icon="reply" title="Reply" onClick={() => setReplyTo(message)} />
             <MsgAction icon="content_copy" title="Copy" onClick={() => navigator.clipboard?.writeText(message.text).catch(() => { /* clipboard unavailable */ })} />
+            <MsgAction icon={ttsPlaying ? 'stop_circle' : 'volume_up'} title={ttsPlaying ? 'Playing...' : 'Read aloud'} active={ttsPlaying} onClick={handleTTS} />
             <MsgAction icon="push_pin" title={message.pinned ? 'Unpin' : 'Pin'} active={message.pinned} onClick={handlePin} />
             <MsgAction icon="bookmark" title={message.bookmarked ? 'Remove bookmark' : 'Bookmark'} active={message.bookmarked} onClick={handleBookmark} />
             <MsgAction icon="delete" title="Select to delete" danger onClick={() => { setSelectMode(true); toggleSelected(message.id); }} />

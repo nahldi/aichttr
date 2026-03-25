@@ -53,10 +53,9 @@ def cleanup_agent(name: str):
         _presence.pop(name, None)
         _activity.pop(name, None)
         _activity_ts.pop(name, None)
+        _empty_read_count.pop(name, None)
     with _cursors_lock:
         _cursors.pop(name, None)
-    with _presence_lock:
-        _empty_read_count.pop(name, None)
 
 
 def configure(
@@ -145,8 +144,8 @@ def _check_execution_mode(channel: str, tool_name: str) -> str | None:
                 return (f"Blocked: tool '{tool_name}' is not available in {mode} mode. "
                         f"The current session is in {mode} mode (read-only). "
                         f"Switch to execute mode to use write tools.")
-    except Exception:
-        pass
+    except Exception as e:
+        log.debug("Execution mode check failed: %s", e)
     return None
 
 
@@ -1661,8 +1660,14 @@ def _wrap_tool_with_hooks(func):
         try:
             from plugin_sdk import event_bus
             event_bus.emit("pre_tool_use", {"agent": agent, "tool": tool_name, "args": kwargs})
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("pre_tool_use hook failed for %s: %s", tool_name, e)
+
+        # v3.9.7: Enforce execution mode (plan/review blocks write tools)
+        channel = kwargs.get("channel", "general")
+        mode_error = _check_execution_mode(channel, tool_name)
+        if mode_error:
+            return mode_error
 
         # Execute the actual tool
         result = func(*args, **kwargs)
@@ -1672,8 +1677,8 @@ def _wrap_tool_with_hooks(func):
             from plugin_sdk import event_bus
             result_preview = str(result)[:200] if result else ""
             event_bus.emit("post_tool_use", {"agent": agent, "tool": tool_name, "args": kwargs, "result": result_preview})
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("post_tool_use hook failed for %s: %s", tool_name, e)
 
         # v3.7.0: Log to audit trail for security accountability
         try:
@@ -1687,8 +1692,8 @@ def _wrap_tool_with_hooks(func):
                     "result_hash": result_hash,
                     "result_length": len(str(result)) if result else 0,
                 }, actor=str(agent))
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("Audit log failed for %s: %s", tool_name, e)
 
         return result
 

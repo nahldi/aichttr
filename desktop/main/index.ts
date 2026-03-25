@@ -116,8 +116,12 @@ function createWizardWindow(): BrowserWindow {
     frame: false,
 
     webPreferences: {
+      // nodeIntegration required: renderer uses require('electron').ipcRenderer directly
+      // Security note: this window only loads local files (loadFile), never remote URLs
       nodeIntegration: true,
       contextIsolation: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
 
