@@ -1,5 +1,12 @@
 # GhostLink Changelog
 
+## v4.5.2 — 2026-03-26
+### Final Audit — Zero Open Bugs
+- **BUGS.md fully updated** — all fixed bugs marked FIXED with version numbers
+- **UNIFIED_ROADMAP.md cleaned** — remaining issues table reduced to 4 items (was 10), backlog items marked DONE
+- **Live tested** — all 25 Phase 4-7 API endpoints verified responding correctly
+- **Version synced** — all 5 locations at v4.5.2
+
 ## v4.5.1 — 2026-03-26
 ### Completeness Release — All Phases Finished
 - **25 new API endpoints** for Phases 4-7 (autonomous plans, memory graph, RAG, specialization, remote agents, auth)

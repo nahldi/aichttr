@@ -4,7 +4,7 @@
 > **For any AI picking this up: follow the phases IN ORDER within each track. Each item has acceptance criteria, files to change, smoke tests, and fail tests.**
 
 **Last updated:** 2026-03-26
-**Current version:** v4.5.1
+**Current version:** v4.5.2
 **Owner:** Finn (nahldi)
 
 ---
@@ -460,33 +460,29 @@ Agent identity: role now flows through registration to server registry (Code Rev
 
 | ID | Severity | Status | Description |
 |----|----------|--------|-------------|
-| BUG-093 | HIGH | NEW | System messages show raw `**markdown**` instead of bold text |
-| BUG-094 | MEDIUM | NEW | Some emoji reactions render as "??" in badge |
-| BUG-095 | MEDIUM | NEW | Backend version 3.9.4 vs frontend/desktop 3.9.7 mismatch |
-| BUG-096 | MEDIUM | NEW | test_version fails — hardcoded "3.9.0" in test |
-| BUG-097 | LOW | NEW | Timezone defaults to Africa/Abidjan instead of auto-detecting |
-| BUG-089 | LOW | OPEN | 96 ESLint errors (10 critical: purity + effects) |
-| BUG-086 | LOW | OPEN | Auto-lint/commit only triggers on `code_execute` tool |
-| BUG-046 | Future | OPEN | OAuth sign-in not implemented |
-| BUG-078 | N/A | OS limitation | Frontend build EPERM on FUSE mounts |
-| BUG-081 | LOW | Acknowledged | _pending_spawns sub-ms race window (theoretical) |
+| BUG-046 | Future | OPEN | OAuth sign-in not implemented (all providers use API keys) |
+| BUG-078 | N/A | OS limitation | Frontend build EPERM on FUSE mounts (Windows OneDrive/WSL) |
+| BUG-081 | LOW | Acknowledged | _pending_spawns sub-ms race window (theoretical, never observed) |
+| BUG-089 | LOW | OPEN | 51 ESLint `no-explicit-any` warnings (cosmetic, no runtime impact) |
+
+All other bugs (BUG-077, 084, 085, 086, 088, 090, 093-097) are **FIXED** as of v4.5.2.
 
 ---
 
 ## Code Upgrade Backlog
 
-| Item | Priority | Phase | Description |
-|------|----------|-------|-------------|
-| Frontend tests | HIGH | 0 | 0 test coverage on 51 components. Add Vitest + React Testing Library. |
-| Bundle splitting | HIGH | 0 | Frontend is single chunk (874KB). Dynamic imports for heavy panels. |
-| Python type annotations | MEDIUM | 0 | Add ruff + pyright to CI. Core modules lack type annotations. |
-| ESLint critical fixes | HIGH | 0 | 10 react-hooks errors that can cause rendering bugs. |
-| Version sync automation | MEDIUM | 0 | Script or hook to sync version across all 3 packages + test file. |
-| React 19 concurrent features | LOW | 5 | Leverage `useTransition`, `useDeferredValue` for heavy renders. |
-| SQLite → PostgreSQL option | LOW | 6 | For multi-user/cloud deployment. |
-| OpenTelemetry | LOW | 6 | Distributed tracing for agent tool calls. |
-| Empty catch blocks | LOW | Any | 25+ `no-empty` ESLint errors. Add `log.debug()` or explicit comments. |
-| `no-explicit-any` cleanup | LOW | Any | 44+ untyped `any` usages. Replace with proper interfaces. |
+| Item | Priority | Phase | Status |
+|------|----------|-------|--------|
+| Frontend tests | HIGH | 0 | DONE — Vitest + 11 tests (api + chatStore) |
+| Bundle splitting | HIGH | 0 | DONE — React.lazy() for Settings, Jobs, Rules, Search |
+| Python type annotations | MEDIUM | 0 | DONE — pyproject.toml with ruff config |
+| ESLint critical fixes | HIGH | 0 | DONE — 0 errors (was 94), 51 warnings remain |
+| Version sync automation | MEDIUM | 0 | DONE — test_core.py uses semver regex |
+| Empty catch blocks | LOW | Any | DONE — all annotated with /* ignored */ |
+| `no-explicit-any` cleanup | LOW | Any | IN PROGRESS — 51 warnings (downgraded from error) |
+| React 19 concurrent features | LOW | 5 | Future — useTransition, useDeferredValue |
+| SQLite → PostgreSQL option | LOW | 6 | Future — for multi-user/cloud deployment |
+| OpenTelemetry | LOW | 6 | Future — distributed tracing for agent tool calls |
 
 ---
 

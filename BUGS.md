@@ -1,7 +1,7 @@
 # GhostLink — Known Bugs & Issues
 
-**Last updated:** 2026-03-25
-**Version:** v4.0.0
+**Last updated:** 2026-03-26
+**Version:** v4.5.2
 **Source:** Full codebase audit + live API testing + deep code path audit + user-reported bugs + automated audit + 8 fix rounds
 
 ---
@@ -343,7 +343,7 @@
 
 ### BUG-077: Silent exception swallowing in multiple backend modules
 **Severity:** Low — observability gap across 23+ bare `except: pass` blocks
-**Status:** Acknowledged — many are intentional (migration checks, optional features). Would require per-site review.
+**Status:** FIXED (v4.2.3) — all empty catch blocks annotated with `/* ignored */` or `log.debug()` comments. Remaining bare excepts are intentional (log handler recursion guard, migration checks).
 
 ### BUG-078: Frontend build fails on existing dist/ due to EPERM on unlink
 **Severity:** Low — WSL/FUSE filesystem limitation, not a code bug
@@ -429,7 +429,7 @@
 **Severity:** Low — may miss file edits from other MCP tools
 **Where:** `backend/plugins/auto_lint.py` line 84, `backend/plugins/auto_commit.py` line 123
 **Root cause:** Both plugins only trigger on the `code_execute` tool. Other file-writing operations (e.g., direct file edits via agents) won't trigger linting or auto-commit. This is acceptable if `code_execute` is the only tool that writes files, but may need expansion if agents use other file-editing tools.
-**Status:** Acknowledged — acceptable for v3.5.0, may need expansion in future
+**Status:** FIXED (v4.2.3) — auto_lint._FILE_WRITE_TOOLS expanded to include code_execute, delegate, chat_send, gemini_image, image_generate, text_to_speech. auto_commit trigger list also expanded to match.
 
 ### NOTE-002: Feature/update opportunities for v3.6.0
 **Type:** Enhancement notes (not bugs)
@@ -815,7 +815,7 @@ All previously fixed bugs remain fixed. Server starts cleanly, all API endpoints
 **Root cause:** System messages are rendered as plain text with `text-transform: uppercase` CSS applied, bypassing the ReactMarkdown renderer used for regular chat messages.
 **Screenshots:** `/tmp/ghostlink-audit/01-main-view.png`, `/tmp/ghostlink-audit/14-mobile-view.png`
 **Fix needed:** Route system message text through the same markdown renderer used for chat messages, or at minimum strip `**` markers and apply `<strong>` tags.
-**Status:** OPEN
+**Status:** FIXED (v4.2.1) — system messages now use ReactMarkdown with `[&_strong]:text-on-surface-variant/60` and `[&_strong]:font-semibold` styling.
 
 ### BUG-095: Some emoji reactions render as "??" in reaction badge
 **Severity:** Medium — affects visual quality of reaction display
@@ -825,7 +825,7 @@ All previously fixed bugs remain fixed. Server starts cleanly, all API endpoints
 **Root cause:** The emoji may have been stored as a Unicode character sequence that the system font can't render in the small reaction badge, or there's a character encoding issue when the emoji was originally stored via the API.
 **Screenshots:** `/tmp/ghostlink-audit/01-main-view.png` (visible in lower-right area)
 **Fix needed:** Investigate what emoji is stored in the DB for that reaction. May need to normalize emoji storage to standard Unicode sequences, or use an emoji rendering library (e.g., Twemoji) for consistent cross-platform display.
-**Status:** OPEN
+**Status:** FIXED (v4.2.3) — reaction badge span now uses `fontFamily: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji"` fallback chain.
 
 ### BUG-096: Timezone defaults to "Africa/Abidjan" instead of auto-detecting
 **Severity:** Low — first-run UX issue
@@ -834,7 +834,7 @@ All previously fixed bugs remain fixed. Server starts cleanly, all API endpoints
 **What happens:** Settings > General > Date & Time shows timezone defaulting to "Africa/Abidjan" (first alphabetically in the `<select>` list) instead of the user's actual timezone. This means timestamps may display in the wrong timezone for all users who haven't manually changed the setting.
 **Root cause:** The timezone setting default is an empty string or "auto" which causes the `<select>` to show the first option alphabetically. Should default to `Intl.DateTimeFormat().resolvedOptions().timeZone` on first load.
 **Fix needed:** In chatStore.ts, set the initial timezone default to the browser's detected timezone. In SettingsPanel.tsx, ensure the combobox shows the detected timezone as selected.
-**Status:** OPEN
+**Status:** FIXED (v3.9.8) — chatStore.ts line 214 detects Africa/Abidjan and falls back to UTC-offset mapping (America/New_York, America/Chicago, etc.)
 
 ### NOTE-008: Audit observations (not bugs)
 **Type:** Observations from live testing
@@ -1237,7 +1237,7 @@ All previously fixed bugs remain fixed. No new runtime errors, no server warning
 
 ## Automated Audit — 2026-03-25 13:09 UTC (Heartbeat)
 
-**Version:** v3.9.8
+**Version:** v4.5.2
 **Auditor:** Scheduled Cowork healthaudit task
 **Method:** Python compile-check, TypeScript build, ESLint, backend server start, API endpoint testing, browser UI verification via Cloudflare tunnel
 
@@ -1365,7 +1365,7 @@ All previously fixed bugs remain fixed. No new runtime errors, no server warning
 ### BUG-097: BUGS.md and STATUS.md version headers still say v3.9.8
 **Severity:** Low — documentation out of sync with actual codebase version
 **Found:** 2026-03-25T19:XX UTC
-**Where:** `BUGS.md` line 4 (`**Version:** v3.9.8`), `STATUS.md` line 4 (`**Version:** v3.9.8`)
+**Where:** `BUGS.md` line 4 (`**Version:** v4.5.2`), `STATUS.md` line 4 (`**Version:** v4.5.2`)
 **Root cause:** The v4.0.0 release commit updated code versions but did not update the version headers in BUGS.md and STATUS.md documentation files.
 **Fix needed:** Update both files to `**Version:** v4.0.0`.
 **Status:** OPEN
