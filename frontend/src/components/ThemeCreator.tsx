@@ -21,6 +21,15 @@ const DEFAULT_THEME: ThemeColors = {
   surfaceContainer: '#141420',
 };
 
+const GALLERY: ThemeColors[] = [
+  { name: 'Midnight', surface: '#08080f', primary: '#a78bfa', secondary: '#38bdf8', tertiary: '#fb923c', onSurface: '#e0dff0', surfaceContainer: '#141420' },
+  { name: 'Ocean', surface: '#0a1628', primary: '#60a5fa', secondary: '#34d399', tertiary: '#fbbf24', onSurface: '#e2e8f0', surfaceContainer: '#0f2140' },
+  { name: 'Terminal', surface: '#000000', primary: '#00ff41', secondary: '#00ff41', tertiary: '#ff6600', onSurface: '#00ff41', surfaceContainer: '#0a0a0a' },
+  { name: 'Sunset', surface: '#1a0a1e', primary: '#f97316', secondary: '#ec4899', tertiary: '#eab308', onSurface: '#fde8d0', surfaceContainer: '#2a1030' },
+  { name: 'Nord', surface: '#2e3440', primary: '#88c0d0', secondary: '#81a1c1', tertiary: '#ebcb8b', onSurface: '#eceff4', surfaceContainer: '#3b4252' },
+  { name: 'Dracula', surface: '#282a36', primary: '#bd93f9', secondary: '#8be9fd', tertiary: '#ffb86c', onSurface: '#f8f8f2', surfaceContainer: '#44475a' },
+];
+
 interface ThemeCreatorProps {
   onClose: () => void;
   onApply: (theme: ThemeColors) => void;
@@ -106,6 +115,31 @@ export function ThemeCreator({ onClose, onApply }: ThemeCreatorProps) {
               onChange={e => updateColor('name', e.target.value)}
               className="setting-input text-[13px]"
             />
+          </div>
+
+          {/* Gallery */}
+          <div className="mb-5">
+            <label className="text-[10px] font-semibold text-on-surface-variant/40 uppercase tracking-wider mb-2 block">Gallery</label>
+            <div className="grid grid-cols-3 gap-2">
+              {GALLERY.map(t => (
+                <button
+                  key={t.name}
+                  onClick={() => setTheme(t)}
+                  className={`rounded-lg p-2 border transition-all text-left ${
+                    theme.name === t.name ? 'border-primary/40 ring-1 ring-primary/20' : 'border-outline-variant/8 hover:border-outline-variant/20'
+                  }`}
+                  style={{ background: t.surface }}
+                  aria-label={`Apply ${t.name} theme`}
+                >
+                  <div className="flex gap-1 mb-1.5">
+                    {[t.primary, t.secondary, t.tertiary].map((c, i) => (
+                      <div key={i} className="w-3 h-3 rounded-full" style={{ background: c }} />
+                    ))}
+                  </div>
+                  <div className="text-[9px] font-semibold" style={{ color: t.onSurface }}>{t.name}</div>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Color Pickers */}

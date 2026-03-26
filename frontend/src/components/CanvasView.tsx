@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface CanvasViewProps {
@@ -17,6 +17,26 @@ export function CanvasView({ content, language, title, onClose }: CanvasViewProp
   const [wrap, setWrap] = useState(false);
 
   const lines = content.split('\n');
+
+  // Keyboard shortcut: Escape to close
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
+  const handleDownload = () => {
+    const ext = language ? ({ python: 'py', typescript: 'ts', javascript: 'js', rust: 'rs', go: 'go', java: 'java', css: 'css', html: 'html', json: 'json', markdown: 'md' }[language] || 'txt') : 'txt';
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(title || 'artifact').replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleCopy = async () => {
     try {
@@ -80,13 +100,23 @@ export function CanvasView({ content, language, title, onClose }: CanvasViewProp
               <button
                 onClick={handleCopy}
                 className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-on-surface-variant/40 hover:text-on-surface-variant transition-colors"
+                aria-label="Copy content"
               >
                 <span className="material-symbols-outlined text-sm">{copied ? 'check' : 'content_copy'}</span>
                 {copied ? 'Copied' : 'Copy'}
               </button>
               <button
+                onClick={handleDownload}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-on-surface-variant/40 hover:text-on-surface-variant transition-colors"
+                aria-label="Download file"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+                Download
+              </button>
+              <button
                 onClick={onClose}
                 className="p-1.5 rounded-lg hover:bg-surface-container text-on-surface-variant/40 hover:text-on-surface-variant transition-colors"
+                aria-label="Close canvas view"
               >
                 <span className="material-symbols-outlined">close</span>
               </button>

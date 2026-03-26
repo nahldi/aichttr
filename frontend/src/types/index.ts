@@ -3,7 +3,7 @@ export interface Message {
   uid: string;
   sender: string;
   text: string;
-  type: 'chat' | 'system' | 'proposal' | 'join' | 'decision' | 'rule_proposal' | 'job_proposal' | 'approval_request' | 'progress';
+  type: 'chat' | 'system' | 'proposal' | 'join' | 'decision' | 'rule_proposal' | 'job_proposal' | 'approval_request' | 'progress' | 'widget';
   timestamp: number;
   time: string;
   channel: string;
@@ -178,4 +178,5 @@ export type WSEvent =
   | { type: 'approval_response'; data: { agent: string; response: string; message_id: number } }
   | { type: 'session_update'; data: { channel: string; session: Record<string, unknown> } }
   | { type: 'thinking_stream'; data: { agent: string; text: string; active: boolean } }
+  | { type: 'token_stream'; data: { message_id: number; token: string; done: boolean } }
   | { type: 'system'; data: Record<string, unknown> };

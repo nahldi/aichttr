@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { ChatWidget } from './ChatWidget';
 import { CodeBlock } from './CodeBlock';
 import { DecisionCard } from './DecisionCard';
 import { JobProposal } from './JobProposal';
@@ -271,9 +272,13 @@ export function ChatMessage({ message }: ChatMessageProps) {
               </div>
             ) : (
               <>
-                <div className="prose">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ code: MdCode, p: MdParagraph }}>{displayText}</ReactMarkdown>
-                </div>
+                {message.type === 'widget' && metadata.html ? (
+                  <ChatWidget html={metadata.html as string} title={metadata.widgetTitle as string} />
+                ) : (
+                  <div className="prose">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={{ code: MdCode, p: MdParagraph }}>{displayText}</ReactMarkdown>
+                  </div>
+                )}
                 {message.text.length > COLLAPSE_THRESHOLD && (
                   <button
                     onClick={() => setCollapsed(!collapsed)}

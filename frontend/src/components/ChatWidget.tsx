@@ -26,6 +26,7 @@ export function ChatWidget({ html, title, height = 300 }: ChatWidgetProps) {
 <html>
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:;">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -71,6 +72,7 @@ export function ChatWidget({ html, title, height = 300 }: ChatWidgetProps) {
             onClick={() => setExpanded(!expanded)}
             className="p-0.5 rounded hover:bg-surface-container text-on-surface-variant/30 hover:text-on-surface-variant/60 transition-colors"
             title={expanded ? 'Collapse' : 'Expand'}
+            aria-label={expanded ? 'Collapse widget' : 'Expand widget'}
           >
             <span className="material-symbols-outlined text-sm">
               {expanded ? 'collapse_content' : 'expand_content'}

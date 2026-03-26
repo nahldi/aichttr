@@ -7,6 +7,7 @@ interface FileEntry {
   type: 'file' | 'directory';
   size?: number;
   modified?: string;
+  git_status?: string;
 }
 
 interface WorkspaceViewerProps {
@@ -132,7 +133,14 @@ export function WorkspaceViewer({ agentName, workspace, onClose }: WorkspaceView
                   >
                     <span className="material-symbols-outlined text-sm opacity-40">{getIcon(f)}</span>
                     <span className="truncate">{f.name}</span>
-                    {f.size !== undefined && f.type === 'file' && (
+                    {f.git_status && (
+                      <span className={`text-[8px] font-bold shrink-0 ${
+                        f.git_status.includes('M') ? 'text-amber-400' :
+                        f.git_status.includes('A') || f.git_status === '??' ? 'text-green-400' :
+                        f.git_status.includes('D') ? 'text-red-400' : 'text-on-surface-variant/40'
+                      }`}>{f.git_status === '??' ? 'U' : f.git_status.trim()}</span>
+                    )}
+                    {f.size !== undefined && f.type === 'file' && !f.git_status && (
                       <span className="ml-auto text-[8px] text-on-surface-variant/20 shrink-0">{(f.size / 1024).toFixed(1)}K</span>
                     )}
                   </button>
@@ -141,7 +149,7 @@ export function WorkspaceViewer({ agentName, workspace, onClose }: WorkspaceView
             </div>
 
             <div className="px-4 py-2 border-t border-outline-variant/5">
-              <button onClick={loadFiles} className="text-[10px] text-on-surface-variant/30 hover:text-primary transition-colors flex items-center gap-1">
+              <button onClick={loadFiles} className="text-[10px] text-on-surface-variant/30 hover:text-primary transition-colors flex items-center gap-1" aria-label="Refresh file tree">
                 <span className="material-symbols-outlined text-xs">refresh</span>
                 Refresh
               </button>

@@ -1622,6 +1622,33 @@ def delegate(sender: str, agent: str, task: str, channel: str = "general") -> st
     return f"Task delegated to {agent} in #{channel}. They will see: {task[:200]}"
 
 
+def chat_stream_token(sender: str, message_id: int, token: str, done: bool = False, ctx: dict | None = None) -> str:
+    """Stream a token to an existing message in real-time.
+    Broadcasts via WebSocket so frontend renders character-by-character.
+
+    Args:
+        sender: Agent name (for identity verification).
+        message_id: ID of the message to append to.
+        token: The token/text chunk to append.
+        done: Set True when streaming is complete.
+    """
+    sender, err = _resolve_identity(sender, ctx, field_name="sender", required=True)
+    if err:
+        return err
+    try:
+        import urllib.request
+        body = json.dumps({"message_id": message_id, "token": token, "done": done}).encode()
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{_server_port}/api/stream-token",
+            data=body, method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=3)
+    except Exception as e:
+        log.debug("Token stream broadcast failed: %s", e)
+    return "ok"
+
+
 # ── Server setup ────────────────────────────────────────────────────
 
 _ALL_TOOLS = [
@@ -1636,6 +1663,8 @@ _ALL_TOOLS = [
     gemini_image, gemini_video, text_to_speech, speech_to_text, code_execute,
     # Agent control & delegation
     set_thinking, sessions_list, sessions_send, delegate,
+    # Streaming
+    chat_stream_token,
 ]
 
 MCP_HTTP_PORT = 8200

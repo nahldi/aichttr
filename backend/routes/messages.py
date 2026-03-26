@@ -200,3 +200,17 @@ async def bulk_delete_messages(request: Request):
     if deleted:
         await deps.broadcast("delete", {"message_ids": deleted})
     return {"ok": True, "deleted": deleted or []}
+
+
+@router.post("/api/stream-token")
+async def stream_token(request: Request):
+    """Broadcast a token stream event to all WebSocket clients.
+    Used by MCP bridge chat_stream_token to enable real-time token streaming."""
+    body = await request.json()
+    message_id = body.get("message_id")
+    token = body.get("token", "")
+    done = body.get("done", False)
+    if not message_id:
+        return JSONResponse({"error": "message_id required"}, 400)
+    await deps.broadcast("token_stream", {"message_id": message_id, "token": token, "done": done})
+    return {"ok": True}

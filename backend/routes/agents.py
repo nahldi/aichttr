@@ -945,8 +945,9 @@ async def get_agent_workspace(name: str):
     except PermissionError:
         pass
 
-    # Git status
+    # Git status — per-file and latest commit
     git_status = ""
+    git_file_status: dict[str, str] = {}  # filename → M/A/D/?
     try:
         result = subprocess.run(
             ["git", "log", "--oneline", "-1"],
@@ -954,8 +955,23 @@ async def get_agent_workspace(name: str):
         )
         if result.returncode == 0:
             git_status = result.stdout.strip()
+        # Per-file status
+        porcelain = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(ws), capture_output=True, text=True, timeout=5,
+        )
+        if porcelain.returncode == 0:
+            for line in porcelain.stdout.strip().split('\n'):
+                if len(line) >= 4:
+                    status_code = line[:2].strip()
+                    fname = line[3:].strip().split('/')[0]  # top-level name
+                    git_file_status[fname] = status_code
     except Exception:
         pass
+
+    # Annotate files with git status
+    for f in files:
+        f["git_status"] = git_file_status.get(f["name"], "")
 
     return {"files": files, "workspace": str(ws), "git_status": git_status}
 

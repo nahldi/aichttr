@@ -1,5 +1,15 @@
 # GhostLink Changelog
 
+## v4.3.0 — 2026-03-26
+### Phase 5: Advanced UX & Frontend
+- **Widget message type** — agents can return interactive HTML/JS rendered in sandboxed iframes with CSP
+- **CanvasView download** — download button + Escape keyboard shortcut for full-screen artifact viewer
+- **WorkspaceViewer git status** — per-file M/A/D/U indicators from `git status --porcelain`
+- **ThemeCreator gallery** — 6 preset themes (Midnight, Ocean, Terminal, Sunset, Nord, Dracula)
+- **Token streaming** — `chat_stream_token` MCP tool + WebSocket `token_stream` event for real-time character-by-character responses
+- **Accessibility** — aria-labels on all Phase 5 component buttons
+- **Emoji font fallback** — reaction badges use platform-native emoji fonts
+
 ## v4.2.3 — 2026-03-26
 ### Zero-Bug Release
 - **0 ESLint errors** (down from 94) — all empty catch blocks annotated, purity violations fixed, stale deps fixed

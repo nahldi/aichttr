@@ -59,6 +59,7 @@ export function useWebSocket() {
     addActivity,
     setThinkingStream,
     updateMessageMeta,
+    appendToMessage,
     setWsState,
   } = useChatStore();
 
@@ -162,6 +163,18 @@ export function useWebSocket() {
           case 'thinking_stream':
             setThinkingStream(parsed.data.agent, parsed.data.text || '', parsed.data.active ?? false);
             break;
+          case 'token_stream': {
+            // v4.3.0: Real-time token streaming — append tokens to existing message
+            const { message_id, token, done } = parsed.data;
+            if (message_id && token) {
+              appendToMessage(message_id, token);
+            }
+            if (done) {
+              // Mark message as complete (stop streaming indicator)
+              updateMessageMeta(message_id, { streaming: false });
+            }
+            break;
+          }
           case 'approval_response':
             if (parsed.data.message_id) {
               updateMessageMeta(parsed.data.message_id, { responded: parsed.data.response });

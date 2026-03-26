@@ -15,6 +15,7 @@ interface ChatState {
   pinMessage: (id: number, pinned: boolean) => void;
   bookmarkMessage: (id: number, bookmarked: boolean) => void;
   editMessage: (id: number, text: string) => void;
+  appendToMessage: (id: number, token: string) => void;
   deleteMessages: (ids: number[]) => void;
   reactMessage: (id: number, reactions: Record<string, string[]>) => void;
   updateMessageMeta: (id: number, metaUpdate: Record<string, unknown>) => void;
@@ -119,6 +120,12 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       messages: s.messages.map((m) =>
         m.id === id ? { ...m, text, edited: true } : m
+      ),
+    })),
+  appendToMessage: (id, token) =>
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === id ? { ...m, text: m.text + token } : m
       ),
     })),
   deleteMessages: (ids) =>
