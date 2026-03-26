@@ -272,6 +272,31 @@ export function ChatMessage({ message }: ChatMessageProps) {
               </div>
             ) : (
               <>
+                {/* Voice note player */}
+                {metadata.voice_note && (
+                  <div className="flex items-center gap-2 mb-1.5 p-2 rounded-xl bg-surface-container/40 border border-outline-variant/5">
+                    <button
+                      onClick={() => {
+                        const audio = new Audio(metadata.voice_note as string);
+                        audio.play().catch(() => { /* best-effort */ });
+                      }}
+                      className="p-1.5 rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors shrink-0"
+                      aria-label="Play voice note"
+                    >
+                      <span className="material-symbols-outlined text-lg">play_arrow</span>
+                    </button>
+                    <div className="flex-1">
+                      <div className="h-1 bg-primary/15 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary/40 rounded-full" style={{ width: '100%' }} />
+                      </div>
+                    </div>
+                    {metadata.duration != null && (
+                      <span className="text-[9px] text-on-surface-variant/30 font-mono shrink-0">
+                        {Math.floor(Number(metadata.duration) / 60)}:{String(Number(metadata.duration) % 60).padStart(2, '0')}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {message.type === 'widget' && metadata.html ? (
                   <ChatWidget html={metadata.html as string} title={metadata.widgetTitle as string} />
                 ) : (

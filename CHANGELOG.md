@@ -1,5 +1,18 @@
 # GhostLink Changelog
 
+## v4.6.0 — 2026-03-26
+### Voice Notes + Voice Call Mode
+- **Voice Notes** — tap mic to record audio, sends as playable voice message with auto-transcription via Whisper
+  - Recording UI: red dot + elapsed timer + cancel/send buttons
+  - Backend `/api/voice-note`: transcribes + stores audio as base64 in message metadata
+  - Inline audio player in ChatMessage with play button and duration display
+- **Voice Call Mode** — live conversation with agent, full duplex voice
+  - Phone icon opens full-screen call overlay with agent avatar
+  - Continuous 4s audio chunk recording → transcribe → send → agent responds
+  - Auto-TTS on agent responses (plays audio immediately)
+  - Mute toggle, call timer, waveform visualizer, end call button
+  - WebSocket watches for new agent messages to auto-speak
+
 ## v4.5.2 — 2026-03-26
 ### Final Audit — Zero Open Bugs
 - **BUGS.md fully updated** — all fixed bugs marked FIXED with version numbers

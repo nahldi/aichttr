@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useChatStore } from '../stores/chatStore';
 import { useMentionAutocomplete } from '../hooks/useMentionAutocomplete';
 import { api } from '../lib/api';
+import { VoiceCall } from './VoiceCall';
 
 // ── Voice Input (Web Speech API) ───────────────────────────────────
 
@@ -11,7 +12,7 @@ const SpeechRecognition: any = (window as any).SpeechRecognition || (window as a
 const HAS_BROWSER_STT = !!SpeechRecognition;
 const HAS_MEDIA_DEVICES = !!(navigator.mediaDevices?.getUserMedia);
 
-function useVoiceInput(onTranscript: (text: string) => void, lang?: string) {
+export function useVoiceInput(onTranscript: (text: string) => void, lang?: string) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState('');
   const [permissionState, setPermissionState] = useState<'unknown' | 'granted' | 'denied' | 'prompt'>('unknown');
@@ -196,6 +197,13 @@ export function MessageInput() {
   const [savedDraft, setSavedDraft] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<{ name: string; url: string; type: string }[]>([]);
+  // Voice note recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [showVoiceCall, setShowVoiceCall] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeChannel = useChatStore((s) => s.activeChannel);
   const settings = useChatStore((s) => s.settings);
@@ -223,11 +231,7 @@ export function MessageInput() {
   const { suggestions, selectedIndex, setSelectedIndex, isOpen, applyMention } =
     useMentionAutocomplete(text, cursorPos);
 
-  // Voice input — uses language from settings or browser default
-  const voiceLang = settings.voiceLanguage;
-  const voice = useVoiceInput(useCallback((transcript: string) => {
-    setText(prev => prev ? `${prev} ${transcript}` : transcript);
-  }, []), voiceLang);
+  // Voice input hook kept for potential fallback but mic button now uses MediaRecorder directly
 
   // Slash commands
   const slashCommands: SlashCommand[] = useMemo(() => [
@@ -503,6 +507,54 @@ export function MessageInput() {
     ? slashCommands.filter(c => c.name.startsWith(slashQuery))
     : [];
   const showSlash = filteredCommands.length > 0 && slashQuery.length > 0;
+
+  // Voice note recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      recordingChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) recordingChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(recordingChunksRef.current, { type: 'audio/webm' });
+        if (blob.size > 0) {
+          try {
+            await api.sendVoiceNote(blob, activeChannel, settings.username, recordingTime);
+          } catch { /* best-effort */ }
+        }
+        setRecordingTime(0);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start(250); // collect data every 250ms
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+    } catch {
+      /* mic permission denied or unavailable */
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
+    }
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    recordingChunksRef.current = [];
+    setIsRecording(false);
+    setRecordingTime(0);
+  };
 
   const executeSlashCommand = (cmd: SlashCommand) => {
     cmd.execute();
@@ -930,34 +982,40 @@ export function MessageInput() {
           rows={1}
           className="flex-1 bg-surface-container/60 rounded-xl px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/30 resize-none max-h-40 outline-none border border-outline-variant/8 focus:border-primary/25 focus:shadow-[0_0_16px_rgba(167,139,250,0.08)] transition-all"
         />
-        {voice.available && (
-          <div className="relative shrink-0">
-            <button
-              onClick={voice.listening ? voice.stop : voice.start}
-              className={`p-2 rounded-lg transition-all active:scale-95 ${
-                voice.listening
-                  ? 'bg-red-500/20 text-red-400'
-                  : voice.permissionState === 'denied'
-                    ? 'text-red-400/40 hover:text-red-400'
-                    : 'text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high'
-              }`}
-              title={voice.listening ? 'Stop recording (click to finish)' :
-                     voice.permissionState === 'denied' ? 'Microphone blocked — click to retry' :
-                     'Voice input — click to speak'}
-              aria-label={voice.listening ? 'Stop recording' : 'Start voice input'}
-            >
-              <span className="material-symbols-outlined text-xl">
-                {voice.listening ? 'mic_off' : voice.permissionState === 'denied' ? 'mic_off' : 'mic'}
-              </span>
-              {voice.listening && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
-              )}
+        {/* Voice Note Recording */}
+        {isRecording ? (
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-[11px] text-red-400 font-mono tabular-nums w-8">
+              {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
+            </span>
+            <button onClick={cancelRecording} className="p-1.5 rounded-lg text-on-surface-variant/40 hover:text-red-400 hover:bg-red-500/10 transition-colors" aria-label="Cancel recording" title="Cancel">
+              <span className="material-symbols-outlined text-lg">close</span>
             </button>
-            {voice.error && (
-              <div className="absolute bottom-full right-0 mb-2 w-64 p-2 rounded-lg bg-error/10 border border-error/20 text-[10px] text-error z-50">
-                {voice.error}
-              </div>
-            )}
+            <button onClick={stopRecording} className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors" aria-label="Send voice note" title="Send voice note">
+              <span className="material-symbols-outlined text-lg">send</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-0.5 shrink-0">
+            {/* Mic button — voice note */}
+            <button
+              onClick={startRecording}
+              className="p-2 rounded-lg text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high transition-all active:scale-95"
+              title="Record voice note"
+              aria-label="Record voice note"
+            >
+              <span className="material-symbols-outlined text-xl">mic</span>
+            </button>
+            {/* Phone button — voice call */}
+            <button
+              onClick={() => setShowVoiceCall(true)}
+              className="p-2 rounded-lg text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high transition-all active:scale-95"
+              title="Start voice call"
+              aria-label="Start voice call with agent"
+            >
+              <span className="material-symbols-outlined text-xl">call</span>
+            </button>
           </div>
         )}
         <motion.button
@@ -970,6 +1028,9 @@ export function MessageInput() {
           <span className="material-symbols-outlined text-xl">send</span>
         </motion.button>
       </div>
+
+      {/* Voice Call Overlay */}
+      {showVoiceCall && <VoiceCall onClose={() => setShowVoiceCall(false)} />}
     </div>
   );
 }

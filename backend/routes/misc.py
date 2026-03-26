@@ -896,6 +896,74 @@ async def transcribe_audio(request: Request):
     return JSONResponse({"error": "All STT providers failed"}, 502)
 
 
+@router.post("/api/voice-note")
+async def send_voice_note(request: Request):
+    """Record and send a voice note — transcribes audio and stores both text + audio.
+
+    Accepts audio file upload. Transcribes via Whisper, stores audio as base64
+    in message metadata for inline playback.
+    """
+    import base64
+
+    form = await request.form()
+    audio = form.get("audio")
+    channel = form.get("channel", "general")
+    sender = form.get("sender", "You")
+    if not audio:
+        return JSONResponse({"error": "audio file required"}, 400)
+
+    audio_bytes = await audio.read()
+    if len(audio_bytes) > 10 * 1024 * 1024:  # 10MB limit for voice notes
+        return JSONResponse({"error": "Voice note too large (max 10MB)"}, 413)
+
+    # Transcribe the audio
+    transcription = ""
+    try:
+        # Reuse the transcribe logic
+        import aiohttp
+        settings = deps._settings
+        configured = settings.get("providers", {})
+        providers = []
+        groq_key = configured.get("groq", {}).get("apiKey", "")
+        if groq_key:
+            providers.append(("groq", groq_key, "https://api.groq.com/openai/v1/audio/transcriptions", "whisper-large-v3"))
+        openai_key = configured.get("openai", {}).get("apiKey", "")
+        if openai_key:
+            providers.append(("openai", openai_key, "https://api.openai.com/v1/audio/transcriptions", "whisper-1"))
+
+        for prov, key, url, model in providers:
+            try:
+                form_data = aiohttp.FormData()
+                form_data.add_field("file", audio_bytes, filename="voice.webm", content_type="audio/webm")
+                form_data.add_field("model", model)
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, data=form_data, headers={"Authorization": f"Bearer {key}"}, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                        if resp.status == 200:
+                            result = await resp.json()
+                            transcription = result.get("text", "")
+                            break
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # Store audio as base64 data URI
+    audio_b64 = base64.b64encode(audio_bytes).decode()
+    audio_uri = f"data:audio/webm;base64,{audio_b64}"
+
+    # Create message with voice note metadata
+    import json as _json
+    text = transcription or "[Voice note]"
+    metadata = _json.dumps({"voice_note": audio_uri, "duration": form.get("duration", "0")})
+
+    if deps.store:
+        msg = await deps.store.add(sender, text, "chat", channel, metadata=metadata)
+        await deps.broadcast("message", msg)
+        return msg
+
+    return JSONResponse({"error": "Store not initialized"}, 503)
+
+
 @router.post("/api/tts")
 async def text_to_speech(request: Request):
     """Convert text to speech audio using the best available TTS provider.

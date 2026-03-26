@@ -177,6 +177,16 @@ export const api = {
       body: JSON.stringify({ text: text.slice(0, 4096), voice: voice || 'alloy' }),
     }),
 
+  sendVoiceNote: (audio: Blob, channel: string, sender: string, duration: number) => {
+    const form = new FormData();
+    form.append('audio', audio, 'voice.webm');
+    form.append('channel', channel);
+    form.append('sender', sender);
+    form.append('duration', String(Math.round(duration)));
+    return fetch('/api/voice-note', { method: 'POST', body: form })
+      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); });
+  },
+
   // Skills
   getSkills: (category?: string, search?: string) => {
     const params = new URLSearchParams();
