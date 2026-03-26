@@ -997,11 +997,11 @@ export function MessageInput() {
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-0.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Mic button — voice note */}
             <button
               onClick={startRecording}
-              className="p-2 rounded-lg text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high transition-all active:scale-95"
+              className="p-2.5 rounded-xl text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high/60 transition-all active:scale-90"
               title="Record voice note"
               aria-label="Record voice note"
             >
@@ -1010,7 +1010,7 @@ export function MessageInput() {
             {/* Phone button — voice call */}
             <button
               onClick={() => setShowVoiceCall(true)}
-              className="p-2 rounded-lg text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high transition-all active:scale-95"
+              className="p-2.5 rounded-xl text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high/60 transition-all active:scale-90"
               title="Start voice call"
               aria-label="Start voice call with agent"
             >
@@ -1023,7 +1023,7 @@ export function MessageInput() {
           disabled={!text.trim()}
           whileTap={{ scale: 0.88 }}
           transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-          className="p-2 rounded-lg bg-primary-container text-primary-fixed hover:brightness-110 transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+          className="p-2.5 rounded-xl bg-primary-container text-primary-fixed hover:brightness-110 transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
         >
           <span className="material-symbols-outlined text-xl">send</span>
         </motion.button>

@@ -10,6 +10,20 @@ html, body, #root {
   color: #e0dff0;
 }
 
+/* Global smooth transitions on interactive elements */
+button, a, input, select, textarea {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+button:active {
+  transform: scale(0.97);
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, 0.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(167, 139, 250, 0.25); }
+
 @theme {
   --color-primary: #a78bfa;
   --color-primary-container: #7c3aed;

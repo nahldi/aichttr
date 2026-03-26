@@ -406,7 +406,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
         {/* Actions */}
         {!selectMode && (
-          <div className="relative opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 mt-0.5">
+          <div className="relative opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 mt-1">
             <MsgAction icon="add_reaction" title="React" onClick={() => setShowPicker(!showPicker)} />
             <MsgAction icon="reply" title="Reply" onClick={() => setReplyTo(message)} />
             <MsgAction icon="content_copy" title="Copy" onClick={() => navigator.clipboard?.writeText(message.text).catch(() => { /* clipboard unavailable */ })} />
@@ -458,14 +458,15 @@ function MsgAction({ icon, title, onClick, active, danger }: {
       whileHover={{ scale: 1.15, y: -1 }}
       whileTap={{ scale: 0.85 }}
       transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-      className={`p-1 rounded-md transition-colors ${
+      className={`p-1.5 rounded-lg transition-colors ${
         danger ? 'text-on-surface-variant/20 hover:text-red-400 hover:bg-red-400/10'
         : active ? 'text-tertiary'
         : 'text-on-surface-variant/20 hover:text-on-surface-variant/60 hover:bg-surface-container-high/40'
       }`}
       title={title}
+      aria-label={title}
     >
-      <span className="material-symbols-outlined text-[13px]">{icon}</span>
+      <span className="material-symbols-outlined text-[14px]">{icon}</span>
     </motion.button>
   );
 }

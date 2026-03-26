@@ -21,12 +21,9 @@ type SettingsTab = 'general' | 'appearance' | 'agents' | 'providers' | 'integrat
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'general', label: 'General', icon: 'tune' },
-  { id: 'appearance', label: 'Look', icon: 'palette' },
   { id: 'agents', label: 'Agents', icon: 'smart_toy' },
   { id: 'providers', label: 'AI', icon: 'model_training' },
-  { id: 'integrations', label: 'Bridges', icon: 'hub' },
-  { id: 'security', label: 'Security', icon: 'shield' },
-  { id: 'advanced', label: 'Advanced', icon: 'settings' },
+  { id: 'advanced', label: 'More', icon: 'settings' },
 ];
 
 /* ── Collapsible Section ─────────────────────────────────────────── */
@@ -190,27 +187,21 @@ export function SettingsPanel() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
-        {tab === 'general' && (
+        {tab === 'general' && (<>
           <GeneralTab display={display} updateDraft={updateDraft} applyInstant={applyInstant} settings={settings} />
-        )}
-        {tab === 'appearance' && (
           <AppearanceTab display={display} updateDraft={updateDraft} applyInstant={applyInstant} settings={settings} />
-        )}
+        </>)}
         {tab === 'agents' && (
           <AgentsTab display={display} updateDraft={updateDraft} applyInstant={applyInstant} settings={settings} />
         )}
-        {tab === 'providers' && (
+        {tab === 'providers' && (<>
           <ProvidersTab />
-        )}
-        {tab === 'integrations' && (
           <IntegrationsTab />
-        )}
-        {tab === 'security' && (
+        </>)}
+        {tab === 'advanced' && (<>
           <SecurityTab />
-        )}
-        {tab === 'advanced' && (
           <AdvancedTab display={display} applyInstant={applyInstant} settings={settings} />
-        )}
+        </>)}
       </div>
     </div>
   );

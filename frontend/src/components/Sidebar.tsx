@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import type { Agent } from '../types';
@@ -176,13 +177,20 @@ export function Sidebar() {
       </div>
 
       {/* Expandable channel panel — slides out from rail */}
+      <AnimatePresence>
       {expanded && (
-        <div className="fixed inset-0 z-[29]" onClick={() => setExpanded(false)}>
-          <div className="sidebar-panel fixed left-14 top-0 h-screen w-[200px] z-[31] py-3 overflow-y-auto" style={{
+        <motion.div className="fixed inset-0 z-[29]" onClick={() => setExpanded(false)}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+          <motion.div className="sidebar-panel fixed left-14 top-0 h-screen w-[200px] z-[31] py-3 overflow-y-auto" style={{
             background: '#0d0d15',
             borderRight: '1px solid rgba(255,255,255,0.04)',
             boxShadow: '4px 0 20px rgba(0,0,0,0.3)',
-          }} onClick={e => e.stopPropagation()}>
+          }} onClick={e => e.stopPropagation()}
+            initial={{ x: -200, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -200, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          >
             <div className="px-4 mb-3 flex items-center justify-between">
               <span className="text-[11px] font-bold text-white/45 uppercase tracking-wider">Channels</span>
               <div className="flex items-center gap-1">
@@ -259,9 +267,10 @@ export function Sidebar() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </>
   );
 }

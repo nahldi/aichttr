@@ -74,13 +74,13 @@ function AgentChip({ agent }: { agent: Agent }) {
               {agent.label}
             </span>
             {agent.role === 'manager' && (
-              <span className="text-[8px] font-bold px-1 py-px rounded bg-yellow-500/20 text-yellow-400 leading-none uppercase">MGR</span>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-yellow-500/20 text-yellow-400 leading-none uppercase">MGR</span>
             )}
             {agent.role === 'worker' && (
-              <span className="text-[8px] font-bold px-1 py-px rounded bg-blue-500/20 text-blue-400 leading-none uppercase">WKR</span>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-400 leading-none uppercase">WKR</span>
             )}
             {agent.role === 'peer' && (
-              <span className="text-[8px] font-bold px-1 py-px rounded bg-purple-500/20 text-purple-400 leading-none uppercase">PEER</span>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-400 leading-none uppercase">PEER</span>
             )}
           </div>
           <div className={`text-[10px] leading-tight truncate font-medium ${

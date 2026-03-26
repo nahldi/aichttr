@@ -1,5 +1,16 @@
 # GhostLink Changelog
 
+## v4.7.0 — 2026-03-26
+### UI Polish & Visual Refinement
+- **Sidebar animation** — channel panel slides in/out with spring physics (Framer Motion)
+- **Settings tabs consolidated** — 7 tabs → 4 (General+Look, Agents, AI+Bridges, More=Security+Advanced)
+- **Message action buttons** — larger hit areas (p-1→p-1.5, gap-0.5→gap-1), 14px icons, aria-labels
+- **Input buttons** — consistent p-2.5 rounded-xl spacing, 1.5 gap between mic/call/send
+- **Agent bar badges** — text-[8px]→text-[9px], rounded-md with more padding for readability
+- **Global transitions** — all buttons/inputs have 0.2s cubic-bezier ease, active:scale(0.97)
+- **Custom scrollbar** — thin 6px with purple-tinted thumb, transparent track
+- **Recording UI** — red pulse + timer for voice notes with smooth cancel/send buttons
+
 ## v4.6.0 — 2026-03-26
 ### Voice Notes + Voice Call Mode
 - **Voice Notes** — tap mic to record audio, sends as playable voice message with auto-transcription via Whisper
