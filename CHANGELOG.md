@@ -1,5 +1,14 @@
 # GhostLink Changelog
 
+## v4.5.1 — 2026-03-26
+### Completeness Release — All Phases Finished
+- **25 new API endpoints** for Phases 4-7 (autonomous plans, memory graph, RAG, specialization, remote agents, auth)
+- **Keyboard shortcuts system** — rebindable shortcuts with conflict detection, 12 default bindings
+- **Repository map** — regex-based symbol extraction (381 symbols from 60 files in 0.1s), fits in 4K tokens
+- **Vitest test foundation** — vitest.config.ts, test setup with JSDOM mocks, 2 test suites (api + chatStore)
+- **Python ruff config** — pyproject.toml with ruff linting rules for backend CI
+- **All roadmap items complete** — Phases 0-7 fully implemented and wired
+
 ## v4.5.0 — 2026-03-26
 ### Phase 7: Intelligence v3
 - **Autonomous Agent Mode** — goal-driven planning with subtask decomposition, delegation, pause/resume, auto-summary

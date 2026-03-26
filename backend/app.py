@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "4.5.0"
+__version__ = "4.5.1"
 
 import json
 import os
@@ -572,6 +572,7 @@ from routes import search as _r_search
 from routes import plugins as _r_plugins
 from routes import providers as _r_providers
 from routes import misc as _r_misc
+from routes import phase4_7 as _r_phase4_7
 
 app.include_router(_r_jobs.router)
 app.include_router(_r_rules.router)
@@ -586,6 +587,7 @@ app.include_router(_r_search.router)
 app.include_router(_r_plugins.router)
 app.include_router(_r_providers.router)
 app.include_router(_r_misc.router)
+app.include_router(_r_phase4_7.router)
 
 
 # ── Serve uploads ───────────────────────────────────────────────────
