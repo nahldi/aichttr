@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -134,11 +134,13 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const agent = agents.find((a) => a.name === message.sender);
   const agentNames = new Set(agents.map(a => a.name));
   // v4.2.1: Build color map (updates shared ref for MdParagraph mention highlighting)
-  useMemo(() => {
+  const agentColorMap = useMemo(() => {
     const map: Record<string, string> = {};
     agents.forEach(a => { map[a.name] = a.color; map[a.base] = a.color; });
-    _agentColorMapRef.current = map;
+    return map;
   }, [agents]);
+  // Sync to module-level ref for renderWithMentions (external to React tree)
+  useEffect(() => { _agentColorMapRef.current = agentColorMap; }, [agentColorMap]);
   const isUser = message.sender === settings.username || message.sender === 'You' || (!agentNames.has(message.sender) && message.type === 'chat');
   const isSystem = message.type === 'system' || message.type === 'join';
 
@@ -171,17 +173,17 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const card = metadata.card as { type: string; title?: string; [key: string]: unknown } | undefined;
 
   const handlePin = async () => {
-    try { await api.pinMessage(message.id, !message.pinned); pinMessage(message.id, !message.pinned); } catch {}
+    try { await api.pinMessage(message.id, !message.pinned); pinMessage(message.id, !message.pinned); } catch { /* best-effort */ }
   };
 
   const handleBookmark = async () => {
-    try { await api.bookmarkMessage(message.id, !message.bookmarked); bookmarkMessage(message.id, !message.bookmarked); } catch {}
+    try { await api.bookmarkMessage(message.id, !message.bookmarked); bookmarkMessage(message.id, !message.bookmarked); } catch { /* best-effort */ }
   };
 
   const handleEdit = async () => {
     const trimmed = editText.trim();
     if (!trimmed || trimmed === message.text) { setEditing(false); return; }
-    try { await api.editMessage(message.id, trimmed); editMessageInStore(message.id, trimmed); } catch {}
+    try { await api.editMessage(message.id, trimmed); editMessageInStore(message.id, trimmed); } catch { /* best-effort */ }
     setEditing(false);
   };
 
