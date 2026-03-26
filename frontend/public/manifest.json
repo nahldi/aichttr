@@ -1,0 +1,24 @@
+{
+  "name": "GhostLink",
+  "short_name": "GhostLink",
+  "description": "Multi-Agent AI Chat Platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08080f",
+  "theme_color": "#a78bfa",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/ghostlink.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["developer", "productivity", "utilities"]
+}

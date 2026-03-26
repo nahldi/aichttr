@@ -1,5 +1,13 @@
 # GhostLink Changelog
 
+## v4.4.0 — 2026-03-26
+### Phase 6: Cloud & Scale
+- **Remote Agent Execution** — `RemoteRunner` spawns agents in Docker containers or on SSH hosts, monitors lifecycle, supports up to 8 parallel remote agents
+- **Multi-User Auth** — `UserManager` with PBKDF2-SHA256 password hashing, session tokens, 3 roles (admin/member/viewer), user CRUD
+- **Docker Compose** — one-command deployment with `docker compose up`, health checks, volume persistence, API key passthrough
+- **A2A Protocol** — JSON-RPC 2.0 agent-to-agent bridge, agent card discovery at `/.well-known/agent.json`, register/deregister/send operations
+- **PWA** — service worker with cache-first for static assets, push notifications, `manifest.json`, add-to-homescreen on mobile
+
 ## v4.3.0 — 2026-03-26
 ### Phase 5: Advanced UX & Frontend
 - **Widget message type** — agents can return interactive HTML/JS rendered in sandboxed iframes with CSP

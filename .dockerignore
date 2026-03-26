@@ -1,0 +1,15 @@
+node_modules
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.claude
+.codex
+backend/data
+desktop
+*.png
+*.dmg
+*.exe
+*.AppImage
+*.deb

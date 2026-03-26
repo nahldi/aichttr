@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "4.3.0"
+__version__ = "4.4.0"
 
 import json
 import os
@@ -290,6 +290,15 @@ async def lifespan(_app: FastAPI):
     deps.data_manager = data_manager
     deps.worktree_manager = worktree_manager
     deps.automation_manager = automation_manager
+
+    # v4.4.0: Remote runner + A2A bridge + user auth
+    from remote_runner import RemoteRunner
+    deps.remote_runner = RemoteRunner(server_port=PORT)
+    from auth import UserManager
+    deps.user_manager = UserManager(DATA_DIR)
+    from a2a_bridge import A2ABridge, setup_routes as setup_a2a
+    deps.a2a_bridge = A2ABridge(server_version=__version__)
+    setup_a2a(app, deps.a2a_bridge)
 
     # Broadcast new messages via WebSocket
     async def on_msg(msg: dict):

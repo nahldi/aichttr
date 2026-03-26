@@ -1,0 +1,39 @@
+# GhostLink — Docker Compose deployment
+# Usage: docker compose up -d
+# Access: http://localhost:8300
+
+version: '3.8'
+
+services:
+  ghostlink:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ghostlink
+    ports:
+      - "8300:8300"   # Web UI + API
+      - "8200:8200"   # MCP HTTP bridge
+      - "8201:8201"   # MCP SSE bridge
+    volumes:
+      - ghostlink-data:/app/backend/data
+      - ${WORKSPACE:-./}:/workspace:rw
+    environment:
+      - GHOSTLINK_PORT=8300
+      - GHOSTLINK_MCP_HTTP_PORT=8200
+      - GHOSTLINK_MCP_SSE_PORT=8201
+      # Pass through AI provider keys
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8300/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  ghostlink-data:
+    driver: local

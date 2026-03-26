@@ -47,6 +47,9 @@ audit_log: "AuditLog | None" = None
 data_manager: "DataManager | None" = None
 worktree_manager: "WorktreeManager | None" = None  # v3.6.0
 automation_manager: "AutomationManager | None" = None  # v3.6.0
+remote_runner: "RemoteRunner | None" = None  # v4.4.0
+user_manager: "UserManager | None" = None  # v4.4.0
+a2a_bridge: "A2ABridge | None" = None  # v4.4.0
 
 # ── Process tracking (set by spawn/register routes) ──────────────────
 
