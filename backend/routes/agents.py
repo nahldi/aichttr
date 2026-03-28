@@ -17,6 +17,7 @@ from pathlib import Path
 import deps
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse
+from plugin_sdk import event_bus
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -240,6 +241,12 @@ async def add_workspace_change(agent_name: str, action: str, path: str) -> dict:
         detail=path,
         path=path,
     )
+    if getattr(deps, "automation_manager", None):
+        await deps.automation_manager.process_trigger("file_change", {
+            "agent": agent_name,
+            "action": action,
+            "path": path,
+        })
     return payload
 
 
@@ -408,6 +415,10 @@ async def register_agent(request: Request):
     await _record_activity("agent_join", f"{inst.label or inst.name} connected", agent=inst.name)
     await add_replay_event(inst.name, "agent_join", title="Agent connected", detail="Session started", surface="session")
     await set_agent_presence(inst.name, surface="session", status="Connected", detail="Agent online", state=inst.state)
+    event_bus.emit("on_agent_join", {"agent": inst.name, "label": inst.label or inst.name})
+    if getattr(deps, "automation_manager", None):
+        await deps.automation_manager.process_trigger("event", {"event": "agent_join", "agent": inst.name, "status": "online"})
+        await deps.automation_manager.process_trigger("agent_status", {"agent": inst.name, "status": "online"})
     return inst.to_dict()
 
 
@@ -428,6 +439,10 @@ async def deregister_agent(name: str):
         await _record_activity("agent_leave", f"{name} disconnected", agent=name)
         await add_replay_event(name, "agent_leave", title="Agent disconnected", detail="Session ended", surface="session")
         await set_agent_presence(name, surface="session", status="Disconnected", detail="Agent offline", state="offline")
+        event_bus.emit("on_agent_leave", {"agent": name})
+        if getattr(deps, "automation_manager", None):
+            await deps.automation_manager.process_trigger("event", {"event": "agent_leave", "agent": name, "status": "offline"})
+            await deps.automation_manager.process_trigger("agent_status", {"agent": name, "status": "offline"})
     return {"ok": ok}
 
 

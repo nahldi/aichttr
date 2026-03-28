@@ -616,6 +616,14 @@ async def lifespan(_app: FastAPI):
                                 ).result(timeout=5)
                             except Exception as e:
                                 log.warning("Schedule message post failed: %s", e)
+                if deps.automation_manager:
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            deps.automation_manager.process_due_schedules(now),
+                            _main_loop,
+                        ).result(timeout=5)
+                    except Exception as e:
+                        log.warning("Workflow schedule processing failed: %s", e)
             except Exception as e:
                 log.warning("Schedule checker error: %s", e)
             _schedule_stop.wait(60)

@@ -157,6 +157,20 @@ async def send_message(request: Request):
 
     # Emit event for hooks
     event_bus.emit("on_message", {"sender": sender, "text": text, "channel": channel, "id": msg.get("id")})
+    if getattr(deps, "automation_manager", None):
+        metadata_payload = {}
+        try:
+            metadata_payload = json.loads(metadata_str) if metadata_str else {}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            metadata_payload = {}
+        await deps.automation_manager.process_trigger("event", {
+            "event": "message_received",
+            "sender": sender,
+            "text": text,
+            "channel": channel,
+            "message_id": msg.get("id"),
+            "workflow_generated": bool(metadata_payload.get("workflow_generated")),
+        })
 
     return msg
 

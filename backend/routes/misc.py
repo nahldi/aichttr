@@ -851,6 +851,7 @@ async def receive_automation_webhook(source: str, request: Request):
 
     # Process matching rules
     actions = deps.automation_manager.process_webhook(source, event_type, payload)
+    await deps.automation_manager.process_trigger("webhook", payload, source=source, event_type=event_type)
 
     for action in actions:
         msg_text = action["message"]
@@ -865,6 +866,115 @@ async def receive_automation_webhook(source: str, request: Request):
             route_mentions("system", msg_text, action["channel"])
 
     return {"processed": len(actions), "actions": actions}
+
+
+# ── Workflow Automations (Phase 3) ───────────────────────────────
+
+_WORKFLOW_TRIGGER_TYPES = {"schedule", "event", "file_change", "agent_status", "webhook"}
+_WORKFLOW_ACTION_TYPES = {"message", "task", "command", "checkpoint"}
+
+
+def _normalize_workflow_payload(body: dict) -> tuple[dict | None, str]:
+    name = " ".join(str(body.get("name", "")).strip().split())[:120]
+    trigger = body.get("trigger", {})
+    action = body.get("action", {})
+    if not name:
+        return None, "name required"
+    if not isinstance(trigger, dict):
+        return None, "trigger required"
+    if not isinstance(action, dict):
+        return None, "action required"
+
+    trigger_type = str(trigger.get("type", "")).strip()
+    action_type = str(action.get("type", "")).strip()
+    if trigger_type not in _WORKFLOW_TRIGGER_TYPES:
+        return None, "invalid trigger type"
+    if action_type not in _WORKFLOW_ACTION_TYPES:
+        return None, "invalid action type"
+
+    trigger_config = trigger.get("config", {})
+    action_config = action.get("config", {})
+    if not isinstance(trigger_config, dict):
+        return None, "trigger config must be an object"
+    if not isinstance(action_config, dict):
+        return None, "action config must be an object"
+
+    agent = str(action.get("agent", "") or "").strip()
+    if action_type in {"task", "command", "checkpoint"} and not agent:
+        return None, "action agent required"
+
+    return {
+        "name": name,
+        "trigger": {
+            "type": trigger_type,
+            "config": {str(k): str(v) for k, v in trigger_config.items() if isinstance(k, str)},
+        },
+        "action": {
+            "type": action_type,
+            "agent": agent,
+            "config": {str(k): str(v) for k, v in action_config.items() if isinstance(k, str)},
+        },
+        "enabled": bool(body.get("enabled", True)),
+    }, ""
+
+
+@router.get("/api/workflows")
+async def list_workflows():
+    if not hasattr(deps, "automation_manager") or not deps.automation_manager:
+        return {"workflows": []}
+    return {"workflows": deps.automation_manager.list_workflows()}
+
+
+@router.post("/api/workflows")
+async def create_workflow(request: Request):
+    if not hasattr(deps, "automation_manager") or not deps.automation_manager:
+        return JSONResponse({"error": "Automations not initialized"}, 500)
+    body = await request.json()
+    workflow, error = _normalize_workflow_payload(body)
+    if error:
+        return JSONResponse({"error": error}, 400)
+    created = deps.automation_manager.add_workflow(workflow)
+    return {"ok": True, "workflow": created}
+
+
+@router.patch("/api/workflows/{workflow_id}")
+async def update_workflow(workflow_id: str, request: Request):
+    if not hasattr(deps, "automation_manager") or not deps.automation_manager:
+        return JSONResponse({"error": "Automations not initialized"}, 500)
+    body = await request.json()
+    updates: dict[str, object] = {}
+    if "enabled" in body:
+        updates["enabled"] = bool(body.get("enabled"))
+    if "name" in body or "trigger" in body or "action" in body:
+        existing = next((workflow for workflow in deps.automation_manager.list_workflows() if workflow.get("id") == workflow_id), None)
+        if not existing:
+            return JSONResponse({"error": "workflow not found"}, 404)
+        merged = {
+            "name": body.get("name", existing.get("name", "")),
+            "trigger": body.get("trigger", existing.get("trigger", {})),
+            "action": body.get("action", existing.get("action", {})),
+            "enabled": body.get("enabled", existing.get("enabled", True)),
+        }
+        normalized, error = _normalize_workflow_payload(merged)
+        if error:
+            return JSONResponse({"error": error}, 400)
+        for key in ("name", "trigger", "action"):
+            if key in body:
+                updates[key] = normalized[key]
+    result = deps.automation_manager.update_workflow(workflow_id, updates)
+    if not result:
+        return JSONResponse({"error": "workflow not found"}, 404)
+    return {"ok": True, "workflow": result}
+
+
+@router.delete("/api/workflows/{workflow_id}")
+async def delete_workflow(workflow_id: str):
+    if not hasattr(deps, "automation_manager") or not deps.automation_manager:
+        return JSONResponse({"error": "Automations not initialized"}, 500)
+    ok = deps.automation_manager.delete_workflow(workflow_id)
+    if not ok:
+        return JSONResponse({"error": "workflow not found"}, 404)
+    return {"ok": True}
 
 
 # ── Voice & Multimodal (v3.9.0) ──────────────────────────────────
