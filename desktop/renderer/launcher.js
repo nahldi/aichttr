@@ -36,6 +36,34 @@ const $version         = document.getElementById('version');
 let serverRunning = false;
 let providerStatuses = [];
 
+function renderConnectionsLoadingState() {
+  while ($providers.firstChild) $providers.removeChild($providers.firstChild);
+
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'providers-empty-state';
+  loadingDiv.innerHTML = `
+    <span class="material-symbols-outlined providers-empty-icon spinner-icon">progress_activity</span>
+    <div class="providers-empty-copy">
+      <div class="providers-empty-title">Checking connections…</div>
+      <div class="providers-empty-subtitle">GhostLink is detecting installed and authenticated agent CLIs.</div>
+    </div>
+  `;
+  $providers.appendChild(loadingDiv);
+}
+
+function renderConnectionsEmptyState() {
+  const emptyState = document.createElement('div');
+  emptyState.className = 'providers-empty-state';
+  emptyState.innerHTML = `
+    <span class="material-symbols-outlined providers-empty-icon">hub</span>
+    <div class="providers-empty-copy">
+      <div class="providers-empty-title">No active connections yet</div>
+      <div class="providers-empty-subtitle">Install or connect an agent below, then it will appear here.</div>
+    </div>
+  `;
+  $providers.appendChild(emptyState);
+}
+
 // ── Titlebar controls ────────────────────────────────────────────────────────
 
 document.getElementById('btn-minimize').addEventListener('click', () => {
@@ -203,6 +231,10 @@ function renderProviders(statuses) {
   }
 
   // Only show connected/installed in Connections
+  if (connected.length === 0) {
+    renderConnectionsEmptyState();
+  }
+
   connected.forEach((s) => {
     const card = document.createElement('div');
     card.className = 'provider-card';
@@ -484,38 +516,38 @@ document.querySelectorAll('#settings-body input, #settings-body select').forEach
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 window.addEventListener('DOMContentLoaded', async () => {
-  // Request initial state from main process
-  const status = await api.invoke('server:status');
-  if (status && status.running) {
-    setServerState('running');
-    $portDisplay.textContent = 'Port: ' + status.port;
-  }
+  renderConnectionsLoadingState();
 
-  // Show loading state while checking auth
-  const loadingDiv = document.createElement('div');
-  loadingDiv.style.cssText = 'text-align:center;padding:12px;color:rgba(255,255,255,0.3);font-size:11px;display:flex;align-items:center;justify-content:center;gap:8px';
-  const spinner = document.createElement('div');
-  spinner.className = 'spinner';
-  spinner.style.cssText = 'width:14px;height:14px;border:2px solid rgba(255,255,255,0.1);border-top-color:rgba(167,139,250,0.6);border-radius:50%;animation:spin 0.8s linear infinite';
-  loadingDiv.appendChild(spinner);
-  loadingDiv.appendChild(document.createTextNode('Checking connections...'));
-  $providers.appendChild(loadingDiv);
-  // Fetch auth statuses
-  api.invoke('auth:check-all');
+  // Fetch version immediately — don't wait for slow auth checks
+  api.invoke('app:get-version').then((ver) => {
+    $version.textContent = ver ? ('v' + ver) : 'v?';
+  }).catch(() => { $version.textContent = 'v?'; });
 
-  // Fetch version
-  // v2.5.6: Robust version display
-  try {
-    const ver = await api.invoke('app:get-version');
-    if (ver) $version.textContent = 'v' + ver;
-    else $version.textContent = 'v?';
-  } catch (e) {
-    console.warn('Version fetch failed:', e);
-    $version.textContent = 'v?';
-  }
+  // Server status — quick check
+  api.invoke('server:status').then((status) => {
+    if (status && status.running) {
+      setServerState('running');
+      $portDisplay.textContent = 'Port: ' + status.port;
+    }
+  }).catch((e) => console.warn('Server status fetch failed:', e));
 
-  // Check for updates
-  api.invoke('update:check');
+  // Auth checks — can be slow, don't block other UI
+  api.invoke('auth:check-all').then((statuses) => {
+    if (Array.isArray(statuses) && statuses.length > 0) {
+      renderProviders(statuses);
+    } else {
+      renderProviders([]);
+    }
+  }).catch((e) => {
+    console.warn('Auth status fetch failed:', e);
+    renderProviders([]);
+  });
+
+  // Update check — fire and forget
+  api.invoke('update:check').catch((e) => {
+    console.warn('Update check failed:', e);
+    setUpdateError(e);
+  });
 });
 
 // ── Agents toggle ─────────────────────────────────────────────────────────
