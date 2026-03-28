@@ -28,7 +28,7 @@ jobs:
         run: |
           npm ci
           npx tsc
-          npx electron-builder --win
+          npx electron-builder --win --publish never
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
@@ -61,7 +61,7 @@ jobs:
         run: |
           npm ci
           npx tsc
-          npx electron-builder --linux AppImage deb
+          npx electron-builder --linux AppImage deb --publish never
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v6
@@ -94,7 +94,7 @@ jobs:
         run: |
           npm ci
           npx tsc
-          npx electron-builder --mac dmg
+          npx electron-builder --mac dmg --publish never
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v6
