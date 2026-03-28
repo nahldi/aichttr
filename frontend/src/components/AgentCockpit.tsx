@@ -756,6 +756,7 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
 function CockpitReplay({ agent, onFileReverted }: { agent: Agent; onFileReverted?: () => void }) {
   const liveReplay = useChatStore((s) => s.agentReplay[agent.name] || []);
   const [events, setEvents] = useState<import('../types').AgentReplayEvent[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<import('../types').AgentReplayEvent | null>(null);
   const fileDiffs = useChatStore((s) => s.fileDiffs[agent.name] || {});
   const normalizedSelectedPath = selectedEvent?.path
@@ -767,9 +768,10 @@ function CockpitReplay({ agent, onFileReverted }: { agent: Agent; onFileReverted
     let cancelled = false;
     setEvents([]);
     setSelectedEvent(null);
+    setLoading(true);
     api.getAgentReplay(agent.name)
-      .then((data) => { if (!cancelled) setEvents((data.events || []).slice(-100)); })
-      .catch(() => {});
+      .then((data) => { if (!cancelled) { setEvents((data.events || []).slice(-100)); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [agent.name]);
 
@@ -861,7 +863,19 @@ function CockpitReplay({ agent, onFileReverted }: { agent: Agent; onFileReverted
         </div>
       ) : (
         <div className="flex-1 overflow-auto">
-          {allEvents.length === 0 ? (
+          {loading ? (
+            <div className="py-2 space-y-1">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-2.5 px-3 py-2">
+                  <div className="w-2 h-2 rounded-full skeleton-shimmer mt-1.5 shrink-0" />
+                  <div className="flex-1 space-y-1">
+                    <div className="h-2.5 rounded skeleton-shimmer" style={{ width: `${50 + Math.random() * 30}%` }} />
+                    <div className="h-2 rounded skeleton-shimmer" style={{ width: `${30 + Math.random() * 40}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : allEvents.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 py-8">
               <span className="material-symbols-outlined text-3xl text-on-surface-variant/20">replay</span>
               <p className="text-xs text-on-surface-variant/40 text-center">
