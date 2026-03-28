@@ -168,10 +168,72 @@ export interface AgentTemplate {
 
 export interface ActivityEvent {
   id: string;
-  type: 'message' | 'agent_join' | 'agent_leave' | 'job_created' | 'job_done' | 'rule_proposed' | 'channel_created' | 'error';
+  type: string;
   text: string;
   agent?: string;
   channel?: string;
+  timestamp: number;
+}
+
+export interface AgentPresence {
+  agent: string;
+  label: string;
+  surface: string;
+  status: string;
+  detail: string;
+  path?: string;
+  url?: string;
+  query?: string;
+  command?: string;
+  tool?: string;
+  artifact_url?: string;
+  state?: string;
+  updated_at: number;
+}
+
+export interface AgentBrowserState {
+  agent: string;
+  mode?: string;
+  status?: string;
+  url?: string;
+  query?: string;
+  title?: string;
+  preview?: string;
+  tool?: string;
+  artifact_url?: string;
+  updated_at: number;
+}
+
+export interface WorkspaceChange {
+  agent: string;
+  action: string;
+  path: string;
+  timestamp: number;
+}
+
+export interface AgentReplayEvent {
+  id: string;
+  agent: string;
+  type: string;
+  title: string;
+  detail: string;
+  surface: string;
+  path?: string;
+  url?: string;
+  query?: string;
+  command?: string;
+  tool?: string;
+  metadata?: Record<string, unknown>;
+  timestamp: number;
+}
+
+export interface FileDiffPayload {
+  agent: string;
+  path: string;
+  action: string;
+  before: string;
+  after: string;
+  diff: string;
   timestamp: number;
 }
 
@@ -306,5 +368,11 @@ export type WSEvent =
   | { type: 'approval_response'; data: { agent: string; response: string; message_id: number } }
   | { type: 'session_update'; data: { channel: string; session: Record<string, unknown> } }
   | { type: 'thinking_stream'; data: { agent: string; text: string; active: boolean } }
+  | { type: 'agent_presence'; data: AgentPresence }
+  | { type: 'browser_state'; data: AgentBrowserState }
+  | { type: 'terminal_stream'; data: { agent: string; output: string; active: boolean; updated_at: number } }
+  | { type: 'workspace_change'; data: WorkspaceChange }
+  | { type: 'agent_replay'; data: AgentReplayEvent }
+  | { type: 'file_diff'; data: { agent: string; path: string; action: string; diff: string; timestamp: number } }
   | { type: 'token_stream'; data: { message_id: number; token: string; done: boolean } }
   | { type: 'system'; data: Record<string, unknown> };

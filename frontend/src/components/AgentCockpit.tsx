@@ -8,11 +8,12 @@ import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { AgentIcon } from './AgentIcon';
 import { toast } from './Toast';
-import type { Agent, ActivityEvent } from '../types';
+import type { Agent, ActivityEvent, AgentBrowserState, WorkspaceChange } from '../types';
 
 // ── Terminal Tab ──────────────────────────────────────────────────────
 
 function CockpitTerminal({ agent }: { agent: Agent }) {
+  const stream = useChatStore((s) => s.terminalStreams[agent.name]);
   const [output, setOutput] = useState('');
   const [active, setActive] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -20,28 +21,27 @@ function CockpitTerminal({ agent }: { agent: Agent }) {
 
   useEffect(() => {
     let cancelled = false;
-    const abort = new AbortController();
-    const poll = async () => {
-      while (!cancelled) {
-        try {
-          const res = await fetch(
-            `/api/agents/${encodeURIComponent(agent.name)}/terminal?lines=80`,
-            { signal: abort.signal },
-          );
-          const data = await res.json();
-          if (!cancelled) {
-            setOutput(data.output || '');
-            setActive(data.active ?? false);
-          }
-        } catch {
-          if (cancelled) break;
+    api.getAgentTerminalLive(agent.name)
+      .then((data) => {
+        if (!cancelled) {
+          setOutput(data.output || '');
+          setActive(data.active ?? false);
         }
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    };
-    poll();
-    return () => { cancelled = true; abort.abort(); };
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOutput('');
+          setActive(false);
+        }
+      });
+    return () => { cancelled = true; };
   }, [agent.name]);
+
+  useEffect(() => {
+    if (!stream) return;
+    setOutput(stream.output || '');
+    setActive(stream.active ?? false);
+  }, [stream]);
 
   useEffect(() => {
     if (autoScroll && preRef.current) {
@@ -355,26 +355,41 @@ function CockpitFiles({ agent }: { agent: Agent }) {
 
 // ── Activity Tab ──────────────────────────────────────────────────────
 
+function workspaceChangeText(change: WorkspaceChange): string {
+  const action = change.action.replace(/_/g, ' ');
+  return `${action} ${change.path}`;
+}
+
+function workspaceChangeIcon(action: string): string {
+  switch (action) {
+    case 'created': return 'note_add';
+    case 'modified': return 'edit';
+    case 'deleted': return 'delete';
+    case 'renamed': return 'drive_file_rename_outline';
+    default: return 'description';
+  }
+}
+
 function CockpitActivity({ agent }: { agent: Agent }) {
+  const liveEvents = useChatStore((s) => s.activities);
+  const liveChanges = useChatStore((s) => s.workspaceChanges[agent.name] || []);
   const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [changes, setChanges] = useState<WorkspaceChange[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    const fetchActivity = async () => {
-      try {
-        const data = await api.getActivity();
-        if (!cancelled) {
-          // Filter to this agent's events
-          const agentEvents = (data.events || []).filter(
-            (e: ActivityEvent) => e.agent === agent.name || e.text?.includes(agent.name)
-          );
-          setEvents(agentEvents.slice(0, 50));
-        }
-      } catch { /* ignored */ }
-    };
-    fetchActivity();
-    const interval = setInterval(fetchActivity, 5000);
-    return () => { cancelled = true; clearInterval(interval); };
+    Promise.all([
+      api.getActivity().catch(() => ({ events: [] as ActivityEvent[] })),
+      api.getAgentWorkspaceChanges(agent.name).catch(() => ({ changes: [] as WorkspaceChange[] })),
+    ]).then(([activityData, changeData]) => {
+      if (cancelled) return;
+      const agentEvents = (activityData.events || []).filter(
+        (e: ActivityEvent) => e.agent === agent.name || e.text?.includes(agent.name)
+      );
+      setEvents(agentEvents.slice(-50));
+      setChanges((changeData.changes || []).slice(-50));
+    });
+    return () => { cancelled = true; };
   }, [agent.name]);
 
   const iconForType = (type: string) => {
@@ -389,21 +404,43 @@ function CockpitActivity({ agent }: { agent: Agent }) {
     }
   };
 
+  const merged = [
+    ...events.map((event) => ({ kind: 'activity' as const, id: `activity:${event.id}`, timestamp: event.timestamp, payload: event })),
+    ...changes.map((change) => ({ kind: 'workspace' as const, id: `workspace:${change.timestamp}:${change.path}:${change.action}`, timestamp: change.timestamp, payload: change })),
+    ...liveEvents
+      .filter((e) => e.agent === agent.name || e.text?.includes(agent.name))
+      .map((event) => ({ kind: 'activity' as const, id: `activity:${event.id}`, timestamp: event.timestamp, payload: event })),
+    ...liveChanges.map((change) => ({ kind: 'workspace' as const, id: `workspace:${change.timestamp}:${change.path}:${change.action}`, timestamp: change.timestamp, payload: change })),
+  ]
+    .filter((item, index, arr) => arr.findIndex((candidate) => candidate.id === item.id) === index)
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, 80);
+
   return (
     <div className="flex-1 overflow-auto">
-      {events.length === 0 ? (
+      {merged.length === 0 ? (
         <div className="text-center py-8 text-on-surface-variant/30 text-xs">
           No recent activity for {agent.label || agent.name}
         </div>
       ) : (
         <div className="py-2">
-          {events.map((e) => (
-            <div key={e.id} className="px-3 py-2 flex items-start gap-2 hover:bg-surface-container-high/30 transition-colors">
-              <span className="material-symbols-outlined text-sm text-on-surface-variant/40 mt-0.5">{iconForType(e.type)}</span>
+          {merged.map((item) => item.kind === 'activity' ? (
+            <div key={item.id} className="px-3 py-2 flex items-start gap-2 hover:bg-surface-container-high/30 transition-colors">
+              <span className="material-symbols-outlined text-sm text-on-surface-variant/40 mt-0.5">{iconForType(item.payload.type)}</span>
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] text-on-surface/70 leading-snug">{e.text}</p>
+                <p className="text-[11px] text-on-surface/70 leading-snug">{item.payload.text}</p>
                 <p className="text-[9px] text-on-surface-variant/25 mt-0.5">
-                  {new Date(e.timestamp * 1000).toLocaleTimeString()}
+                  {new Date(item.payload.timestamp * 1000).toLocaleTimeString()}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div key={item.id} className="px-3 py-2 flex items-start gap-2 hover:bg-surface-container-high/30 transition-colors">
+              <span className="material-symbols-outlined text-sm text-on-surface-variant/40 mt-0.5">{workspaceChangeIcon(item.payload.action)}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] text-on-surface/70 leading-snug">{workspaceChangeText(item.payload)}</p>
+                <p className="text-[9px] text-on-surface-variant/25 mt-0.5">
+                  {new Date(item.payload.timestamp * 1000).toLocaleTimeString()}
                 </p>
               </div>
             </div>
@@ -416,34 +453,31 @@ function CockpitActivity({ agent }: { agent: Agent }) {
 
 // ── Browser Tab ───────────────────────────────────────────────────────
 
-interface BrowserState {
-  url?: string;
-  query?: string;
-  preview?: string;
-  tool?: string;
-  timestamp?: number;
-}
-
 function CockpitBrowser({ agent }: { agent: Agent }) {
-  const [browser, setBrowser] = useState<BrowserState | null>(null);
+  const liveBrowser = useChatStore((s) => s.browserStates[agent.name]);
+  const [browser, setBrowser] = useState<AgentBrowserState | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    const fetchBrowser = async () => {
-      try {
-        const res = await fetch(`/api/agents/${encodeURIComponent(agent.name)}/browser`);
-        if (res.ok) {
-          const data = await res.json();
-          if (!cancelled) setBrowser(data.state || null);
+    api.getAgentBrowserState(agent.name)
+      .then((data) => {
+        if (!cancelled) {
+          setBrowser(data);
+          setLoading(false);
         }
-      } catch { /* ignored */ }
-      if (!cancelled) setLoading(false);
-    };
-    fetchBrowser();
-    const interval = setInterval(fetchBrowser, 3000);
-    return () => { cancelled = true; clearInterval(interval); };
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [agent.name]);
+
+  useEffect(() => {
+    if (!liveBrowser) return;
+    setBrowser(liveBrowser);
+    setLoading(false);
+  }, [liveBrowser]);
 
   if (loading) {
     return (
@@ -511,10 +545,10 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
         )}
       </div>
       {/* Timestamp */}
-      {browser.timestamp && (
+      {browser.updated_at && (
         <div className="px-3 py-1.5 border-t border-outline-variant/5 shrink-0">
           <span className="text-[9px] text-on-surface-variant/20">
-            Last updated {new Date(browser.timestamp * 1000).toLocaleTimeString()}
+            Last updated {new Date(browser.updated_at * 1000).toLocaleTimeString()}
           </span>
         </div>
       )}
@@ -538,10 +572,12 @@ export function AgentCockpit() {
   const agents = useChatStore((s) => s.agents);
   const cockpitAgent = useChatStore((s) => s.cockpitAgent);
   const thinkingStreams = useChatStore((s) => s.thinkingStreams);
+  const agentPresence = useChatStore((s) => s.agentPresence);
   const [tab, setTab] = useState<CockpitTab>('terminal');
 
   const agent = agents.find((a) => a.name === cockpitAgent) || null;
   const thinking = agent ? thinkingStreams[agent.name] : null;
+  const presence = agent ? agentPresence[agent.name] : null;
 
   if (!agent) {
     return (
@@ -567,11 +603,12 @@ export function AgentCockpit() {
           <AgentIcon base={agent.base} color={agent.color} size={20} />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-on-surface/80 truncate">{agent.label || agent.name}</p>
-            <p className="text-[9px] text-on-surface-variant/40">
+            <p className="text-[9px] text-on-surface-variant/40 truncate">
               {thinking?.active
                 ? 'Thinking...'
-                : agent.state === 'active' ? 'Working' : agent.state === 'idle' ? 'Ready' : agent.state === 'paused' ? 'Paused' : agent.state}
-              {agent.workspace && <span className="ml-1 text-on-surface-variant/25">in {agent.workspace.split('/').pop()}</span>}
+                : presence?.detail || (agent.state === 'active' ? 'Working' : agent.state === 'idle' ? 'Ready' : agent.state === 'paused' ? 'Paused' : agent.state)}
+              {presence?.path && <span className="ml-1 text-on-surface-variant/25">at {presence.path}</span>}
+              {!presence?.path && agent.workspace && <span className="ml-1 text-on-surface-variant/25">in {agent.workspace.split('/').pop()}</span>}
             </p>
           </div>
           <div
@@ -583,11 +620,15 @@ export function AgentCockpit() {
           />
         </div>
         {/* Thinking stream preview */}
-        {thinking?.active && thinking.text && (
+        {thinking?.active && thinking.text ? (
           <p className="mt-1.5 text-[9px] text-on-surface-variant/35 truncate font-mono italic pl-7">
             {thinking.text.slice(-80)}
           </p>
-        )}
+        ) : presence?.surface ? (
+          <p className="mt-1.5 text-[9px] text-on-surface-variant/35 truncate font-mono pl-7">
+            {presence.surface}{presence.status ? ` · ${presence.status}` : ''}{presence.command ? ` · ${presence.command}` : ''}{presence.url ? ` · ${presence.url}` : ''}
+          </p>
+        ) : null}
       </div>
 
       {/* Tabs */}

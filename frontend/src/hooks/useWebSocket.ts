@@ -62,6 +62,12 @@ export function useWebSocket() {
     updateMessageMeta,
     appendToMessage,
     setWsState,
+    setAgentPresence,
+    setBrowserState,
+    setTerminalStream,
+    addWorkspaceChange,
+    addAgentReplayEvent,
+    setFileDiff,
   } = useChatStore();
 
   useEffect(() => {
@@ -177,6 +183,32 @@ export function useWebSocket() {
             break;
           case 'thinking_stream':
             setThinkingStream(parsed.data.agent, parsed.data.text || '', parsed.data.active ?? false);
+            break;
+          case 'agent_presence':
+            setAgentPresence(parsed.data);
+            break;
+          case 'browser_state':
+            setBrowserState(parsed.data);
+            break;
+          case 'terminal_stream':
+            setTerminalStream(parsed.data);
+            break;
+          case 'workspace_change':
+            addWorkspaceChange(parsed.data);
+            break;
+          case 'agent_replay':
+            addAgentReplayEvent(parsed.data);
+            break;
+          case 'file_diff':
+            setFileDiff({
+              agent: parsed.data.agent,
+              path: parsed.data.path,
+              action: parsed.data.action,
+              diff: parsed.data.diff,
+              before: '',
+              after: '',
+              timestamp: parsed.data.timestamp,
+            });
             break;
           case 'token_stream': {
             // v4.3.0: Real-time token streaming — append tokens to existing message

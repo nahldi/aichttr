@@ -1,5 +1,18 @@
 import { create } from 'zustand';
-import type { Message, Agent, Channel, Job, Rule, Settings, ActivityEvent } from '../types';
+import type {
+  Message,
+  Agent,
+  Channel,
+  Job,
+  Rule,
+  Settings,
+  ActivityEvent,
+  AgentPresence,
+  AgentBrowserState,
+  WorkspaceChange,
+  AgentReplayEvent,
+  FileDiffPayload,
+} from '../types';
 
 interface FailedMessage {
   text: string;
@@ -66,7 +79,7 @@ interface ChatState {
 
   // UI state
   sidebarPanel: 'jobs' | 'rules' | 'settings' | 'cockpit' | null;
-  setSidebarPanel: (p: 'jobs' | 'rules' | 'settings' | null) => void;
+  setSidebarPanel: (p: 'jobs' | 'rules' | 'settings' | 'cockpit' | null) => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
   replyTo: Message | null;
@@ -86,6 +99,18 @@ interface ChatState {
   // Agent cockpit
   cockpitAgent: string | null;
   setCockpitAgent: (name: string | null) => void;
+  agentPresence: Record<string, AgentPresence>;
+  setAgentPresence: (presence: AgentPresence) => void;
+  browserStates: Record<string, AgentBrowserState>;
+  setBrowserState: (state: AgentBrowserState) => void;
+  terminalStreams: Record<string, { output: string; active: boolean; updated_at: number }>;
+  setTerminalStream: (stream: { agent: string; output: string; active: boolean; updated_at: number }) => void;
+  workspaceChanges: Record<string, WorkspaceChange[]>;
+  addWorkspaceChange: (change: WorkspaceChange) => void;
+  agentReplay: Record<string, AgentReplayEvent[]>;
+  addAgentReplayEvent: (event: AgentReplayEvent) => void;
+  fileDiffs: Record<string, Record<string, FileDiffPayload>>;
+  setFileDiff: (diff: FileDiffPayload) => void;
 
   // Multi-select deletion
   selectMode: boolean;
@@ -302,6 +327,48 @@ export const useChatStore = create<ChatState>((set) => ({
   // Agent cockpit
   cockpitAgent: null,
   setCockpitAgent: (name) => set({ cockpitAgent: name, sidebarPanel: name ? 'cockpit' : null }),
+  agentPresence: {},
+  setAgentPresence: (presence) =>
+    set((s) => ({
+      agentPresence: { ...s.agentPresence, [presence.agent]: presence },
+    })),
+  browserStates: {},
+  setBrowserState: (browserState) =>
+    set((s) => ({
+      browserStates: { ...s.browserStates, [browserState.agent]: browserState },
+    })),
+  terminalStreams: {},
+  setTerminalStream: (stream) =>
+    set((s) => ({
+      terminalStreams: { ...s.terminalStreams, [stream.agent]: stream },
+    })),
+  workspaceChanges: {},
+  addWorkspaceChange: (change) =>
+    set((s) => ({
+      workspaceChanges: {
+        ...s.workspaceChanges,
+        [change.agent]: [...(s.workspaceChanges[change.agent] || []), change].slice(-100),
+      },
+    })),
+  agentReplay: {},
+  addAgentReplayEvent: (event) =>
+    set((s) => ({
+      agentReplay: {
+        ...s.agentReplay,
+        [event.agent]: [...(s.agentReplay[event.agent] || []), event].slice(-200),
+      },
+    })),
+  fileDiffs: {},
+  setFileDiff: (diff) =>
+    set((s) => ({
+      fileDiffs: {
+        ...s.fileDiffs,
+        [diff.agent]: {
+          ...(s.fileDiffs[diff.agent] || {}),
+          [diff.path]: diff,
+        },
+      },
+    })),
 
   // Multi-select deletion
   selectMode: false,

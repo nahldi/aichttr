@@ -162,6 +162,30 @@ export const api = {
   getUsage: () =>
     request<{ total_tokens: number; by_agent: Record<string, number>; estimated_cost: number }>('/api/usage'),
 
+  getAgentPresence: (name: string) =>
+    request<import('../types').AgentPresence>(`/api/agents/${encodeURIComponent(name)}/presence`),
+
+  getAgentBrowserState: (name: string) =>
+    request<import('../types').AgentBrowserState>(`/api/agents/${encodeURIComponent(name)}/browser`),
+
+  getAgentTerminalLive: (name: string) =>
+    request<{ agent: string; output: string; active: boolean; updated_at: number }>(`/api/agents/${encodeURIComponent(name)}/terminal/live`),
+
+  getAgentWorkspaceChanges: (name: string, since = 0, limit = 100) =>
+    request<{ changes: import('../types').WorkspaceChange[] }>(
+      `/api/agents/${encodeURIComponent(name)}/workspace/changes?since=${since}&limit=${limit}`
+    ),
+
+  getAgentReplay: (name: string, since = 0, limit = 100) =>
+    request<{ events: import('../types').AgentReplayEvent[] }>(
+      `/api/agents/${encodeURIComponent(name)}/replay?since=${since}&limit=${limit}`
+    ),
+
+  getAgentDiff: (name: string, path: string) =>
+    request<import('../types').FileDiffPayload>(
+      `/api/agents/${encodeURIComponent(name)}/diff?path=${encodeURIComponent(path)}`
+    ),
+
   exportChannel: (channel: string) =>
     request<{ markdown: string; filename: string }>('/api/export?channel=' + encodeURIComponent(channel)),
 
