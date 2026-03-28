@@ -1,7 +1,7 @@
 # GhostLink — Project Status & Handoff
 
 **Last updated:** 2026-03-28
-**Version:** v4.8.6
+**Version:** v4.8.7
 **Owner:** Finn (FinnTheDogg / nahldi / nahlidify)
 **GitHub:** https://github.com/nahldi/ghostlink (public)
 **License:** MIT
@@ -57,7 +57,7 @@ GhostLink is a local-first multi-agent AI chat platform. It puts all your AI age
 |-------|-----------|
 | Backend | Python 3.11+, FastAPI, aiosqlite, uvicorn, MCP SDK (FastMCP) |
 | Frontend | React 19, TypeScript, Vite 8, Tailwind CSS 4, Zustand |
-| Desktop | Electron 33, electron-builder, electron-updater |
+| Desktop | Electron 35, electron-builder 26, electron-updater |
 | Database | SQLite with FTS5 full-text search |
 | Agent Execution | tmux sessions managed by wrapper.py |
 | Communication | MCP over HTTP + SSE, WebSocket for real-time UI |
@@ -66,9 +66,10 @@ GhostLink is a local-first multi-agent AI chat platform. It puts all your AI age
 
 ---
 
-## CURRENT STATE (v4.8.6)
+## CURRENT STATE (v4.8.7)
 
-### Recent Changes (v3.9.8 → v4.8.6)
+### Recent Changes (v3.9.8 → v4.8.7)
+- **v4.8.7**: Maintenance release — refresh desktop toolchain to Electron 35 / electron-builder 26, clear remaining desktop audit debt, and keep the chunk-splitting frontend cleanup from the prior pass.
 - **v4.8.6**: Release job checkout fix — check out the repo in the dedicated release job before `gh run download`, so artifact collection and GitHub release creation run from a valid repository context.
 - **v4.8.5**: Final release workflow fix — force `electron-builder --publish never` in per-platform build jobs so tagged builds only upload artifacts to Actions; GitHub release publishing stays in the dedicated release job.
 - **v4.8.4**: Release workflow fix and frontend verification reliability — remove build-job `GH_TOKEN`, and run frontend lint/tests through stable direct Node entrypoints for this WSL/Windows setup.
