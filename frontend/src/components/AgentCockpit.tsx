@@ -356,8 +356,13 @@ function CockpitFiles({ agent }: { agent: Agent }) {
       )}
       <div className="flex-1 overflow-auto">
         {loading ? (
-          <div className="flex items-center justify-center p-8">
-            <span className="material-symbols-outlined animate-spin text-primary/40">progress_activity</span>
+          <div className="py-1 space-y-0.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2 px-3 py-1.5">
+                <div className="w-4 h-4 rounded skeleton-shimmer" />
+                <div className="h-2.5 rounded skeleton-shimmer" style={{ width: `${40 + Math.random() * 40}%` }} />
+              </div>
+            ))}
           </div>
         ) : filteredFiles.length === 0 ? (
           <div className="text-center py-8 text-on-surface-variant/30 text-xs">
@@ -559,8 +564,16 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <span className="material-symbols-outlined animate-spin text-primary/40">progress_activity</span>
+      <div className="flex flex-col h-full">
+        <div className="px-3 py-2 flex items-center gap-2 border-b border-outline-variant/10">
+          <div className="w-4 h-4 rounded skeleton-shimmer" />
+          <div className="flex-1 h-3 rounded skeleton-shimmer" />
+        </div>
+        <div className="p-3 space-y-2">
+          <div className="w-3/4 h-3 rounded skeleton-shimmer" />
+          <div className="w-1/2 h-3 rounded skeleton-shimmer" />
+          <div className="w-full h-20 rounded-lg skeleton-shimmer mt-3" />
+        </div>
       </div>
     );
   }
