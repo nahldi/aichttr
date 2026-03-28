@@ -561,15 +561,143 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
   );
 }
 
+// ── Replay Tab ────────────────────────────────────────────────────────
+
+function CockpitReplay({ agent }: { agent: Agent }) {
+  const liveReplay = useChatStore((s) => s.agentReplay[agent.name] || []);
+  const [events, setEvents] = useState<import('../types').AgentReplayEvent[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<import('../types').AgentReplayEvent | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getAgentReplay(agent.name)
+      .then((data) => { if (!cancelled) setEvents((data.events || []).slice(-100)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [agent.name]);
+
+  const allEvents = [
+    ...events,
+    ...liveReplay.filter((e) => !events.some((x) => x.id === e.id)),
+  ].sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
+
+  const replayIcon = (type: string) => {
+    switch (type) {
+      case 'tool_start': return 'build';
+      case 'tool_result': return 'check_circle';
+      case 'file_open': case 'file_save': return 'edit_document';
+      case 'browser_navigate': case 'web_fetch': case 'web_search': return 'language';
+      case 'thinking_start': case 'thinking_update': return 'psychology';
+      case 'command_run': return 'terminal';
+      case 'agent_join': return 'login';
+      case 'agent_leave': return 'logout';
+      default: return 'radio_button_checked';
+    }
+  };
+
+  const surfaceColor = (surface: string) => {
+    switch (surface) {
+      case 'terminal': return '#4ade80';
+      case 'browser': return '#60a5fa';
+      case 'files': return '#a78bfa';
+      case 'thinking': return '#fbbf24';
+      default: return '#8b8b8b';
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {selectedEvent ? (
+        <div className="flex flex-col h-full">
+          <div className="px-3 py-2 flex items-center gap-2 border-b border-outline-variant/10 shrink-0">
+            <button onClick={() => setSelectedEvent(null)} className="p-1 rounded hover:bg-surface-container-high">
+              <span className="material-symbols-outlined text-sm text-on-surface-variant/50">arrow_back</span>
+            </button>
+            <span className="material-symbols-outlined text-sm" style={{ color: surfaceColor(selectedEvent.surface) }}>
+              {replayIcon(selectedEvent.type)}
+            </span>
+            <span className="text-[11px] text-on-surface/70 font-medium truncate">{selectedEvent.title}</span>
+          </div>
+          <div className="flex-1 overflow-auto p-3">
+            <div className="space-y-2">
+              <div className="text-[10px] text-on-surface-variant/40">
+                {new Date(selectedEvent.timestamp * 1000).toLocaleString()}
+              </div>
+              <p className="text-[11px] text-on-surface/70 leading-relaxed">{selectedEvent.detail}</p>
+              {selectedEvent.path && (
+                <div className="flex items-center gap-1.5 text-[10px] text-on-surface-variant/40">
+                  <span className="material-symbols-outlined text-[12px]">description</span>
+                  <span className="font-mono">{selectedEvent.path}</span>
+                </div>
+              )}
+              {selectedEvent.url && (
+                <div className="flex items-center gap-1.5 text-[10px] text-on-surface-variant/40">
+                  <span className="material-symbols-outlined text-[12px]">link</span>
+                  <a href={selectedEvent.url} target="_blank" rel="noopener noreferrer" className="font-mono text-primary/60 hover:text-primary">{selectedEvent.url}</a>
+                </div>
+              )}
+              {selectedEvent.command && (
+                <pre className="mt-2 p-2 rounded-lg bg-surface-container-highest/30 text-[10px] font-mono text-green-300/70 whitespace-pre-wrap">
+                  $ {selectedEvent.command}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          {allEvents.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4 py-8">
+              <span className="material-symbols-outlined text-3xl text-on-surface-variant/20">replay</span>
+              <p className="text-xs text-on-surface-variant/40 text-center">
+                No replay events yet. Actions will appear here as {agent.label || agent.name} works.
+              </p>
+            </div>
+          ) : (
+            <div className="py-1">
+              {allEvents.map((e) => (
+                <button
+                  key={e.id}
+                  onClick={() => setSelectedEvent(e)}
+                  className="w-full text-left px-3 py-2 flex items-start gap-2.5 hover:bg-surface-container-high/30 transition-colors"
+                >
+                  {/* Timeline dot */}
+                  <div className="flex flex-col items-center mt-1 shrink-0">
+                    <div className="w-2 h-2 rounded-full" style={{ background: surfaceColor(e.surface) }} />
+                    <div className="w-px flex-1 bg-outline-variant/10 mt-1" />
+                  </div>
+                  <div className="flex-1 min-w-0 pb-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[13px]" style={{ color: surfaceColor(e.surface) }}>
+                        {replayIcon(e.type)}
+                      </span>
+                      <span className="text-[11px] text-on-surface/70 font-medium truncate">{e.title}</span>
+                    </div>
+                    <p className="text-[10px] text-on-surface-variant/35 mt-0.5 truncate">{e.detail}</p>
+                    <span className="text-[9px] text-on-surface-variant/20">
+                      {new Date(e.timestamp * 1000).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Cockpit Panel ────────────────────────────────────────────────
 
-const TABS = ['terminal', 'files', 'browser', 'activity'] as const;
+const TABS = ['terminal', 'files', 'browser', 'replay', 'activity'] as const;
 type CockpitTab = typeof TABS[number];
 
 const TAB_ICONS: Record<CockpitTab, string> = {
   terminal: 'terminal',
   files: 'folder_open',
   browser: 'language',
+  replay: 'replay',
   activity: 'timeline',
 };
 
@@ -688,6 +816,7 @@ export function AgentCockpit() {
         {tab === 'terminal' && <CockpitTerminal agent={agent} />}
         {tab === 'files' && <CockpitFiles agent={agent} />}
         {tab === 'browser' && <CockpitBrowser agent={agent} />}
+        {tab === 'replay' && <CockpitReplay agent={agent} />}
         {tab === 'activity' && <CockpitActivity agent={agent} />}
       </div>
     </div>
