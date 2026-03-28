@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -50,6 +50,26 @@ function parseReactions(raw: unknown): Record<string, string[]> {
 }
 
 function ReactionPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+
+    const buttons = Array.from(
+      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button[data-reaction-index]') || []
+    );
+    if (!buttons.length) return;
+
+    event.preventDefault();
+    const delta = event.key === 'ArrowRight' ? 1 : -1;
+    const nextIndex = (index + delta + buttons.length) % buttons.length;
+    buttons[nextIndex]?.focus();
+  };
+
   return (
     <motion.div
       initial={{ scale: 0.8, opacity: 0, y: 4 }}
@@ -57,14 +77,21 @@ function ReactionPicker({ onPick, onClose }: { onPick: (emoji: string) => void; 
       exit={{ scale: 0.8, opacity: 0, y: 4 }}
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       className="absolute bottom-full mb-1 left-0 z-50 flex gap-0.5 bg-surface-container-high border border-outline-variant/20 rounded-lg p-1 shadow-xl"
+      role="toolbar"
+      aria-label="Reaction picker"
     >
-      {REACTION_EMOJIS.map((e) => (
+      {REACTION_EMOJIS.map((e, index) => (
         <motion.button
           key={e}
+          type="button"
+          data-reaction-index={index}
+          autoFocus={index === 0}
           onClick={() => { onPick(e); onClose(); }}
+          onKeyDown={(event) => handleKeyDown(event, index)}
           whileHover={{ scale: 1.2 }}
           whileTap={{ scale: 0.9 }}
           className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-surface-container-highest text-sm transition-colors"
+          aria-label={`React with ${e}`}
         >
           {e}
         </motion.button>
@@ -404,6 +431,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           {handoff && <HandoffCard from={handoff.from} to={handoff.to} reason={handoff.reason} context={handoff.context} fromColor={agents.find(a => a.name === handoff.from)?.color} toColor={agents.find(a => a.name === handoff.to)?.color} />}
           {approval && <ApprovalCard messageId={message.id} agent={approval.agent || message.sender} agentColor={agentColor} agentBase={agent?.base} prompt={approval.prompt || message.text} responded={approval.responded} />}
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- card shape validated by 'type' in check */}
           {card && 'type' in card && <GenerativeCard card={card as any} agentColor={agentColor} />}
         </div>
 
@@ -526,10 +554,9 @@ function renderWithMentions(text: string): React.ReactNode[] {
   });
 }
 
-// Custom paragraph that highlights @mentions
+// Custom paragraph that highlights @mentions — any needed for react-markdown component override
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function MdParagraph(props: any) {
-  const { children } = props;
+function MdParagraph({ children }: any) {
   if (typeof children === 'string') {
     return <p>{renderWithMentions(children)}</p>;
   }
@@ -537,22 +564,21 @@ function MdParagraph(props: any) {
   if (Array.isArray(children)) {
     return <p>{children.map((child: unknown, i: number) => {
       if (typeof child === 'string') return <span key={i}>{renderWithMentions(child)}</span>;
-      return child as React.ReactNode;
+      return child as ReactNode;
     })}</p>;
   }
   return <p>{children}</p>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function MdCode(props: any) {
-  const { className, children, ...rest } = props;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-markdown component override
+function MdCode({ className, children, ...rest }: any) {
   const match = /language-(\w+)/.exec(className || '');
   const codeStr = String(children).replace(/\n$/, '');
   // For fenced code blocks: pass highlighted HTML from rehype-highlight
   if (match) {
     // rehype-highlight adds hljs classes to the children — pass raw HTML
     const hasHljs = typeof children === 'object';
-    return <CodeBlock code={codeStr} language={match[1]} highlighted={hasHljs ? props.children : undefined} />;
+    return <CodeBlock code={codeStr} language={match[1]} highlighted={hasHljs ? children : undefined} />;
   }
   return <code className={className} {...rest}>{children}</code>;
 }

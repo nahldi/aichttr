@@ -2,35 +2,75 @@ import { useState, useEffect, useMemo } from 'react';
 import { api } from '../lib/api';
 
 const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g;
-
-// Cache previews to avoid re-fetching (bounded to 200 entries)
-const _cache: Record<string, { title: string; description: string; image: string; site_name: string } | null> = {};
-const _cacheOrder: string[] = [];
 const MAX_CACHE = 200;
-function _cacheSet(url: string, val: typeof _cache[string]) {
+const PREVIEW_TTL_MS = 10 * 60 * 1000;
+
+type UrlPreviewData = {
+  title: string;
+  description: string;
+  image: string;
+  site_name: string;
+};
+
+type CacheEntry = {
+  value: UrlPreviewData | null;
+  expiresAt: number;
+};
+
+// Cache previews to avoid re-fetching while allowing previews to refresh over time.
+const _cache: Record<string, CacheEntry | undefined> = {};
+const _cacheOrder: string[] = [];
+
+function _cacheDelete(url: string) {
+  delete _cache[url];
+  const index = _cacheOrder.indexOf(url);
+  if (index !== -1) _cacheOrder.splice(index, 1);
+}
+
+function _cacheGet(url: string): UrlPreviewData | null | undefined {
+  const entry = _cache[url];
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    _cacheDelete(url);
+    return undefined;
+  }
+  return entry.value;
+}
+
+function _cacheSet(url: string, value: UrlPreviewData | null) {
   if (!(url in _cache)) {
     _cacheOrder.push(url);
     if (_cacheOrder.length > MAX_CACHE) {
       const evict = _cacheOrder.shift()!;
-      delete _cache[evict];
+      _cacheDelete(evict);
     }
   }
-  _cache[url] = val;
+  _cache[url] = {
+    value,
+    expiresAt: Date.now() + PREVIEW_TTL_MS,
+  };
 }
 
 export function UrlPreviews({ text }: { text: string }) {
-  const [previews, setPreviews] = useState<Record<string, { title: string; description: string; image: string; site_name: string }>>({});
+  const [previews, setPreviews] = useState<Record<string, UrlPreviewData>>({});
 
   const urls = useMemo(() => Array.from(new Set(text.match(URL_REGEX) || [])).slice(0, 3), [text]);
 
   const urlsKey = urls.join('\n');
   useEffect(() => {
-    if (urls.length === 0) return;
+    if (urls.length === 0) {
+      setPreviews({});
+      return;
+    }
+
     let cancelled = false;
+    setPreviews(prev => Object.fromEntries(Object.entries(prev).filter(([url]) => urls.includes(url))));
+
     urls.forEach(async (url) => {
-      if (_cache[url] !== undefined) {
-        if (_cache[url] && !cancelled) {
-          setPreviews(p => ({ ...p, [url]: _cache[url]! }));
+      const cached = _cacheGet(url);
+      if (cached !== undefined) {
+        if (cached && !cancelled) {
+          setPreviews(p => ({ ...p, [url]: cached }));
         }
         return;
       }

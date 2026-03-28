@@ -7,16 +7,37 @@ import { VoiceCall } from './VoiceCall';
 
 // ── Voice Input (Web Speech API) ───────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SpeechRecognition: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+// Web Speech API types (not in standard TS lib)
+interface SpeechRecognitionResult { readonly [index: number]: { transcript: string; confidence: number }; }
+interface SpeechRecognitionResultList { readonly length: number; readonly [index: number]: SpeechRecognitionResult; }
+interface SpeechRecognitionEvent extends Event { readonly results: SpeechRecognitionResultList; }
+interface SpeechRecognitionErrorEvent extends Event { readonly error: string; readonly message?: string; }
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+const _win = window as Window & { SpeechRecognition?: new () => SpeechRecognitionInstance; webkitSpeechRecognition?: new () => SpeechRecognitionInstance };
+const SpeechRecognition = _win.SpeechRecognition || _win.webkitSpeechRecognition;
 const HAS_BROWSER_STT = !!SpeechRecognition;
 const HAS_MEDIA_DEVICES = !!(navigator.mediaDevices?.getUserMedia);
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export function useVoiceInput(onTranscript: (text: string) => void, lang?: string) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState('');
   const [permissionState, setPermissionState] = useState<'unknown' | 'granted' | 'denied' | 'prompt'>('unknown');
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -24,8 +45,8 @@ export function useVoiceInput(onTranscript: (text: string) => void, lang?: strin
   useEffect(() => {
     if (navigator.permissions?.query) {
       navigator.permissions.query({ name: 'microphone' as PermissionName }).then(result => {
-        setPermissionState(result.state as any);
-        result.addEventListener('change', () => setPermissionState(result.state as any));
+        setPermissionState(result.state as 'granted' | 'denied' | 'prompt');
+        result.addEventListener('change', () => setPermissionState(result.state as 'granted' | 'denied' | 'prompt'));
       }).catch(() => setPermissionState('unknown'));
     }
   }, []);
@@ -42,14 +63,15 @@ export function useVoiceInput(onTranscript: (text: string) => void, lang?: strin
       setPermissionState('granted');
       setError('');
       return true;
-    } catch (e: any) {
-      if (e.name === 'NotAllowedError') {
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      if (err.name === 'NotAllowedError') {
         setPermissionState('denied');
         setError('Microphone access denied. Check browser permissions.');
-      } else if (e.name === 'NotFoundError') {
+      } else if (err.name === 'NotFoundError') {
         setError('No microphone found. Connect a microphone and try again.');
       } else {
-        setError('Microphone error: ' + (e.message || String(e)));
+        setError('Microphone error: ' + err.message);
       }
       return false;
     }
@@ -73,13 +95,13 @@ export function useVoiceInput(onTranscript: (text: string) => void, lang?: strin
         recognition.interimResults = false;
         recognition.lang = lang || navigator.language || 'en-US';
 
-        recognition.onresult = (event: any) => {
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
           const transcript = event.results[0][0].transcript;
           onTranscript(transcript);
           setListening(false);
         };
 
-        recognition.onerror = (e: any) => {
+        recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
           if (e.error === 'not-allowed') {
             setError('Microphone access denied');
             setPermissionState('denied');
@@ -129,8 +151,8 @@ export function useVoiceInput(onTranscript: (text: string) => void, lang?: strin
               const err = await resp.json().catch(() => ({ error: 'Transcription failed' }));
               setError(err.error || 'Transcription failed');
             }
-          } catch (e: any) {
-            setError('Transcription error: ' + (e.message || String(e)));
+          } catch (e: unknown) {
+            setError('Transcription error: ' + getErrorMessage(e));
           }
           setListening(false);
         };
@@ -138,8 +160,8 @@ export function useVoiceInput(onTranscript: (text: string) => void, lang?: strin
         mediaRecorderRef.current = mediaRecorder;
         mediaRecorder.start();
         setListening(true);
-      } catch (e: any) {
-        setError('Could not start recording: ' + (e.message || String(e)));
+      } catch (e: unknown) {
+        setError('Could not start recording: ' + getErrorMessage(e));
       }
     } else {
       setError('Voice input not available in this browser');
@@ -299,7 +321,7 @@ export function MessageInput() {
         const current = useChatStore.getState().settings.theme;
         const next = current === 'dark' ? 'light' : 'dark';
         useChatStore.getState().updateSettings({ theme: next });
-        api.saveSettings({ theme: next }).catch((e) => console.warn('Settings save:', e.message || e));
+        api.saveSettings({ theme: next }).catch((e: unknown) => console.warn('Settings save:', getErrorMessage(e)));
       },
     },
     {
@@ -362,7 +384,7 @@ export function MessageInput() {
       execute: () => {
         const current = useChatStore.getState().settings.debugMode;
         useChatStore.getState().updateSettings({ debugMode: !current });
-        api.saveSettings({ debugMode: !current }).catch((e) => console.warn('Settings save:', e.message || e));
+        api.saveSettings({ debugMode: !current }).catch((e: unknown) => console.warn('Settings save:', getErrorMessage(e)));
         addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: `Debug mode: ${!current ? 'ON' : 'OFF'}`, type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
       },
     },
@@ -385,7 +407,7 @@ export function MessageInput() {
       description: 'Mute notification sounds',
       execute: () => {
         useChatStore.getState().updateSettings({ notificationSounds: false });
-        api.saveSettings({ notificationSounds: false }).catch((e) => console.warn('Settings save:', e.message || e));
+        api.saveSettings({ notificationSounds: false }).catch((e: unknown) => console.warn('Settings save:', getErrorMessage(e)));
         addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: 'Notifications muted', type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
       },
     },
@@ -394,7 +416,7 @@ export function MessageInput() {
       description: 'Unmute notification sounds',
       execute: () => {
         useChatStore.getState().updateSettings({ notificationSounds: true });
-        api.saveSettings({ notificationSounds: true }).catch((e) => console.warn('Settings save:', e.message || e));
+        api.saveSettings({ notificationSounds: true }).catch((e: unknown) => console.warn('Settings save:', getErrorMessage(e)));
         addMessage({ id: Date.now(), uid: 'cmd-' + Date.now(), sender: 'system', text: 'Notifications unmuted', type: 'system', timestamp: Date.now() / 1000, time: new Date().toLocaleTimeString(), channel: activeChannel });
       },
     },
@@ -589,7 +611,7 @@ export function MessageInput() {
         const label = parts[2] || base;
         sysMsg(`Spawning ${base} agent "${label}"...`);
         api.spawnAgent(base, label, '.', []).then(() => {
-          setTimeout(() => api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch((e) => console.warn('Status fetch:', e.message || e)), 3000);
+          setTimeout(() => api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch((e: unknown) => console.warn('Status fetch:', getErrorMessage(e))), 3000);
         }).catch(() => sysMsg(`Failed to spawn ${base}`));
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -600,7 +622,7 @@ export function MessageInput() {
         const name = parts[1];
         sysMsg(`Stopping agent "${name}"...`);
         api.killAgent(name).then(() => {
-          api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch((e) => console.warn('Status fetch:', e.message || e));
+          api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch((e: unknown) => console.warn('Status fetch:', getErrorMessage(e)));
         }).catch(() => sysMsg(`Failed to stop ${name}`));
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -614,7 +636,7 @@ export function MessageInput() {
           sysMsg(`Setting ${agentName} role to ${role}...`);
           api.setAgentConfig(agentName, { role }).then(() => {
             sysMsg(`${agentName} is now a ${role}`);
-            api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch((e) => console.warn('Status fetch:', e.message || e));
+            api.getStatus().then(r => useChatStore.getState().setAgents(r.agents)).catch((e: unknown) => console.warn('Status fetch:', getErrorMessage(e)));
           }).catch(() => sysMsg(`Failed to set role — agent "${agentName}" may not be registered`));
         } else {
           sysMsg('Invalid role. Use: manager, worker, or peer');
@@ -628,7 +650,7 @@ export function MessageInput() {
         const agentName = parts[1];
         const topic = parts.slice(2).join(' ');
         sysMsg(`Focusing ${agentName}${topic ? ` on "${topic}"` : ''}`);
-        api.sendMessage(settings.username, trimmed, activeChannel).catch((e) => console.warn('Send message:', e.message || e));
+        api.sendMessage(settings.username, trimmed, activeChannel).catch((e: unknown) => console.warn('Send message:', getErrorMessage(e)));
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
         return;
@@ -638,7 +660,7 @@ export function MessageInput() {
         const theme = parts[1] as 'dark' | 'light';
         if (theme === 'dark' || theme === 'light') {
           useChatStore.getState().updateSettings({ theme });
-          api.saveSettings({ theme }).catch((e) => console.warn('Settings save:', e.message || e));
+          api.saveSettings({ theme }).catch((e: unknown) => console.warn('Settings save:', getErrorMessage(e)));
           sysMsg(`Theme set to ${theme}`);
         } else {
           sysMsg('Usage: /theme dark|light');
@@ -656,7 +678,7 @@ export function MessageInput() {
         } else {
           sysMsg(`Consensus: asking ${onlineAgents.length} agents — "${question}"`);
           // Send the question @all so every agent gets it
-          api.sendMessage(settings.username, `@all ${question}`, activeChannel).catch((e) => console.warn('Consensus send:', e.message || e));
+          api.sendMessage(settings.username, `@all ${question}`, activeChannel).catch((e: unknown) => console.warn('Consensus send:', getErrorMessage(e)));
         }
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -669,9 +691,9 @@ export function MessageInput() {
         const topic = parts.slice(3).join(' ');
         sysMsg(`Debate started: @${agent1} (FOR) vs @${agent2} (AGAINST)\nTopic: ${topic}`);
         // Send initial prompts to both agents
-        api.sendMessage(settings.username, `@${agent1} You are arguing FOR the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch((e) => console.warn('Debate send (FOR):', e.message || e));
+        api.sendMessage(settings.username, `@${agent1} You are arguing FOR the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch((e: unknown) => console.warn('Debate send (FOR):', getErrorMessage(e)));
         setTimeout(() => {
-          api.sendMessage(settings.username, `@${agent2} You are arguing AGAINST the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch((e) => console.warn('Debate send (AGAINST):', e.message || e));
+          api.sendMessage(settings.username, `@${agent2} You are arguing AGAINST the following position. Make your case in 2-3 paragraphs: "${topic}"`, activeChannel).catch((e: unknown) => console.warn('Debate send (AGAINST):', getErrorMessage(e)));
         }, 1000);
         setText('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -712,8 +734,8 @@ export function MessageInput() {
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
-    } catch (e) {
-      console.error('Send failed:', e);
+    } catch (e: unknown) {
+      console.error('Send failed:', getErrorMessage(e));
     }
   }, [text, activeChannel, settings.username, replyTo, setReplyTo, slashCommands, pendingAttachments, addMessage, agents]);
 
