@@ -82,12 +82,18 @@ class JobStore:
             query += " WHERE " + " AND ".join(clauses)
         query += " ORDER BY sort_order, id"
         cursor = await self._db.execute(query, params)
-        rows = await cursor.fetchall()
+        try:
+            rows = await cursor.fetchall()
+        finally:
+            await cursor.close()
         return [self._row_to_dict(r) for r in rows]
 
     async def _get_by_id(self, job_id: int) -> dict:
         cursor = await self._db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
-        row = await cursor.fetchone()
+        try:
+            row = await cursor.fetchone()
+        finally:
+            await cursor.close()
         return self._row_to_dict(row) if row else {}
 
     @staticmethod

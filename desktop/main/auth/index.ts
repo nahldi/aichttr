@@ -264,11 +264,14 @@ export function isCommandNotFound(err: any): boolean {
 }
 
 function writeTempLauncher(prefix: string, ext: string, content: string): string {
-  const filePath = path.join(
-    os.tmpdir(),
-    `${prefix}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`
-  );
-  fs.writeFileSync(filePath, content, { encoding: 'utf-8', mode: 0o700 });
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-${process.pid}-`));
+  const filePath = path.join(tempDir, `launcher${ext}`);
+  const fd = fs.openSync(filePath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY, 0o700);
+  fs.writeFileSync(fd, content, { encoding: 'utf-8' });
+  fs.closeSync(fd);
+  if (process.platform !== 'win32') {
+    fs.chmodSync(filePath, 0o700);
+  }
   return filePath;
 }
 

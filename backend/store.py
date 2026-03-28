@@ -195,7 +195,10 @@ class MessageStore:
             "SELECT * FROM messages WHERE channel = ? ORDER BY id DESC LIMIT ?",
             (channel, count),
         )
-        rows = await cursor.fetchall()
+        try:
+            rows = await cursor.fetchall()
+        finally:
+            await cursor.close()
         return [self._row_to_dict(r) for r in reversed(rows)]
 
     async def get_since(self, since_id: int, channel: str = "general") -> list[dict]:
@@ -205,7 +208,10 @@ class MessageStore:
             "SELECT * FROM messages WHERE channel = ? AND id > ? ORDER BY id",
             (channel, since_id),
         )
-        rows = await cursor.fetchall()
+        try:
+            rows = await cursor.fetchall()
+        finally:
+            await cursor.close()
         return [self._row_to_dict(r) for r in rows]
 
     async def pin(self, msg_id: int, pinned: bool) -> dict | None:
@@ -217,7 +223,10 @@ class MessageStore:
         )
         await self._db.commit()
         cursor = await self._db.execute("SELECT * FROM messages WHERE id = ?", (msg_id,))
-        row = await cursor.fetchone()
+        try:
+            row = await cursor.fetchone()
+        finally:
+            await cursor.close()
         return self._row_to_dict(row) if row else None
 
     async def delete(self, msg_ids: list[int]) -> list[int]:
@@ -226,7 +235,11 @@ class MessageStore:
         deleted = []
         for mid in msg_ids:
             cursor = await self._db.execute("DELETE FROM messages WHERE id = ?", (mid,))
-            if cursor.rowcount:
+            try:
+                rowcount = cursor.rowcount
+            finally:
+                await cursor.close()
+            if rowcount:
                 deleted.append(mid)
         await self._db.commit()
         return deleted
@@ -237,7 +250,10 @@ class MessageStore:
         if self._db is None:
             raise RuntimeError("MessageStore not initialized — call await store.init() first")
         cursor = await self._db.execute("SELECT reactions FROM messages WHERE id = ?", (msg_id,))
-        row = await cursor.fetchone()
+        try:
+            row = await cursor.fetchone()
+        finally:
+            await cursor.close()
         if not row:
             return None
         try:
@@ -269,22 +285,19 @@ class MessageStore:
         """Edit a message's text. Returns updated message or None."""
         if self._db is None:
             raise RuntimeError("MessageStore not initialized — call await store.init() first")
-        cursor = await self._db.execute("SELECT * FROM messages WHERE id = ?", (msg_id,))
-        row = await cursor.fetchone()
-        if not row:
-            return None
         await self._db.execute("UPDATE messages SET text = ? WHERE id = ?", (new_text, msg_id))
         await self._db.commit()
-        msg = self._row_to_dict(row)
-        msg["text"] = new_text
-        return msg
+        return await self.get_by_id(msg_id)
 
     async def get_by_id(self, msg_id: int) -> dict | None:
         """Get a single message by ID."""
         if self._db is None:
             raise RuntimeError("MessageStore not initialized — call await store.init() first")
         cursor = await self._db.execute("SELECT * FROM messages WHERE id = ?", (msg_id,))
-        row = await cursor.fetchone()
+        try:
+            row = await cursor.fetchone()
+        finally:
+            await cursor.close()
         return self._row_to_dict(row) if row else None
 
     async def update_metadata(self, msg_id: int, metadata: str) -> bool:
@@ -303,7 +316,10 @@ class MessageStore:
             "UPDATE messages SET channel = ? WHERE channel = ?", (new_name, old_name)
         )
         await self._db.commit()
-        return cursor.rowcount
+        try:
+            return cursor.rowcount
+        finally:
+            await cursor.close()
 
     @staticmethod
     def _row_to_dict(row: Any) -> dict:

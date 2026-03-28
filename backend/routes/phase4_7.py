@@ -23,6 +23,21 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _is_local_request(request: Request) -> bool:
+    host = request.client.host if request.client else "127.0.0.1"
+    return host in ("127.0.0.1", "::1", "localhost")
+
+
+def _get_session_user(request: Request) -> dict | None:
+    if not deps.user_manager:
+        return None
+    auth_header = request.headers.get("Authorization", "")
+    scheme, _, token = auth_header.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    return deps.user_manager.validate_token(token.strip())
+
+
 # ── Autonomous Agent (Phase 7.1) ──────────────────────────────────
 
 @router.post("/api/autonomous/plan")
@@ -266,10 +281,19 @@ async def auth_register(request: Request):
     if not deps.user_manager:
         return JSONResponse({"error": "Auth not initialized"}, 503)
     body = await request.json()
+    requested_role = body.get("role", "member")
     try:
+        if not deps.user_manager.has_admin():
+            if not _is_local_request(request):
+                return JSONResponse({"error": "Initial admin bootstrap is localhost only"}, 403)
+            requested_role = "admin"
+        else:
+            session_user = _get_session_user(request)
+            if not session_user or session_user.get("role") != "admin":
+                return JSONResponse({"error": "Admin authentication required"}, 403)
         user = deps.user_manager.create_user(
             body.get("username", ""), body.get("password", ""),
-            role=body.get("role", "member"),
+            role=requested_role,
         )
         return user
     except ValueError as e:
@@ -277,9 +301,12 @@ async def auth_register(request: Request):
 
 
 @router.get("/api/auth/users")
-async def auth_list_users():
+async def auth_list_users(request: Request):
     if not deps.user_manager:
         return {"users": []}
+    session_user = _get_session_user(request)
+    if not session_user or session_user.get("role") != "admin":
+        return JSONResponse({"error": "Admin authentication required"}, 403)
     return {"users": deps.user_manager.list_users()}
 
 

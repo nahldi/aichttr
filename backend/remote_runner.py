@@ -10,6 +10,8 @@ The remote agent connects back to the GhostLink MCP bridge via HTTP transport.
 from __future__ import annotations
 
 import logging
+import re
+import shlex
 import subprocess
 import threading
 import time
@@ -19,6 +21,9 @@ from typing import Literal
 log = logging.getLogger(__name__)
 
 MAX_REMOTE_AGENTS = 8
+_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+_SAFE_HOST_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,255}$")
+_SAFE_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 
 @dataclass
@@ -119,14 +124,35 @@ class RemoteRunner:
             if len(self._agents) >= MAX_REMOTE_AGENTS:
                 raise RuntimeError(f"Max {MAX_REMOTE_AGENTS} remote agents reached")
 
+        if not _SAFE_NAME_RE.fullmatch(agent_base):
+            raise RuntimeError("Invalid agent base")
+        if not _SAFE_NAME_RE.fullmatch(agent_name):
+            raise RuntimeError("Invalid agent name")
+        if not _SAFE_HOST_RE.fullmatch(host):
+            raise RuntimeError("Invalid SSH host")
+        if user and not _SAFE_NAME_RE.fullmatch(user):
+            raise RuntimeError("Invalid SSH user")
+
         ssh_target = f"{user}@{host}" if user else host
-        env_exports = " ".join(f"{k}={v}" for k, v in (env or {}).items())
+        env_parts = []
+        for key, value in (env or {}).items():
+            if not _SAFE_ENV_KEY_RE.fullmatch(str(key)):
+                raise RuntimeError(f"Invalid environment variable: {key}")
+            env_parts.append(f"{key}={shlex.quote(str(value))}")
+        env_exports = " ".join(env_parts)
+        cd_cmd = f"cd -- {shlex.quote(workspace)}"
+        export_cmd = (
+            f"export GHOSTLINK_SERVER={shlex.quote(f'http://{self.server_host}:{self.server_port}')} "
+            f"GHOSTLINK_AGENT_NAME={shlex.quote(agent_name)} "
+            f"GHOSTLINK_AGENT_BASE={shlex.quote(agent_base)}"
+        )
+        env_cmd = f"export {env_exports}" if env_exports else ""
+        launch_cmd = f"nohup {shlex.quote(agent_base)} --headless > /dev/null 2>&1 & echo $!"
         remote_cmd = (
-            f"cd {workspace} && "
-            f"export GHOSTLINK_SERVER=http://{self.server_host}:{self.server_port} "
-            f"GHOSTLINK_AGENT_NAME={agent_name} GHOSTLINK_AGENT_BASE={agent_base} "
-            f"{env_exports} && "
-            f"nohup {agent_base} --headless > /dev/null 2>&1 & echo $!"
+            f"{cd_cmd} && "
+            f"{export_cmd} && "
+            f"{env_cmd + ' && ' if env_cmd else ''}"
+            f"{launch_cmd}"
         )
 
         try:

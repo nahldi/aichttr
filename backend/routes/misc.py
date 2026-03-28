@@ -71,13 +71,18 @@ def _save_settings():
     save_settings()
 
 
+def _tunnel_share_url() -> str | None:
+    if not deps._tunnel_url or not deps._tunnel_access_token:
+        return None
+    return f"{deps._tunnel_url}?access_token={deps._tunnel_access_token}"
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────
 
 @router.get("/api/ws-token")
 async def get_ws_token(request: Request):
     client_host = request.client.host if request.client else "127.0.0.1"
-    tunnel_active = deps._tunnel_process is not None and deps._tunnel_process.poll() is None
-    if client_host not in ("127.0.0.1", "::1") and not tunnel_active:
+    if client_host not in ("127.0.0.1", "::1"):
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Localhost only")
     return {"token": deps._ws_token}
@@ -638,7 +643,8 @@ async def create_dm_channel(request: Request):
 @router.post("/api/tunnel/start")
 async def tunnel_start():
     if deps._tunnel_process and deps._tunnel_process.poll() is None:
-        return JSONResponse({"url": deps._tunnel_url, "pid": deps._tunnel_process.pid, "already": True})
+        deps._tunnel_access_token = deps._tunnel_access_token or _uuid.uuid4().hex
+        return JSONResponse({"url": _tunnel_share_url(), "pid": deps._tunnel_process.pid, "already": True})
 
     try:
         proc = subprocess.Popen(
@@ -681,7 +687,8 @@ async def tunnel_start():
 
     deps._tunnel_process = proc
     deps._tunnel_url = found_url
-    return {"url": found_url, "pid": proc.pid}
+    deps._tunnel_access_token = _uuid.uuid4().hex
+    return {"url": _tunnel_share_url(), "pid": proc.pid}
 
 
 @router.post("/api/tunnel/stop")
@@ -691,6 +698,7 @@ async def tunnel_stop():
         deps._tunnel_process.wait()
         deps._tunnel_process = None
         deps._tunnel_url = None
+        deps._tunnel_access_token = ""
     return {"ok": True}
 
 
@@ -698,8 +706,11 @@ async def tunnel_stop():
 async def tunnel_status():
     active = deps._tunnel_process is not None and deps._tunnel_process.poll() is None
     if not active:
+        deps._tunnel_process = None
+        deps._tunnel_url = None
+        deps._tunnel_access_token = ""
         return {"active": False, "url": None}
-    return {"active": True, "url": deps._tunnel_url}
+    return {"active": True, "url": _tunnel_share_url()}
 
 
 # ── Inbound triggers ─────────────────────────────────────────────────

@@ -15,6 +15,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import time
 from pathlib import Path
@@ -24,6 +25,7 @@ log = logging.getLogger(__name__)
 # Token expiry: 7 days
 TOKEN_EXPIRY = 7 * 24 * 3600
 ROLES = ("admin", "member", "viewer")
+USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{2,64}$")
 
 
 def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
@@ -72,8 +74,8 @@ class UserManager:
 
     def create_user(self, username: str, password: str, role: str = "member") -> dict:
         """Create a new user account."""
-        if not username or len(username) < 2:
-            raise ValueError("Username must be at least 2 characters")
+        if not USERNAME_RE.fullmatch(username):
+            raise ValueError("Username must be 2-64 chars using letters, numbers, ., _, or -")
         if username in self._users:
             raise ValueError(f"User '{username}' already exists")
         if role not in ROLES:
@@ -130,6 +132,10 @@ class UserManager:
             {"username": u["username"], "role": u["role"], "created_at": u.get("created_at", 0)}
             for u in self._users.values()
         ]
+
+    def has_admin(self) -> bool:
+        """Return True when at least one admin user exists."""
+        return any(user.get("role") == "admin" for user in self._users.values())
 
     def update_role(self, username: str, new_role: str) -> bool:
         """Update a user's role."""

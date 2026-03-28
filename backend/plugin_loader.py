@@ -9,6 +9,7 @@ Enhanced with manifest support for install/uninstall/update lifecycle.
 import importlib
 import json
 import logging
+import re
 import sys
 import time as _time
 from pathlib import Path
@@ -17,6 +18,7 @@ log = logging.getLogger(__name__)
 
 PLUGINS_DIR = Path(__file__).parent / "plugins"
 MANIFEST_FILE = PLUGINS_DIR / "manifest.json"
+_PLUGIN_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def _load_manifest() -> dict:
@@ -31,6 +33,16 @@ def _load_manifest() -> dict:
 def _save_manifest(manifest: dict):
     PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
     MANIFEST_FILE.write_text(json.dumps(manifest, indent=2))
+
+
+def _plugin_path(name: str) -> Path:
+    if not _PLUGIN_NAME_RE.fullmatch(name):
+        raise ValueError("Invalid plugin name")
+    plugin_file = (PLUGINS_DIR / f"{name}.py").resolve()
+    plugins_root = PLUGINS_DIR.resolve()
+    if plugin_file.parent != plugins_root:
+        raise ValueError("Plugin path escapes plugins directory")
+    return plugin_file
 
 
 def discover_plugins() -> list[str]:
@@ -165,7 +177,10 @@ def install_plugin(name: str, code: str, description: str = "", version: str = "
             if pattern in code:
                 return {"ok": False, "error": f"Blocked dangerous pattern: {pattern}"}
 
-    plugin_file = PLUGINS_DIR / f"{name}.py"
+    try:
+        plugin_file = _plugin_path(name)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
     plugin_file.write_text(code)
 
     manifest = _load_manifest()
@@ -190,7 +205,10 @@ def uninstall_plugin(name: str) -> bool:
     if meta.get("builtin"):
         return False
 
-    plugin_file = PLUGINS_DIR / f"{name}.py"
+    try:
+        plugin_file = _plugin_path(name)
+    except ValueError:
+        return False
     if plugin_file.exists():
         plugin_file.unlink()
     manifest["plugins"].pop(name, None)

@@ -3,6 +3,7 @@ import { WebSocketClient } from '../lib/ws';
 import { useChatStore } from '../stores/chatStore';
 import { SoundManager } from '../lib/sounds';
 import { api } from '../lib/api';
+import { getRemoteAccessToken } from '../lib/remoteAccess';
 import type { WSEvent } from '../types';
 
 function updateFaviconBadge(count: number) {
@@ -77,13 +78,10 @@ export function useWebSocket() {
       // If accessed remotely (not localhost), try to get WS auth token
       const isRemote = !['localhost', '127.0.0.1', '[::1]'].some(h => window.location.hostname === h);
       if (isRemote) {
-        try {
-          const resp = await fetch('/api/ws-token');
-          if (resp.ok) {
-            const { token } = await resp.json();
-            wsUrl += `?token=${encodeURIComponent(token)}`;
-          }
-        } catch { /* tunnel mode — server accepts without token */ }
+        const accessToken = getRemoteAccessToken();
+        if (accessToken) {
+          wsUrl += `?access_token=${encodeURIComponent(accessToken)}`;
+        }
       }
 
       if (cancelled) return;

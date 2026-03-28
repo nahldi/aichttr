@@ -120,6 +120,7 @@ _thinking_buffers: dict[str, dict] = {}  # agent_name → {text, updated_at, act
 
 _tunnel_process: Any = None
 _tunnel_url: Any = None
+_tunnel_access_token: str = ""
 
 # ── Activity / server logs ───────────────────────────────────────────
 

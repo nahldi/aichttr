@@ -72,6 +72,17 @@ async def test_store_edit_message(db):
 
 
 @pytest.mark.asyncio
+async def test_store_edit_returns_updated_message(db):
+    """Editing returns the post-update message snapshot."""
+    await db.add("alice", "before", channel="general")
+    msg_id = (await db.get_recent(count=10, channel="general"))[0]["id"]
+    edited = await db.edit(msg_id, "after")
+    assert edited is not None
+    assert edited["id"] == msg_id
+    assert edited["text"] == "after"
+
+
+@pytest.mark.asyncio
 async def test_store_delete_message(db):
     """Deleting a message removes it."""
     await db.add("alice", "to be deleted", channel="general")
@@ -398,6 +409,38 @@ async def test_schedule_generated_uid_is_full_uuid_hex(sched_store):
     sched = await sched_store.create("* * * * *", "agent", "cmd", "general", enabled=True)
     assert len(sched["uid"]) == 32
     int(sched["uid"], 16)
+
+
+@pytest.mark.asyncio
+async def test_schedule_claim_due_run_is_atomic(sched_store):
+    """A schedule run can only be claimed once per cooldown window."""
+    sched = await sched_store.create("* * * * *", "agent", "cmd", "general", enabled=True)
+    now = time.time()
+    assert await sched_store.claim_due_run(sched["id"], 60, now)
+    assert not await sched_store.claim_due_run(sched["id"], 60, now)
+    assert await sched_store.claim_due_run(sched["id"], 60, now + 61)
+
+
+def test_plugin_loader_rejects_invalid_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Plugin install/uninstall refuse path-traversal names."""
+    import plugin_loader
+
+    monkeypatch.setattr(plugin_loader, "PLUGINS_DIR", tmp_path / "plugins")
+    monkeypatch.setattr(plugin_loader, "MANIFEST_FILE", plugin_loader.PLUGINS_DIR / "manifest.json")
+    result = plugin_loader.install_plugin("../escape", "def setup(**kwargs):\n    return None\n")
+    assert result["ok"] is False
+    assert plugin_loader.uninstall_plugin("../escape") is False
+
+
+def test_user_manager_tracks_admins(tmp_path: Path):
+    """Initial admin bootstrap state is detectable by the auth layer."""
+    from auth import UserManager
+
+    manager = UserManager(tmp_path)
+    assert not manager.has_admin()
+    user = manager.create_user("admin.user", "hunter2", role="admin")
+    assert user["role"] == "admin"
+    assert manager.has_admin()
 
 
 # ── AgentMemory ───────────────────────────────────────────────────────

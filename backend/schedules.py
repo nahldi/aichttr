@@ -65,18 +65,27 @@ class ScheduleStore:
     async def delete(self, sched_id: int) -> bool:
         cursor = await self._db.execute("DELETE FROM schedules WHERE id = ?", (sched_id,))
         await self._db.commit()
-        return cursor.rowcount > 0
+        try:
+            return cursor.rowcount > 0
+        finally:
+            await cursor.close()
 
     async def list_all(self) -> list[dict]:
         cursor = await self._db.execute("SELECT * FROM schedules ORDER BY id")
-        rows = await cursor.fetchall()
+        try:
+            rows = await cursor.fetchall()
+        finally:
+            await cursor.close()
         return [self._row_to_dict(r) for r in rows]
 
     async def list_enabled(self) -> list[dict]:
         cursor = await self._db.execute(
             "SELECT * FROM schedules WHERE enabled = 1 ORDER BY id"
         )
-        rows = await cursor.fetchall()
+        try:
+            rows = await cursor.fetchall()
+        finally:
+            await cursor.close()
         return [self._row_to_dict(r) for r in rows]
 
     async def mark_run(self, sched_id: int):
@@ -87,9 +96,33 @@ class ScheduleStore:
         )
         await self._db.commit()
 
+    async def claim_due_run(self, sched_id: int, cooldown_seconds: float, now: float | None = None) -> bool:
+        """Atomically mark a schedule as running only if its cooldown elapsed."""
+        if now is None:
+            now = time.time()
+        threshold = now - max(0.0, cooldown_seconds)
+        cursor = await self._db.execute(
+            """
+            UPDATE schedules
+               SET last_run = ?, updated_at = ?
+             WHERE id = ?
+               AND enabled = 1
+               AND last_run <= ?
+            """,
+            (now, now, sched_id, threshold),
+        )
+        await self._db.commit()
+        try:
+            return cursor.rowcount > 0
+        finally:
+            await cursor.close()
+
     async def _get_by_id(self, sched_id: int) -> dict:
         cursor = await self._db.execute("SELECT * FROM schedules WHERE id = ?", (sched_id,))
-        row = await cursor.fetchone()
+        try:
+            row = await cursor.fetchone()
+        finally:
+            await cursor.close()
         return self._row_to_dict(row) if row else {}
 
     @staticmethod

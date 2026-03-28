@@ -392,7 +392,15 @@ async def lifespan(_app: FastAPI):
                 for sched in schedules:
                     if cron_matches(sched["cron_expr"], now):
                         cooldown = _schedule_cooldown_seconds(sched["cron_expr"])
-                        if now - sched.get("last_run", 0) < cooldown:
+                        try:
+                            claimed = asyncio.run_coroutine_threadsafe(
+                                schedule_store.claim_due_run(sched["id"], cooldown, now),
+                                _main_loop,
+                            ).result(timeout=5)
+                        except Exception as e:
+                            log.warning("Schedule claim failed for %s: %s", sched["id"], e)
+                            continue
+                        if not claimed:
                             continue
                         agent = sched.get("agent", "")
                         command = sched.get("command", "")
@@ -411,13 +419,6 @@ async def lifespan(_app: FastAPI):
                                 ).result(timeout=5)
                             except Exception as e:
                                 log.warning("Schedule message post failed: %s", e)
-                        try:
-                            asyncio.run_coroutine_threadsafe(
-                                schedule_store.mark_run(sched["id"]),
-                                _main_loop,
-                            ).result(timeout=5)
-                        except Exception as e:
-                            log.warning("Schedule mark_run failed for %s: %s", sched["id"], e)
             except Exception as e:
                 log.warning("Schedule checker error: %s", e)
             _schedule_stop.wait(60)
@@ -535,6 +536,27 @@ _RATE_LIMIT_MAX_IPS = 10000  # Max tracked IPs to prevent memory leak
 app = FastAPI(title="GhostLink", lifespan=lifespan)
 
 _LOCALHOST_IPS = {"127.0.0.1", "::1", "localhost"}
+_REMOTE_LOCAL_ONLY_PATHS = {
+    "/api/tunnel/start",
+    "/api/tunnel/stop",
+    "/api/tunnel/status",
+    "/api/ws-token",
+}
+
+
+def _is_local_client(host: str | None) -> bool:
+    return (host or "").lower() in _LOCALHOST_IPS
+
+
+def _has_valid_remote_access_token(request: Request) -> bool:
+    expected = deps._tunnel_access_token
+    if not expected:
+        return False
+    token = (
+        request.headers.get("X-GhostLink-Access-Token")
+        or request.query_params.get("access_token")
+    )
+    return bool(token) and secrets.compare_digest(token, expected)
 
 
 @app.middleware("http")
@@ -569,15 +591,33 @@ async def rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def remote_access_middleware(request: Request, call_next):
+    """Require the per-tunnel bearer token for non-local API access."""
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
+    client_ip = request.client.host if request.client else "unknown"
+    if _is_local_client(client_ip):
+        return await call_next(request)
+
+    if request.url.path in _REMOTE_LOCAL_ONLY_PATHS:
+        return JSONResponse({"error": "Localhost only"}, status_code=403)
+
+    if not _has_valid_remote_access_token(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    return await call_next(request)
+
+
 # ── WebSocket endpoint ──────────────────────────────────────────────
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     client_host = ws.client.host if ws.client else "127.0.0.1"
-    tunnel_active = deps._tunnel_process is not None and deps._tunnel_process.poll() is None
-    if client_host not in ("127.0.0.1", "::1") and not tunnel_active:
-        token = ws.query_params.get("token")
-        if not token or not secrets.compare_digest(token, _ws_token):
+    if not _is_local_client(client_host):
+        access_token = ws.query_params.get("access_token")
+        if not deps._tunnel_access_token or not access_token or not secrets.compare_digest(access_token, deps._tunnel_access_token):
             await ws.close(code=4001, reason="Unauthorized")
             return
     await ws.accept()

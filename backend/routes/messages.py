@@ -41,7 +41,10 @@ async def _message_exists(message_id: int) -> bool:
     if deps.store is None or deps.store._db is None:
         raise RuntimeError("Message store not initialized")
     cursor = await deps.store._db.execute("SELECT 1 FROM messages WHERE id = ? LIMIT 1", (message_id,))
-    row = await cursor.fetchone()
+    try:
+        row = await cursor.fetchone()
+    finally:
+        await cursor.close()
     return row is not None
 
 
@@ -229,7 +232,10 @@ async def delete_message(msg_id: int):
         cursor = await deps.store._db.execute(
             "SELECT type FROM messages WHERE id = ?", (msg_id,)
         )
-        row = await cursor.fetchone()
+        try:
+            row = await cursor.fetchone()
+        finally:
+            await cursor.close()
         if row and row[0] in ("system", "join"):
             return JSONResponse({"error": "cannot delete system messages"}, 403)
     deleted = await deps.store.delete([msg_id])
@@ -263,7 +269,10 @@ async def bulk_delete_messages(request: Request):
             f"SELECT id FROM messages WHERE id IN ({placeholders}) AND type IN ('system', 'join')",
             tuple(safe_ids),
         )
-        protected = {row[0] for row in await cursor.fetchall()}
+        try:
+            protected = {row[0] for row in await cursor.fetchall()}
+        finally:
+            await cursor.close()
         if protected:
             safe_ids = [i for i in safe_ids if i not in protected]
         if not safe_ids:
