@@ -198,7 +198,26 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
 
   agents: [],
-  setAgents: (agents) => set({ agents }),
+  setAgents: (agents) => set((s) => {
+    // Clean up cockpit state for agents that went offline
+    const activeNames = new Set(agents.filter(a => a.state !== 'offline').map(a => a.name));
+    const cleanTerminal = { ...s.terminalStreams };
+    const cleanBrowser = { ...s.browserStates };
+    const cleanPresence = { ...s.agentPresence };
+    for (const name of Object.keys(cleanTerminal)) {
+      if (!activeNames.has(name)) delete cleanTerminal[name];
+    }
+    for (const name of Object.keys(cleanBrowser)) {
+      if (!activeNames.has(name)) delete cleanBrowser[name];
+    }
+    for (const name of Object.keys(cleanPresence)) {
+      if (!activeNames.has(name)) delete cleanPresence[name];
+    }
+    // If cockpit agent went offline, close cockpit
+    const cockpitAgent = s.cockpitAgent && !activeNames.has(s.cockpitAgent) ? null : s.cockpitAgent;
+    const sidebarPanel = !cockpitAgent && s.sidebarPanel === 'cockpit' ? null : s.sidebarPanel;
+    return { agents, terminalStreams: cleanTerminal, browserStates: cleanBrowser, agentPresence: cleanPresence, cockpitAgent, sidebarPanel };
+  }),
   typingAgents: {},
   setTyping: (sender, channel) =>
     set((s) => {
@@ -376,15 +395,15 @@ export const useChatStore = create<ChatState>((set) => ({
     })),
   fileDiffs: {},
   setFileDiff: (diff) =>
-    set((s) => ({
-      fileDiffs: {
-        ...s.fileDiffs,
-        [diff.agent]: {
-          ...(s.fileDiffs[diff.agent] || {}),
-          [diff.path]: diff,
-        },
-      },
-    })),
+    set((s) => {
+      const agentDiffs = { ...(s.fileDiffs[diff.agent] || {}), [diff.path]: diff };
+      // Cap at 50 diffs per agent to prevent unbounded growth
+      const keys = Object.keys(agentDiffs);
+      if (keys.length > 50) {
+        for (const k of keys.slice(0, keys.length - 50)) delete agentDiffs[k];
+      }
+      return { fileDiffs: { ...s.fileDiffs, [diff.agent]: agentDiffs } };
+    }),
 
   // Multi-select deletion
   selectMode: false,
