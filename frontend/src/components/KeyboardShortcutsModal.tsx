@@ -17,6 +17,11 @@ const SHORTCUTS = [
   { keys: ['@'], description: 'Mention agent autocomplete' },
   { keys: ['Tab'], description: 'Accept autocomplete suggestion' },
   { keys: ['Arrow Up/Down'], description: 'Navigate autocomplete / commands' },
+  { keys: ['Ctrl', 'Shift', 'T'], description: 'Cockpit: Terminal tab' },
+  { keys: ['Ctrl', 'Shift', 'F'], description: 'Cockpit: Files tab' },
+  { keys: ['Ctrl', 'Shift', 'B'], description: 'Cockpit: Browser tab' },
+  { keys: ['Ctrl', 'Shift', 'R'], description: 'Cockpit: Replay tab' },
+  { keys: ['Ctrl', 'Shift', 'A'], description: 'Cockpit: Activity tab' },
 ];
 
 export function KeyboardShortcutsModal({ onClose }: KeyboardShortcutsModalProps) {

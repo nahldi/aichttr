@@ -398,10 +398,13 @@ function AppInner() {
         return;
       }
       // Ctrl+Shift+T/F/B/R/A — cockpit tabs (Terminal/Files/Browser/Replay/Activity)
+      // Skip if user is typing in an input/textarea/contenteditable
       if (ctrl && e.shiftKey && 'tfbra'.includes(e.key.toLowerCase()) && useChatStore.getState().sidebarPanel === 'cockpit') {
+        const tag = (document.activeElement?.tagName || '').toLowerCase();
+        const editable = document.activeElement?.getAttribute('contenteditable') === 'true';
+        if (tag === 'input' || tag === 'textarea' || editable) return;
         e.preventDefault();
         const tabMap: Record<string, string> = { t: 'terminal', f: 'files', b: 'browser', r: 'replay', a: 'activity' };
-        // Dispatch custom event for cockpit to pick up
         window.dispatchEvent(new CustomEvent('cockpit-tab', { detail: tabMap[e.key.toLowerCase()] }));
         return;
       }
