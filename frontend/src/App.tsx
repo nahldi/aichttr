@@ -29,6 +29,7 @@ const OnboardingTour = lazy(() => import('./components/OnboardingTour').then(m =
 const HelpPanel = lazy(() => import('./components/HelpPanel').then(m => ({ default: m.HelpPanel })));
 const SessionLauncher = lazy(() => import('./components/SessionLauncher').then(m => ({ default: m.SessionLauncher })));
 const FirstRunWizard = lazy(() => import('./components/FirstRunWizard').then(m => ({ default: m.FirstRunWizard })));
+const AgentCockpit = lazy(() => import('./components/AgentCockpit').then(m => ({ default: m.AgentCockpit })));
 
 const CONVERSATION_STARTERS = [
   { text: 'Ask @claude to review your code', icon: 'code' },
@@ -267,6 +268,7 @@ function RightPanel() {
               {panel === 'jobs' && <JobsPanel />}
               {panel === 'rules' && <RulesPanel />}
               {panel === 'settings' && <SettingsPanel />}
+              {panel === 'cockpit' && <AgentCockpit />}
             </Suspense>
           </motion.aside>
         </>
@@ -297,6 +299,7 @@ function MobilePanel() {
           {panel === 'jobs' && <JobsPanel />}
           {panel === 'rules' && <RulesPanel />}
           {panel === 'settings' && <SettingsPanel />}
+          {panel === 'cockpit' && <AgentCockpit />}
         </motion.div>
       )}
     </AnimatePresence>

@@ -107,6 +107,24 @@ function AgentChip({ agent }: { agent: Agent }) {
             {busy ? 'hourglass_empty' : isPaused ? 'play_circle' : isOnline ? 'stop_circle' : 'play_circle'}
           </span>
         </button>
+        {/* Cockpit button — opens agent workspace panel */}
+        {isOnline && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const store = useChatStore.getState();
+              if (store.cockpitAgent === agent.name && store.sidebarPanel === 'cockpit') {
+                store.setCockpitAgent(null);
+              } else {
+                store.setCockpitAgent(agent.name);
+              }
+            }}
+            className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shrink-0 hover:bg-primary/15 text-primary/50 hover:text-primary"
+            title="Open Cockpit"
+          >
+            <span className="material-symbols-outlined text-[16px]">monitor</span>
+          </button>
+        )}
       </div>
 
       {showInfo && <AgentInfoPanel agent={agent} onClose={() => setShowInfo(false)} />}

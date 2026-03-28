@@ -65,7 +65,7 @@ interface ChatState {
   updateSettings: (s: Partial<Settings>) => void;
 
   // UI state
-  sidebarPanel: 'jobs' | 'rules' | 'settings' | null;
+  sidebarPanel: 'jobs' | 'rules' | 'settings' | 'cockpit' | null;
   setSidebarPanel: (p: 'jobs' | 'rules' | 'settings' | null) => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
@@ -82,6 +82,10 @@ interface ChatState {
   thinkingStreams: Record<string, { text: string; active: boolean }>;
   _thinkingTimestamps: Record<string, number>;
   setThinkingStream: (agent: string, text: string, active: boolean) => void;
+
+  // Agent cockpit
+  cockpitAgent: string | null;
+  setCockpitAgent: (name: string | null) => void;
 
   // Multi-select deletion
   selectMode: boolean;
@@ -294,6 +298,10 @@ export const useChatStore = create<ChatState>((set) => ({
       }
       return { thinkingStreams: updated, _thinkingTimestamps: timestamps };
     }),
+
+  // Agent cockpit
+  cockpitAgent: null,
+  setCockpitAgent: (name) => set({ cockpitAgent: name, sidebarPanel: name ? 'cockpit' : null }),
 
   // Multi-select deletion
   selectMode: false,
