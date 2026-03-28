@@ -1410,6 +1410,10 @@ _WORKSPACE_MAX_FILE_SIZE = 500_000
 _CHECKPOINT_RETENTION = 20
 _CHECKPOINT_LABEL_MAX = 120
 _VALID_CHECKPOINT_ID = re.compile(r"^[A-Za-z0-9_-]{8,80}$")
+_TASK_RETENTION = 100
+_TASK_TITLE_MAX = 200
+_TASK_DESCRIPTION_MAX = 4000
+_VALID_TASK_ID = re.compile(r"^[A-Za-z0-9_-]{8,80}$")
 
 
 def _get_agent_workspace_path(name: str) -> Path:
@@ -1427,6 +1431,11 @@ def _get_agent_workspace_path(name: str) -> Path:
 def _get_agent_checkpoints_root(name: str) -> Path:
     data_dir = Path(deps.DATA_DIR or ".").resolve()
     return data_dir / "checkpoints" / name
+
+
+def _get_agent_tasks_path(name: str) -> Path:
+    data_dir = Path(deps.DATA_DIR or ".").resolve()
+    return data_dir / "tasks" / f"{name}.json"
 
 
 def _resolve_workspace_target(workspace: Path, raw_path: str, *, expect_dir: bool | None = None) -> Path:
@@ -1536,6 +1545,50 @@ def _copy_workspace_snapshot(source_root: Path, dest_root: Path) -> tuple[int, i
 
 def _checkpoint_metadata_path(checkpoint_dir: Path) -> Path:
     return checkpoint_dir / "metadata.json"
+
+
+def _save_agent_tasks(name: str, tasks: list[dict[str, object]]) -> None:
+    tasks_path = _get_agent_tasks_path(name)
+    tasks_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = tasks_path.with_suffix(".tmp")
+    temp_path.write_text(json.dumps(tasks, indent=2), encoding="utf-8")
+    temp_path.replace(tasks_path)
+
+
+def _load_agent_tasks(name: str) -> list[dict[str, object]]:
+    tasks_path = _get_agent_tasks_path(name)
+    if not tasks_path.is_file():
+        return []
+    try:
+        payload = json.loads(tasks_path.read_text("utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    tasks: list[dict[str, object]] = []
+    for item in payload:
+        if isinstance(item, dict):
+            tasks.append(item)
+    tasks.sort(
+        key=lambda task: float(
+            task.get("completed_at")
+            or task.get("started_at")
+            or task.get("created_at")
+            or 0
+        ),
+        reverse=True,
+    )
+    return tasks
+
+
+def _trim_task_history(tasks: list[dict[str, object]]) -> list[dict[str, object]]:
+    active = [task for task in tasks if str(task.get("status", "")) in {"queued", "running", "paused"}]
+    inactive = [task for task in tasks if str(task.get("status", "")) not in {"queued", "running", "paused"}]
+    inactive.sort(
+        key=lambda task: float(task.get("completed_at") or task.get("created_at") or 0),
+        reverse=True,
+    )
+    return active + inactive[: max(0, _TASK_RETENTION - len(active))]
 
 
 def _normalize_checkpoint_label(label: object) -> str:
@@ -1715,6 +1768,59 @@ async def _emit_checkpoint_event(
         status=title,
         detail=detail,
     )
+
+
+def _normalize_task_title(title: object) -> str:
+    if not isinstance(title, str):
+        return ""
+    return " ".join(title.strip().split())[:_TASK_TITLE_MAX]
+
+
+def _normalize_task_description(description: object) -> str:
+    if not isinstance(description, str):
+        return ""
+    return description.strip()[:_TASK_DESCRIPTION_MAX]
+
+
+async def _emit_task_event(
+    name: str,
+    event_type: str,
+    *,
+    title: str,
+    detail: str,
+    metadata: dict[str, object] | None = None,
+) -> None:
+    await _record_activity("message", f"{title}: {detail}", agent=name)
+    await add_replay_event(
+        name,
+        event_type,
+        title=title,
+        detail=detail,
+        surface="tasks",
+        metadata=metadata or {},
+    )
+    await set_agent_presence(
+        name,
+        surface="tasks",
+        status=title,
+        detail=detail,
+    )
+
+
+async def _trigger_agent_task(name: str, task: dict[str, object], *, channel: str = "general") -> None:
+    if not deps.store or not deps.registry or not deps.router_inst:
+        return
+    sender = str(deps._settings.get("username", "You") or "You")
+    title = str(task.get("title", "")).strip()
+    description = str(task.get("description", "")).strip()
+    task_id = str(task.get("id", "")).strip()
+    text = f"@{name} [Autonomous Task {task_id}] {title}"
+    if description:
+        text = f"{text}\n\n{description}"
+    metadata = json.dumps({"task_id": task_id, "autonomous_task": True})
+    await deps.store.add(sender, text, "chat", channel, metadata=metadata)
+    from app_helpers import route_mentions
+    route_mentions(sender, text, channel)
 
 
 @router.get("/api/agents/{name}/workspace")
@@ -1958,5 +2064,80 @@ async def delete_agent_checkpoint(name: str, checkpoint_id: str):
         title="Deleted checkpoint",
         detail=str(metadata.get("label", checkpoint_id)),
         metadata={"checkpoint_id": checkpoint_id},
+    )
+    return {"ok": True}
+
+
+@router.get("/api/agents/{name}/tasks")
+async def list_agent_tasks(name: str):
+    """List autonomous tasks queued or recorded for an agent."""
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
+    return {"tasks": _load_agent_tasks(name)}
+
+
+@router.post("/api/agents/{name}/tasks")
+async def create_agent_task(name: str, request: Request):
+    """Queue an autonomous task for an agent."""
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
+    if not deps.registry or not deps.registry.get(name):
+        return JSONResponse({"error": "agent not found"}, 404)
+
+    body = await request.json()
+    title = _normalize_task_title(body.get("title", ""))
+    description = _normalize_task_description(body.get("description", ""))
+    channel = str(body.get("channel", "general") or "general").strip()[:80] or "general"
+    if not title:
+        return JSONResponse({"error": "title required"}, 400)
+
+    task = {
+        "id": f"task_{int(time.time() * 1000)}_{secrets.token_hex(4)}",
+        "agent": name,
+        "title": title,
+        "description": description,
+        "status": "queued",
+        "progress": 0,
+        "created_at": time.time(),
+        "started_at": 0,
+        "completed_at": 0,
+        "error": "",
+        "channel": channel,
+    }
+    tasks = _trim_task_history([task, *_load_agent_tasks(name)])
+    _save_agent_tasks(name, tasks)
+
+    await _trigger_agent_task(name, task, channel=channel)
+    await _emit_task_event(
+        name,
+        "task_create",
+        title="Queued task",
+        detail=title,
+        metadata={"task_id": task["id"], "channel": channel},
+    )
+    return {"ok": True, "task": task}
+
+
+@router.delete("/api/agents/{name}/tasks/{task_id}")
+async def delete_agent_task(name: str, task_id: str):
+    """Cancel or remove an autonomous task for an agent."""
+    if not _VALID_AGENT_NAME.match(name):
+        return JSONResponse({"error": "invalid agent name"}, 400)
+    if not _VALID_TASK_ID.match(task_id):
+        return JSONResponse({"error": "invalid task id"}, 400)
+
+    tasks = _load_agent_tasks(name)
+    removed = next((task for task in tasks if str(task.get("id", "")) == task_id), None)
+    if not removed:
+        return JSONResponse({"error": "task not found"}, 404)
+    remaining = [task for task in tasks if str(task.get("id", "")) != task_id]
+    _save_agent_tasks(name, remaining)
+
+    await _emit_task_event(
+        name,
+        "task_delete",
+        title="Cancelled task",
+        detail=str(removed.get("title", task_id)),
+        metadata={"task_id": task_id},
     )
     return {"ok": True}

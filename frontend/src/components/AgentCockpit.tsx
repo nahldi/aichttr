@@ -12,6 +12,7 @@ import { toast } from './Toast';
 import type { Agent, ActivityEvent, AgentBrowserState, AgentReplayEvent, WorkspaceChange, FileDiffPayload } from '../types';
 import { DiffViewer } from './DiffViewer';
 import { CheckpointPanel } from './CheckpointPanel';
+import { TaskQueue } from './TaskQueue';
 
 // ── Terminal Tab ──────────────────────────────────────────────────────
 
@@ -920,7 +921,7 @@ function CockpitReplay({ agent, onFileReverted }: { agent: Agent; onFileReverted
 
 // ── Main Cockpit Panel ────────────────────────────────────────────────
 
-const TABS = ['terminal', 'files', 'browser', 'replay', 'activity', 'checkpoints'] as const;
+const TABS = ['terminal', 'files', 'browser', 'replay', 'activity', 'tasks', 'checkpoints'] as const;
 type CockpitTab = typeof TABS[number];
 
 const TAB_ICONS: Record<CockpitTab, string> = {
@@ -929,6 +930,7 @@ const TAB_ICONS: Record<CockpitTab, string> = {
   browser: 'language',
   replay: 'replay',
   activity: 'timeline',
+  tasks: 'task_alt',
   checkpoints: 'save',
 };
 
@@ -1083,6 +1085,7 @@ export function AgentCockpit() {
             {tab === 'browser' && <CockpitBrowser agent={agent} />}
             {tab === 'replay' && <CockpitReplay agent={agent} onFileReverted={() => setFilesKey(k => k + 1)} />}
             {tab === 'activity' && <CockpitActivity agent={agent} />}
+            {tab === 'tasks' && <TaskQueue agent={agent} />}
             {tab === 'checkpoints' && <CheckpointPanel agent={agent} />}
           </motion.div>
         </AnimatePresence>
