@@ -4,7 +4,7 @@
  * Shows live terminal output, workspace file tree, and agent activity timeline.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { AgentIcon } from './AgentIcon';
@@ -912,6 +912,7 @@ export function AgentCockpit() {
   const setWorkspaceChanges = useChatStore((s) => s.setWorkspaceChanges);
   const setAgentReplayEvents = useChatStore((s) => s.setAgentReplayEvents);
   const [tab, setTab] = useState<CockpitTab>('terminal');
+  const prefersReducedMotion = useReducedMotion();
 
   // Reset tab to terminal when switching agents
   useEffect(() => { setTab('terminal'); }, [cockpitAgent]);
@@ -1042,10 +1043,10 @@ export function AgentCockpit() {
         <AnimatePresence mode="wait">
           <motion.div
             key={`${agent.name}-${tab}`}
-            initial={{ opacity: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.12 }}
+            exit={prefersReducedMotion ? undefined : { opacity: 0 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.12 }}
             className="absolute inset-0 flex flex-col"
           >
             {tab === 'terminal' && <CockpitTerminal agent={agent} />}
