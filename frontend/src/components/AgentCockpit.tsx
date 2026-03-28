@@ -915,6 +915,16 @@ export function AgentCockpit() {
 
   // Reset tab to terminal when switching agents
   useEffect(() => { setTab('terminal'); }, [cockpitAgent]);
+
+  // Keyboard shortcut listener for tab switching
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent).detail;
+      if (tab && TABS.includes(tab)) setTab(tab);
+    };
+    window.addEventListener('cockpit-tab', handler);
+    return () => window.removeEventListener('cockpit-tab', handler);
+  }, []);
   const [filesKey, setFilesKey] = useState(0);
 
   const agent = agents.find((a) => a.name === cockpitAgent) || null;
