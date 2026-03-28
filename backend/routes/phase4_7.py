@@ -14,6 +14,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import secrets
+import time
+from pathlib import Path
 
 import deps
 from fastapi import APIRouter, Request
@@ -21,6 +25,44 @@ from fastapi.responses import JSONResponse
 
 log = logging.getLogger(__name__)
 router = APIRouter()
+_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+_RULE_SCOPES = {"project", "user", "agent"}
+_RULE_CATEGORIES = {"behavior", "format", "safety", "workflow", "style"}
+_PERSONA_CATEGORIES = {"developer", "reviewer", "architect", "writer", "researcher", "devops", "security", "custom"}
+
+
+def _json_path(name: str) -> Path:
+    return Path(deps.DATA_DIR or ".") / name
+
+
+def _load_json_file(name: str, default: dict) -> dict:
+    path = _json_path(name)
+    if not path.exists():
+        return dict(default)
+    try:
+        return json.loads(path.read_text("utf-8"))
+    except Exception:
+        return dict(default)
+
+
+def _save_json_file(name: str, payload: dict) -> None:
+    path = _json_path(name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _ensure_safe_id(value: str, field: str = "id") -> str | None:
+    cleaned = (value or "").strip()
+    if not _SAFE_ID_RE.fullmatch(cleaned):
+        return None
+    return cleaned
+
+
+def _username_color(username: str) -> str:
+    palette = ["#3b82f6", "#8b5cf6", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#a855f7", "#10b981"]
+    return palette[sum(ord(ch) for ch in username) % len(palette)]
 
 
 def _is_local_request(request: Request) -> bool:
@@ -316,4 +358,292 @@ async def auth_logout(request: Request):
         return {"ok": True}
     body = await request.json()
     deps.user_manager.logout(body.get("token", ""))
+    return {"ok": True}
+
+
+# ── Personas (Phase 5) ────────────────────────────────────────────
+
+@router.get("/api/personas")
+async def list_personas():
+    data = _load_json_file("personas.json", {"personas": []})
+    personas = data.get("personas", [])
+    if not isinstance(personas, list):
+        personas = []
+    return {"personas": personas}
+
+
+@router.post("/api/personas")
+async def create_persona(request: Request):
+    body = await request.json()
+    name = (body.get("name", "") or "").strip()
+    instructions = (body.get("instructions", "") or "").strip()
+    description = (body.get("description", "") or "").strip()
+    if not name or not instructions or not description:
+        return JSONResponse({"error": "name, description, and instructions required"}, 400)
+
+    category = (body.get("category", "custom") or "custom").strip()
+    if category not in _PERSONA_CATEGORIES:
+        return JSONResponse({"error": "invalid category"}, 400)
+
+    persona = {
+        "id": secrets.token_hex(8),
+        "name": name[:80],
+        "role": (body.get("role", category) or category).strip()[:40],
+        "description": description[:500],
+        "icon": (body.get("icon", "person") or "person").strip()[:40],
+        "color": (body.get("color", "#8b5cf6") or "#8b5cf6").strip()[:20],
+        "instructions": instructions[:8000],
+        "skills": [str(skill).strip()[:60] for skill in body.get("skills", []) if str(skill).strip()][:12],
+        "category": category,
+        "author": (body.get("author") or deps._settings.get("username") or "GhostLink").strip()[:80],
+        "installs": int(body.get("installs", 0) or 0),
+        "rating": body.get("rating"),
+        "created_at": time.time(),
+    }
+
+    data = _load_json_file("personas.json", {"personas": []})
+    personas = data.get("personas", [])
+    if not isinstance(personas, list):
+        personas = []
+    personas.append(persona)
+    _save_json_file("personas.json", {"personas": personas})
+    return {"ok": True, "persona": persona}
+
+
+@router.patch("/api/personas/{persona_id}")
+async def update_persona(persona_id: str, request: Request):
+    safe_id = _ensure_safe_id(persona_id, "persona id")
+    if not safe_id:
+        return JSONResponse({"error": "invalid persona id"}, 400)
+
+    body = await request.json()
+    data = _load_json_file("personas.json", {"personas": []})
+    personas = data.get("personas", [])
+    if not isinstance(personas, list):
+        personas = []
+
+    for persona in personas:
+        if persona.get("id") != safe_id:
+            continue
+        if "name" in body and str(body["name"]).strip():
+            persona["name"] = str(body["name"]).strip()[:80]
+        if "description" in body and str(body["description"]).strip():
+            persona["description"] = str(body["description"]).strip()[:500]
+        if "instructions" in body and str(body["instructions"]).strip():
+            persona["instructions"] = str(body["instructions"]).strip()[:8000]
+        if "role" in body and str(body["role"]).strip():
+            persona["role"] = str(body["role"]).strip()[:40]
+        if "icon" in body and str(body["icon"]).strip():
+            persona["icon"] = str(body["icon"]).strip()[:40]
+        if "color" in body and str(body["color"]).strip():
+            persona["color"] = str(body["color"]).strip()[:20]
+        if "category" in body:
+            category = str(body["category"]).strip()
+            if category not in _PERSONA_CATEGORIES:
+                return JSONResponse({"error": "invalid category"}, 400)
+            persona["category"] = category
+        if "skills" in body and isinstance(body["skills"], list):
+            persona["skills"] = [str(skill).strip()[:60] for skill in body["skills"] if str(skill).strip()][:12]
+        _save_json_file("personas.json", {"personas": personas})
+        return {"ok": True, "persona": persona}
+
+    return JSONResponse({"error": "persona not found"}, 404)
+
+
+@router.delete("/api/personas/{persona_id}")
+async def delete_persona(persona_id: str):
+    safe_id = _ensure_safe_id(persona_id, "persona id")
+    if not safe_id:
+        return JSONResponse({"error": "invalid persona id"}, 400)
+
+    data = _load_json_file("personas.json", {"personas": []})
+    personas = data.get("personas", [])
+    if not isinstance(personas, list):
+        personas = []
+    kept = [persona for persona in personas if persona.get("id") != safe_id]
+    if len(kept) == len(personas):
+        return JSONResponse({"error": "persona not found"}, 404)
+    _save_json_file("personas.json", {"personas": kept})
+    return {"ok": True}
+
+
+# ── Custom Rules (Phase 6) ─────────────────────────────────────────
+
+@router.get("/api/custom-rules")
+async def list_custom_rules():
+    data = _load_json_file("custom_rules.json", {"rules": []})
+    rules = data.get("rules", [])
+    if not isinstance(rules, list):
+        rules = []
+    return {"rules": rules}
+
+
+@router.post("/api/custom-rules")
+async def create_custom_rule(request: Request):
+    body = await request.json()
+    scope = (body.get("scope", "") or "").strip()
+    category = (body.get("category", "") or "").strip()
+    text = (body.get("text", "") or "").strip()
+    agent = (body.get("agent", "") or "").strip()
+
+    if scope not in _RULE_SCOPES:
+        return JSONResponse({"error": "invalid scope"}, 400)
+    if category not in _RULE_CATEGORIES:
+        return JSONResponse({"error": "invalid category"}, 400)
+    if not text:
+        return JSONResponse({"error": "text required"}, 400)
+    if agent and not deps._VALID_AGENT_NAME.fullmatch(agent):
+        return JSONResponse({"error": "invalid agent"}, 400)
+
+    rule = {
+        "id": secrets.token_hex(8),
+        "scope": scope,
+        "agent": agent or None,
+        "category": category,
+        "text": text[:2000],
+        "enabled": bool(body.get("enabled", True)),
+        "created_at": time.time(),
+    }
+
+    data = _load_json_file("custom_rules.json", {"rules": []})
+    rules = data.get("rules", [])
+    if not isinstance(rules, list):
+        rules = []
+    rules.append(rule)
+    _save_json_file("custom_rules.json", {"rules": rules})
+    return {"ok": True, "rule": rule}
+
+
+@router.patch("/api/custom-rules/{rule_id}")
+async def update_custom_rule(rule_id: str, request: Request):
+    safe_id = _ensure_safe_id(rule_id, "rule id")
+    if not safe_id:
+        return JSONResponse({"error": "invalid rule id"}, 400)
+
+    body = await request.json()
+    data = _load_json_file("custom_rules.json", {"rules": []})
+    rules = data.get("rules", [])
+    if not isinstance(rules, list):
+        rules = []
+
+    for rule in rules:
+        if rule.get("id") != safe_id:
+            continue
+        if "enabled" in body:
+            rule["enabled"] = bool(body["enabled"])
+        if "text" in body and str(body["text"]).strip():
+            rule["text"] = str(body["text"]).strip()[:2000]
+        if "category" in body:
+            category = str(body["category"]).strip()
+            if category not in _RULE_CATEGORIES:
+                return JSONResponse({"error": "invalid category"}, 400)
+            rule["category"] = category
+        _save_json_file("custom_rules.json", {"rules": rules})
+        return {"ok": True, "rule": rule}
+
+    return JSONResponse({"error": "rule not found"}, 404)
+
+
+@router.delete("/api/custom-rules/{rule_id}")
+async def delete_custom_rule(rule_id: str):
+    safe_id = _ensure_safe_id(rule_id, "rule id")
+    if not safe_id:
+        return JSONResponse({"error": "invalid rule id"}, 400)
+
+    data = _load_json_file("custom_rules.json", {"rules": []})
+    rules = data.get("rules", [])
+    if not isinstance(rules, list):
+        rules = []
+    kept = [rule for rule in rules if rule.get("id") != safe_id]
+    if len(kept) == len(rules):
+        return JSONResponse({"error": "rule not found"}, 404)
+    _save_json_file("custom_rules.json", {"rules": kept})
+    return {"ok": True}
+
+
+# ── Collaborative Workspace (Phase 7) ──────────────────────────────
+
+@router.get("/api/workspace/collaborators")
+async def list_workspace_collaborators():
+    if not deps.user_manager or not deps.user_manager.is_enabled():
+        return {"collaborators": []}
+
+    collaborators = []
+    seen = set()
+    for session in deps.user_manager.list_active_sessions():
+        username = session.get("username", "")
+        if not username or username in seen:
+            continue
+        seen.add(username)
+        collaborators.append({
+            "id": username,
+            "username": username,
+            "color": _username_color(username),
+            "status": "active",
+            "viewing": None,
+            "joined_at": session.get("created_at", time.time()),
+        })
+    return {"collaborators": collaborators}
+
+
+@router.get("/api/workspace/invites")
+async def list_workspace_invites():
+    data = _load_json_file("workspace_invites.json", {"invites": []})
+    invites = data.get("invites", [])
+    if not isinstance(invites, list):
+        invites = []
+    now = time.time()
+    active = [
+        invite for invite in invites
+        if float(invite.get("expires_at", 0) or 0) > now
+        and int(invite.get("uses", 0) or 0) < int(invite.get("max_uses", 0) or 0)
+    ]
+    if len(active) != len(invites):
+        _save_json_file("workspace_invites.json", {"invites": active})
+    return {"invites": active}
+
+
+@router.post("/api/workspace/invites")
+async def create_workspace_invite(request: Request):
+    body = await request.json()
+    max_uses = int(body.get("max_uses", 5) or 5)
+    expires_hours = int(body.get("expires_hours", 24) or 24)
+    if max_uses < 1 or max_uses > 100:
+        return JSONResponse({"error": "max_uses must be between 1 and 100"}, 400)
+    if expires_hours < 1 or expires_hours > 24 * 30:
+        return JSONResponse({"error": "expires_hours must be between 1 and 720"}, 400)
+
+    invite = {
+        "id": secrets.token_hex(8),
+        "code": secrets.token_urlsafe(9),
+        "created_at": time.time(),
+        "expires_at": time.time() + expires_hours * 3600,
+        "uses": 0,
+        "max_uses": max_uses,
+        "created_by": deps._settings.get("username", "You"),
+    }
+
+    data = _load_json_file("workspace_invites.json", {"invites": []})
+    invites = data.get("invites", [])
+    if not isinstance(invites, list):
+        invites = []
+    invites.append(invite)
+    _save_json_file("workspace_invites.json", {"invites": invites})
+    return {"ok": True, "invite": invite}
+
+
+@router.delete("/api/workspace/invites/{invite_id}")
+async def delete_workspace_invite(invite_id: str):
+    safe_id = _ensure_safe_id(invite_id, "invite id")
+    if not safe_id:
+        return JSONResponse({"error": "invalid invite id"}, 400)
+
+    data = _load_json_file("workspace_invites.json", {"invites": []})
+    invites = data.get("invites", [])
+    if not isinstance(invites, list):
+        invites = []
+    kept = [invite for invite in invites if invite.get("id") != safe_id]
+    if len(kept) == len(invites):
+        return JSONResponse({"error": "invite not found"}, 404)
+    _save_json_file("workspace_invites.json", {"invites": kept})
     return {"ok": True}

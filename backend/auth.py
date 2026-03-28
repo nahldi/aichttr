@@ -103,11 +103,14 @@ class UserManager:
         if not _verify_password(password, user["password_hash"], user["salt"]):
             return None
 
+        now = time.time()
         token = secrets.token_urlsafe(32)
         self._sessions[token] = {
             "username": username,
             "role": user["role"],
-            "expires": time.time() + TOKEN_EXPIRY,
+            "expires": now + TOKEN_EXPIRY,
+            "created_at": now,
+            "last_seen": now,
         }
         log.info("User authenticated: %s", username)
         return token
@@ -120,6 +123,7 @@ class UserManager:
         if time.time() > session["expires"]:
             del self._sessions[token]
             return None
+        session["last_seen"] = time.time()
         return {"username": session["username"], "role": session["role"]}
 
     def logout(self, token: str):
@@ -186,3 +190,19 @@ class UserManager:
             return False
         role_hierarchy = {"admin": 3, "member": 2, "viewer": 1}
         return role_hierarchy.get(user["role"], 0) >= role_hierarchy.get(required_role, 0)
+
+    def list_active_sessions(self) -> list[dict]:
+        """Return non-expired active sessions without exposing raw tokens."""
+        now = time.time()
+        expired = [token for token, session in self._sessions.items() if now > session["expires"]]
+        for token in expired:
+            del self._sessions[token]
+        return [
+            {
+                "username": session["username"],
+                "role": session["role"],
+                "created_at": session.get("created_at", now),
+                "last_seen": session.get("last_seen", session.get("created_at", now)),
+            }
+            for session in self._sessions.values()
+        ]

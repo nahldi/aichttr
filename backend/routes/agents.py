@@ -1091,7 +1091,10 @@ async def api_set_soul(name: str, request: Request):
         return JSONResponse({"error": "invalid agent name"}, 400)
     body = await request.json()
     agent_dir = deps.DATA_DIR / "agents"
-    set_soul(agent_dir, name, body.get("content", ""))
+    content = body.get("content")
+    if content is None:
+        content = body.get("soul", "")
+    set_soul(agent_dir, name, content)
     return {"ok": True}
 
 
