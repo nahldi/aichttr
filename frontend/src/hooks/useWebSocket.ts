@@ -66,7 +66,9 @@ export function useWebSocket() {
     setBrowserState,
     setTerminalStream,
     addWorkspaceChange,
+    setWorkspaceChanges,
     addAgentReplayEvent,
+    setAgentReplayEvents,
     setFileDiff,
   } = useChatStore();
 
@@ -101,6 +103,11 @@ export function useWebSocket() {
       unsubReconnect = client.onReconnect(async () => {
         try {
           const state = useChatStore.getState();
+          const status = await api.getStatus().catch(() => ({ agents: state.agents }));
+          if (status?.agents) {
+            setAgents(status.agents);
+          }
+
           const lastMsg = state.messages[state.messages.length - 1];
           const sinceId = lastMsg?.id || 0;
           if (sinceId > 0) {
@@ -110,6 +117,29 @@ export function useWebSocket() {
               state.addMessage(msg);
             }
           }
+
+          const agentsToRefresh = (status?.agents || state.agents || []).map((agent) => agent.name);
+          await Promise.all(agentsToRefresh.map(async (agentName) => {
+            const [
+              presence,
+              browser,
+              terminal,
+              workspace,
+              replay,
+            ] = await Promise.all([
+              api.getAgentPresence(agentName).catch(() => null),
+              api.getAgentBrowserState(agentName).catch(() => null),
+              api.getAgentTerminalLive(agentName).catch(() => null),
+              api.getAgentWorkspaceChanges(agentName).catch(() => null),
+              api.getAgentReplay(agentName).catch(() => null),
+            ]);
+
+            if (presence) setAgentPresence(presence);
+            if (browser) setBrowserState(browser);
+            if (terminal) setTerminalStream(terminal);
+            if (workspace?.changes) setWorkspaceChanges(agentName, workspace.changes);
+            if (replay?.events) setAgentReplayEvents(agentName, replay.events);
+          }));
         } catch (e) {
           console.warn('Failed to fetch missed messages on reconnect:', e instanceof Error ? e.message : String(e));
         }

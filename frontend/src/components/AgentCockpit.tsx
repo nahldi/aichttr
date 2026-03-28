@@ -8,7 +8,8 @@ import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { AgentIcon } from './AgentIcon';
 import { toast } from './Toast';
-import type { Agent, ActivityEvent, AgentBrowserState, AgentReplayEvent, WorkspaceChange } from '../types';
+import type { Agent, ActivityEvent, AgentBrowserState, AgentReplayEvent, WorkspaceChange, FileDiffPayload } from '../types';
+import { DiffViewer } from './DiffViewer';
 
 // ── Terminal Tab ──────────────────────────────────────────────────────
 
@@ -462,6 +463,7 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
   const liveBrowser = useChatStore((s) => s.browserStates[agent.name]);
   const [browser, setBrowser] = useState<AgentBrowserState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [artifactErrored, setArtifactErrored] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -483,6 +485,10 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
     setBrowser(liveBrowser);
     setLoading(false);
   }, [liveBrowser]);
+
+  useEffect(() => {
+    setArtifactErrored(false);
+  }, [browser?.artifact_url, browser?.updated_at]);
 
   if (loading) {
     return (
@@ -525,6 +531,36 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
           </button>
         </div>
       )}
+      {/* Title + state */}
+      {(browser.title || browser.status || browser.mode) && (
+        <div className="px-3 py-2 border-b border-outline-variant/5 shrink-0 space-y-1.5">
+          {browser.title && (
+            <div className="text-[11px] text-on-surface/75 font-medium truncate">{browser.title}</div>
+          )}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {browser.status && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                {browser.status}
+              </span>
+            )}
+            {browser.mode && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant/35">
+                {browser.mode}
+              </span>
+            )}
+            {browser.artifact_url && (
+              <a
+                href={`${browser.artifact_url}${browser.updated_at ? `?t=${browser.updated_at}` : ''}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant/35 hover:text-primary transition-colors"
+              >
+                Open snapshot
+              </a>
+            )}
+          </div>
+        </div>
+      )}
       {/* Search query */}
       {browser.query && (
         <div className="px-3 py-1.5 flex items-center gap-2 border-b border-outline-variant/5 shrink-0">
@@ -537,6 +573,16 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
           )}
         </div>
       )}
+      {browser.artifact_url && !artifactErrored && (
+        <div className="px-3 pt-3 shrink-0">
+          <img
+            src={`${browser.artifact_url}${browser.updated_at ? `?t=${browser.updated_at}` : ''}`}
+            alt={`${agent.label || agent.name} browser snapshot`}
+            className="w-full max-h-48 object-contain rounded-lg border border-outline-variant/10 bg-black/20"
+            onError={() => setArtifactErrored(true)}
+          />
+        </div>
+      )}
       {/* Preview content */}
       <div className="flex-1 overflow-auto p-3">
         {browser.preview ? (
@@ -545,7 +591,7 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
           </div>
         ) : (
           <div className="text-center py-8 text-on-surface-variant/25 text-xs">
-            Page content loading...
+            {browser.artifact_url ? 'Snapshot captured. Open it above for full view.' : 'Page content loading...'}
           </div>
         )}
       </div>
@@ -567,6 +613,8 @@ function CockpitReplay({ agent }: { agent: Agent }) {
   const liveReplay = useChatStore((s) => s.agentReplay[agent.name] || []);
   const [events, setEvents] = useState<import('../types').AgentReplayEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<import('../types').AgentReplayEvent | null>(null);
+  const fileDiffs = useChatStore((s) => s.fileDiffs[agent.name] || {});
+  const diffData = selectedEvent?.path ? (fileDiffs[selectedEvent.path] as FileDiffPayload | undefined) : undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -642,6 +690,24 @@ function CockpitReplay({ agent }: { agent: Agent }) {
                 <pre className="mt-2 p-2 rounded-lg bg-surface-container-highest/30 text-[10px] font-mono text-green-300/70 whitespace-pre-wrap">
                   $ {selectedEvent.command}
                 </pre>
+              )}
+              {/* Inline diff for file events */}
+              {selectedEvent.path && diffData && (
+                <div className="mt-3 rounded-lg overflow-hidden border border-outline-variant/10" style={{ maxHeight: '300px' }}>
+                  <DiffViewer diff={diffData.diff} path={diffData.path} agentColor={agent.color} />
+                </div>
+              )}
+              {selectedEvent.path && !diffData && (
+                <button
+                  onClick={() => {
+                    api.getAgentDiff(agent.name, selectedEvent.path!).then((d) => {
+                      if (d?.diff) useChatStore.getState().setFileDiff(d);
+                    }).catch(() => {});
+                  }}
+                  className="mt-2 text-[10px] px-2 py-1 rounded-md bg-primary/10 text-primary/60 hover:bg-primary/20 transition-colors"
+                >
+                  Load diff
+                </button>
               )}
             </div>
           </div>
