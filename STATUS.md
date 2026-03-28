@@ -1,7 +1,7 @@
 # GhostLink — Project Status & Handoff
 
 **Last updated:** 2026-03-28
-**Version:** v4.8.5
+**Version:** v4.8.6
 **Owner:** Finn (FinnTheDogg / nahldi / nahlidify)
 **GitHub:** https://github.com/nahldi/ghostlink (public)
 **License:** MIT
@@ -66,9 +66,10 @@ GhostLink is a local-first multi-agent AI chat platform. It puts all your AI age
 
 ---
 
-## CURRENT STATE (v4.8.5)
+## CURRENT STATE (v4.8.6)
 
-### Recent Changes (v3.9.8 → v4.8.5)
+### Recent Changes (v3.9.8 → v4.8.6)
+- **v4.8.6**: Release job checkout fix — check out the repo in the dedicated release job before `gh run download`, so artifact collection and GitHub release creation run from a valid repository context.
 - **v4.8.5**: Final release workflow fix — force `electron-builder --publish never` in per-platform build jobs so tagged builds only upload artifacts to Actions; GitHub release publishing stays in the dedicated release job.
 - **v4.8.4**: Release workflow fix and frontend verification reliability — remove build-job `GH_TOKEN`, and run frontend lint/tests through stable direct Node entrypoints for this WSL/Windows setup.
 - **v4.8.3**: Frontend polish and verification sweep — build/lint cleanup, session/provider typing, URL preview cache TTL, reaction picker keyboard navigation, voice input cleanup, lockfile/version consistency.
