@@ -710,7 +710,7 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
 
 // ── Replay Tab ────────────────────────────────────────────────────────
 
-function CockpitReplay({ agent }: { agent: Agent }) {
+function CockpitReplay({ agent, onFileReverted }: { agent: Agent; onFileReverted?: () => void }) {
   const liveReplay = useChatStore((s) => s.agentReplay[agent.name] || []);
   const [events, setEvents] = useState<import('../types').AgentReplayEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<import('../types').AgentReplayEvent | null>(null);
@@ -795,7 +795,7 @@ function CockpitReplay({ agent }: { agent: Agent }) {
               {/* Inline diff for file events */}
               {selectedEvent.path && diffData && (
                 <div className="mt-3 rounded-lg overflow-hidden border border-outline-variant/10" style={{ maxHeight: '300px' }}>
-                  <DiffViewer diff={diffData.diff} path={diffData.path} before={diffData.before} after={diffData.after} agentName={agent.name} agentColor={agent.color} onRevert={() => setSelectedEvent(null)} />
+                  <DiffViewer diff={diffData.diff} path={diffData.path} before={diffData.before} after={diffData.after} agentName={agent.name} agentColor={agent.color} onRevert={() => { setSelectedEvent(null); onFileReverted?.(); }} />
                 </div>
               )}
               {selectedEvent.path && !diffData && (
@@ -879,6 +879,10 @@ export function AgentCockpit() {
   const setWorkspaceChanges = useChatStore((s) => s.setWorkspaceChanges);
   const setAgentReplayEvents = useChatStore((s) => s.setAgentReplayEvents);
   const [tab, setTab] = useState<CockpitTab>('terminal');
+
+  // Reset tab to terminal when switching agents
+  useEffect(() => { setTab('terminal'); }, [cockpitAgent]);
+  const [filesKey, setFilesKey] = useState(0);
 
   const agent = agents.find((a) => a.name === cockpitAgent) || null;
   const thinking = agent ? thinkingStreams[agent.name] : null;
@@ -983,9 +987,9 @@ export function AgentCockpit() {
       {/* Tab content */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {tab === 'terminal' && <CockpitTerminal agent={agent} />}
-        {tab === 'files' && <CockpitFiles agent={agent} />}
+        {tab === 'files' && <CockpitFiles key={filesKey} agent={agent} />}
         {tab === 'browser' && <CockpitBrowser agent={agent} />}
-        {tab === 'replay' && <CockpitReplay agent={agent} />}
+        {tab === 'replay' && <CockpitReplay agent={agent} onFileReverted={() => setFilesKey(k => k + 1)} />}
         {tab === 'activity' && <CockpitActivity agent={agent} />}
       </div>
     </div>
