@@ -1050,21 +1050,22 @@ export function AgentCockpit() {
         ) : null}
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-outline-variant/10 shrink-0">
+      {/* Tabs — scrollable, icon-only below 360px */}
+      <div className="flex border-b border-outline-variant/10 shrink-0 overflow-x-auto scrollbar-none">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-medium transition-colors ${
+            className={`flex items-center justify-center gap-1 py-2 px-2.5 text-[9px] font-medium transition-colors whitespace-nowrap shrink-0 ${
               tab === t
                 ? 'border-b-2'
                 : 'text-on-surface-variant/40 hover:text-on-surface-variant/60'
             }`}
             style={tab === t ? { color: agent.color, borderColor: agent.color } : undefined}
+            title={t.charAt(0).toUpperCase() + t.slice(1)}
           >
-            <span className="material-symbols-outlined text-[14px]">{TAB_ICONS[t]}</span>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            <span className="material-symbols-outlined text-[13px]">{TAB_ICONS[t]}</span>
+            <span className="hidden sm:inline">{t.charAt(0).toUpperCase() + t.slice(1)}</span>
           </button>
         ))}
       </div>

@@ -124,6 +124,39 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     // Quick actions
     results.push(
       {
+        id: 'action-workflows',
+        label: 'Automations',
+        description: 'Manage workflow automations',
+        icon: 'bolt',
+        category: 'navigation',
+        action: () => {
+          window.dispatchEvent(new CustomEvent('ghostlink:open-workflows'));
+          onClose();
+        },
+      },
+      {
+        id: 'action-branches',
+        label: 'Branches',
+        description: 'View conversation branches',
+        icon: 'fork_right',
+        category: 'navigation',
+        action: () => {
+          window.dispatchEvent(new CustomEvent('ghostlink:open-branches'));
+          onClose();
+        },
+      },
+      {
+        id: 'action-personas',
+        label: 'Agent Personas',
+        description: 'Browse pre-built agent personalities',
+        icon: 'person',
+        category: 'navigation',
+        action: () => {
+          window.dispatchEvent(new CustomEvent('ghostlink:open-personas'));
+          onClose();
+        },
+      },
+      {
         id: 'action-settings',
         label: 'Settings',
         description: 'Open settings panel',
