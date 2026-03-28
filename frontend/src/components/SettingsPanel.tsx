@@ -19,6 +19,8 @@ const AGENT_PRESETS: { base: string; label: string; command: string; color: stri
 ];
 
 type SettingsTab = 'general' | 'appearance' | 'agents' | 'providers' | 'integrations' | 'security' | 'advanced';
+type ProviderStatus = Awaited<ReturnType<typeof api.getProviders>>;
+type ProviderCapability = ProviderStatus['capabilities'][string];
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'general', label: 'General', icon: 'tune' },
@@ -916,8 +918,9 @@ function RetentionSection() {
 
   useEffect(() => { api.getRetention().then(r => setPolicy(r.policy)).catch((e) => console.warn('Retention fetch:', e instanceof Error ? e.message : String(e))); }, []);
 
-  const handleSave = async (updates: any) => {
-    const updated = { ...policy, ...updates };
+  const handleSave = async (updates: Partial<RetentionPolicy>) => {
+    if (!policy) return;
+    const updated: RetentionPolicy = { ...policy, ...updates };
     setPolicy(updated);
     try { await api.setRetention(updated); } catch (e) { console.warn('Retention save:', e instanceof Error ? e.message : String(e)); }
   };
@@ -1205,8 +1208,7 @@ function ServerLogsSection() {
 /* ── Tab: Providers ──────────────────────────────────────────────── */
 
 function ProvidersTab() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- provider status shape varies
-  const [status, setStatus] = useState<any>(null);
+  const [status, setStatus] = useState<ProviderStatus | null>(null);
   const [configuring, setConfiguring] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [saved, setSaved] = useState('');
@@ -1250,21 +1252,24 @@ function ProvidersTab() {
     <>
       <Section title="Capabilities" icon="auto_awesome" defaultOpen>
         <div className="grid grid-cols-2 gap-1.5">
-          {Object.entries(status.capabilities).map(([cap, info]: [string, any]) => (
+          {Object.entries(status.capabilities).map(([cap, info]) => {
+            const capability = info as ProviderCapability;
+            return (
             <div key={cap} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[10px] ${
-              info.available ? 'bg-green-500/8 text-green-400/80' : 'bg-surface-container/30 text-on-surface-variant/30'
+              capability.available ? 'bg-green-500/8 text-green-400/80' : 'bg-surface-container/30 text-on-surface-variant/30'
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${info.available ? 'bg-green-400' : 'bg-outline-variant/30'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${capability.available ? 'bg-green-400' : 'bg-outline-variant/30'}`} />
               <span className="font-medium">{capLabels[cap] || cap}</span>
-              {info.provider_name && <span className="ml-auto text-[8px] text-on-surface-variant/30">{info.provider_name}</span>}
+              {capability.provider_name && <span className="ml-auto text-[8px] text-on-surface-variant/30">{capability.provider_name}</span>}
             </div>
-          ))}
+            );
+          })}
         </div>
       </Section>
 
       <Section title="Providers" icon="cloud" defaultOpen>
         <div className="space-y-2">
-          {status.providers.map((p: any) => (
+          {status.providers.map((p) => (
             <div key={p.id} className={`rounded-xl p-3 border transition-all ${
               p.configured ? 'bg-green-500/5 border-green-500/15' : p.free_tier ? 'bg-primary/5 border-primary/10' : 'bg-surface-container/20 border-outline-variant/8'
             }`}>
@@ -1289,7 +1294,7 @@ function ProvidersTab() {
                 )}
               </div>
               <div className="flex flex-wrap gap-1 mb-1">
-                {p.capabilities.map((c: string) => (
+                {(p.capabilities || []).map((c: string) => (
                   <span key={c} className="text-[8px] px-1 py-0.5 rounded bg-surface-container/40 text-on-surface-variant/40">{capLabels[c] || c}</span>
                 ))}
               </div>
@@ -1337,7 +1342,7 @@ function ProvidersTab() {
         </div>
       {status.free_options.length > 0 && (
         <div className="text-[10px] text-on-surface-variant/40 leading-relaxed mt-2">
-          Free: {status.free_options.map((p: any) => p.name).join(', ')}
+          Free: {status.free_options.map((p) => p.name).join(', ')}
         </div>
       )}
       </Section>

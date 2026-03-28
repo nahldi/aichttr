@@ -1,4 +1,9 @@
 const BASE = '';
+type SessionTemplate = import('../types').SessionTemplate;
+type SessionState = import('../types').Session | null;
+type Provider = import('../types').Provider;
+type ProviderCapability = import('../types').ProviderCapability;
+type FreeOption = import('../types').FreeOption;
 
 async function request<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -330,32 +335,31 @@ export const api = {
 
   // Sessions
   getSessionTemplates: () =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- session templates vary by backend config
-    request<{ templates: any[] }>('/api/session-templates'),
+    request<{ templates: SessionTemplate[] }>('/api/session-templates'),
 
   getSession: (channel: string) =>
-    request<{ session: any }>(`/api/sessions/${encodeURIComponent(channel)}`),
+    request<{ session: SessionState }>(`/api/sessions/${encodeURIComponent(channel)}`),
 
   startSession: (channel: string, templateId: string, cast: Record<string, string>, topic?: string) =>
-    request<{ session: any }>(`/api/sessions/${encodeURIComponent(channel)}/start`, {
+    request<{ session: SessionState }>(`/api/sessions/${encodeURIComponent(channel)}/start`, {
       method: 'POST',
       body: JSON.stringify({ template_id: templateId, cast, topic }),
     }),
 
   advanceSession: (channel: string) =>
-    request<{ session: any }>(`/api/sessions/${encodeURIComponent(channel)}/advance`, { method: 'POST' }),
+    request<{ session: SessionState }>(`/api/sessions/${encodeURIComponent(channel)}/advance`, { method: 'POST' }),
 
   endSession: (channel: string) =>
-    request<{ session: any }>(`/api/sessions/${encodeURIComponent(channel)}/end`, { method: 'POST' }),
+    request<{ session: SessionState }>(`/api/sessions/${encodeURIComponent(channel)}/end`, { method: 'POST' }),
 
   pauseSession: (channel: string) =>
-    request<{ session: any }>(`/api/sessions/${encodeURIComponent(channel)}/pause`, { method: 'POST' }),
+    request<{ session: SessionState }>(`/api/sessions/${encodeURIComponent(channel)}/pause`, { method: 'POST' }),
 
   resumeSession: (channel: string) =>
-    request<{ session: any }>(`/api/sessions/${encodeURIComponent(channel)}/resume`, { method: 'POST' }),
+    request<{ session: SessionState }>(`/api/sessions/${encodeURIComponent(channel)}/resume`, { method: 'POST' }),
 
   setSessionMode: (channel: string, mode: string) =>
-    request<{ session: any }>(`/api/sessions/${encodeURIComponent(channel)}/mode`, {
+    request<{ session: SessionState }>(`/api/sessions/${encodeURIComponent(channel)}/mode`, {
       method: 'POST',
       body: JSON.stringify({ mode }),
     }),
@@ -363,9 +367,9 @@ export const api = {
   // Providers
   getProviders: () =>
     request<{
-      providers: { id: string; name: string; available: boolean; free_tier: boolean; local: boolean; capabilities: string[]; models: Record<string, { label: string; tier: string }>; configured: boolean }[];
-      capabilities: Record<string, { available: boolean; provider: string | null; provider_name: string | null }>;
-      free_options: import('../types').FreeOption[];
+      providers: Provider[];
+      capabilities: Record<string, ProviderCapability>;
+      free_options: FreeOption[];
       total_configured: number;
     }>('/api/providers'),
 

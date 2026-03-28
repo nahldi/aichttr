@@ -1,7 +1,7 @@
 # GhostLink — Project Status & Handoff
 
 **Last updated:** 2026-03-28
-**Version:** v4.8.2
+**Version:** v4.8.3
 **Owner:** Finn (FinnTheDogg / nahldi / nahlidify)
 **GitHub:** https://github.com/nahldi/ghostlink (public)
 **License:** MIT
@@ -66,9 +66,10 @@ GhostLink is a local-first multi-agent AI chat platform. It puts all your AI age
 
 ---
 
-## CURRENT STATE (v4.8.2)
+## CURRENT STATE (v4.8.3)
 
-### Recent Changes (v3.9.8 → v4.8.2)
+### Recent Changes (v3.9.8 → v4.8.3)
+- **v4.8.3**: Frontend polish and verification sweep — build/lint cleanup, session/provider typing, URL preview cache TTL, reaction picker keyboard navigation, voice input cleanup, lockfile/version consistency.
 - **v4.8.0–v4.8.2**: Security hardening, auth regression fixes, SSRF protection, provider reachability checks, CI/runtime upgrades, emoji/reply validation, type-safety cleanup, expanded frontend/backend tests.
 - **v4.7.1–v4.7.3**: Tunnel remote access fixes, service worker cache-first fix, CSS specificity fix.
 - **v4.7.0**: UI polish — sidebar animation, settings consolidation, spacing fixes.

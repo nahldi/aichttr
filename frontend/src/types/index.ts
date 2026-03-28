@@ -89,6 +89,35 @@ export interface PersistentAgent {
   defaultPrompt?: string;
 }
 
+export interface SessionPhase {
+  name: string;
+  prompt?: string;
+  turns?: number;
+  [key: string]: unknown;
+}
+
+export interface SessionTemplate {
+  id: string;
+  name: string;
+  description: string;
+  phases: SessionPhase[];
+  roles: string[];
+  [key: string]: unknown;
+}
+
+export interface Session {
+  id: string;
+  template_name: string;
+  topic: string;
+  phases: SessionPhase[];
+  current_phase: number;
+  current_turn: number;
+  status: string;
+  cast: Record<string, string>;
+  execution_mode?: string;
+  [key: string]: unknown;
+}
+
 export interface StatsSections {
   session: boolean;
   tokens: boolean;
@@ -245,7 +274,16 @@ export interface Provider {
   free_tier?: boolean;
   local?: boolean;
   capabilities?: string[];
+  models?: Record<string, { label: string; tier: string }>;
   configured?: boolean;
+  setup_instructions?: string;
+  setup_url?: string;
+}
+
+export interface ProviderCapability {
+  available: boolean;
+  provider: string | null;
+  provider_name: string | null;
 }
 
 export interface FreeOption {

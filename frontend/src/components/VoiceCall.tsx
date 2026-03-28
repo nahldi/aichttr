@@ -35,6 +35,7 @@ export function VoiceCall({ onClose }: VoiceCallProps) {
   const onlineAgent = agents.find(a => a.state === 'active' || a.state === 'idle');
   const agentName = onlineAgent?.label || onlineAgent?.name || 'Agent';
   const agentColor = onlineAgent?.color || '#a78bfa';
+  const waveformHeights = speaking || agentSpeaking ? [14, 22, 30, 22, 14] : [4, 4, 4, 4, 4];
 
   // Call timer
   useEffect(() => {
@@ -118,18 +119,23 @@ export function VoiceCall({ onClose }: VoiceCallProps) {
       };
 
       recordChunk();
-    } catch (e) {
+    } catch {
       setError('Microphone access denied');
     }
   }, [activeChannel, settings.username]);
 
   // Start listening on mount
   useEffect(() => {
-    startListening();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void startListening();
+    });
+    const queuedAudio = audioQueueRef.current;
     return () => {
+      cancelled = true;
       recordingRef.current = false;
       streamRef.current?.getTracks().forEach(t => t.stop());
-      audioQueueRef.current.forEach(a => { a.pause(); a.src = ''; });
+      queuedAudio.forEach(a => { a.pause(); a.src = ''; });
     };
   }, [startListening]);
 
@@ -213,12 +219,12 @@ export function VoiceCall({ onClose }: VoiceCallProps) {
 
           {/* Waveform indicator */}
           <div className="flex items-center gap-1 h-8">
-            {[...Array(5)].map((_, i) => (
+            {waveformHeights.map((height, i) => (
               <div
                 key={i}
                 className="w-1 rounded-full transition-all duration-150"
                 style={{
-                  height: speaking || agentSpeaking ? `${12 + Math.random() * 20}px` : '4px',
+                  height: `${height}px`,
                   background: agentSpeaking ? '#34d399' : speaking ? agentColor : 'rgba(255,255,255,0.1)',
                   transition: 'height 0.15s, background 0.3s',
                 }}

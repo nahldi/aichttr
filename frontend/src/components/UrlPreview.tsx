@@ -56,15 +56,10 @@ export function UrlPreviews({ text }: { text: string }) {
 
   const urls = useMemo(() => Array.from(new Set(text.match(URL_REGEX) || [])).slice(0, 3), [text]);
 
-  const urlsKey = urls.join('\n');
   useEffect(() => {
-    if (urls.length === 0) {
-      setPreviews({});
-      return;
-    }
+    if (urls.length === 0) return;
 
     let cancelled = false;
-    setPreviews(prev => Object.fromEntries(Object.entries(prev).filter(([url]) => urls.includes(url))));
 
     urls.forEach(async (url) => {
       const cached = _cacheGet(url);
@@ -87,9 +82,12 @@ export function UrlPreviews({ text }: { text: string }) {
       }
     });
     return () => { cancelled = true; };
-  }, [urlsKey]); // urlsKey memoizes the extracted URLs from text
+  }, [urls]);
 
-  const entries = Object.entries(previews);
+  const entries = useMemo(
+    () => Object.entries(previews).filter(([url]) => urls.includes(url)),
+    [previews, urls]
+  );
   if (entries.length === 0) return null;
 
   return (

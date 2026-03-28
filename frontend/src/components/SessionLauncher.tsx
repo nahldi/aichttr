@@ -2,14 +2,7 @@ import { useState, useEffect } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { AgentIcon } from './AgentIcon';
-
-interface SessionTemplate {
-  id: string;
-  name: string;
-  description: string;
-  phases: { name: string; prompt: string; turns: number }[];
-  roles: string[];
-}
+import type { SessionTemplate } from '../types';
 
 export function SessionLauncher({ onClose }: { onClose: () => void }) {
   const agents = useChatStore((s) => s.agents);
@@ -86,7 +79,7 @@ export function SessionLauncher({ onClose }: { onClose: () => void }) {
                 <div key={i} className="flex items-center gap-2 text-[10px]">
                   <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[9px]">{i + 1}</div>
                   <span className="text-on-surface/70 font-medium">{p.name}</span>
-                  <span className="text-on-surface-variant/30 ml-auto">{p.turns} turn{p.turns > 1 ? 's' : ''}</span>
+                  <span className="text-on-surface-variant/30 ml-auto">{p.turns ?? 0} turn{(p.turns ?? 0) > 1 ? 's' : ''}</span>
                 </div>
               ))}
             </div>

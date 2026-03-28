@@ -33,7 +33,7 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function useVoiceInput(onTranscript: (text: string) => void, lang?: string) {
+function useVoiceInput(onTranscript: (text: string) => void, lang?: string) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState('');
   const [permissionState, setPermissionState] = useState<'unknown' | 'granted' | 'denied' | 'prompt'>('unknown');
@@ -254,6 +254,11 @@ export function MessageInput() {
     useMentionAutocomplete(text, cursorPos);
 
   // Voice input hook kept for potential fallback but mic button now uses MediaRecorder directly
+  const voiceFallback = useVoiceInput(
+    (transcript) => setText(prev => (prev ? `${prev} ${transcript}` : transcript)),
+    settings.voiceLanguage
+  );
+  const canUseVoiceInput = HAS_MEDIA_DEVICES || voiceFallback.available;
 
   // Slash commands
   const slashCommands: SlashCommand[] = useMemo(() => [
@@ -1023,8 +1028,9 @@ export function MessageInput() {
             {/* Mic button — voice note */}
             <button
               onClick={startRecording}
+              disabled={!canUseVoiceInput}
               className="p-2.5 rounded-xl text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high/60 transition-all active:scale-90"
-              title="Record voice note"
+              title={canUseVoiceInput ? 'Record voice note' : 'Voice input unavailable in this browser'}
               aria-label="Record voice note"
             >
               <span className="material-symbols-outlined text-xl">mic</span>
@@ -1032,8 +1038,9 @@ export function MessageInput() {
             {/* Phone button — voice call */}
             <button
               onClick={() => setShowVoiceCall(true)}
+              disabled={!canUseVoiceInput}
               className="p-2.5 rounded-xl text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high/60 transition-all active:scale-90"
-              title="Start voice call"
+              title={canUseVoiceInput ? 'Start voice call' : 'Voice input unavailable in this browser'}
               aria-label="Start voice call with agent"
             >
               <span className="material-symbols-outlined text-xl">call</span>

@@ -1,18 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
-
-interface Session {
-  id: string;
-  template_name: string;
-  topic: string;
-  phases: { name: string }[];
-  current_phase: number;
-  current_turn: number;
-  status: string;
-  cast: Record<string, string>;
-  execution_mode?: string;
-}
+import type { Session } from '../types';
 
 const MODE_STYLES: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   plan: { label: 'Plan', color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20', icon: 'edit_note' },
