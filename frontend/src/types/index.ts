@@ -164,6 +164,94 @@ export interface Webhook {
   created_at: number;
 }
 
+// Plugins and Marketplace
+export interface Plugin {
+  id: string;
+  name: string;
+  description: string;
+  author: string;
+  version: string;
+  category?: string;
+  installed?: boolean;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  cost?: number;
+  icon: string;
+  enabled: boolean;
+  [key: string]: unknown;
+}
+
+export interface SkillPack {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  description: string;
+}
+
+// Hooks and Automation
+export interface Hook {
+  id: string;
+  name: string;
+  event: string;
+  action: string;
+  enabled: boolean;
+  trigger_count?: number;
+}
+
+// Bridges/Integrations
+export interface Bridge {
+  platform: string;
+  has_token?: boolean;
+  configured?: boolean;
+  connected?: boolean;
+  enabled?: boolean;
+}
+
+// Policies and Security
+export interface ExecutionPolicy {
+  allowed_commands?: string[];
+  blocked_commands?: string[];
+  require_approval?: boolean;
+  [key: string]: unknown;
+}
+
+export interface RetentionPolicy {
+  enabled: boolean;
+  max_age_days?: number;
+  [key: string]: unknown;
+}
+
+export interface AuditLogEntry {
+  timestamp: number;
+  type: string;
+  actor: string;
+  detail?: string;
+  [key: string]: unknown;
+}
+
+// Provider types
+export interface Provider {
+  id: string;
+  name: string;
+  available?: boolean;
+  free_tier?: boolean;
+  local?: boolean;
+  capabilities?: string[];
+  configured?: boolean;
+}
+
+export interface FreeOption {
+  name: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
 export type WSEvent =
   | { type: 'message'; data: Message }
   | { type: 'typing'; data: { sender: string; channel: string } }

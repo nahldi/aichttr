@@ -193,11 +193,11 @@ export const api = {
     const params = new URLSearchParams();
     if (category) params.set('category', category);
     if (search) params.set('search', search);
-    return request<{ skills: any[]; categories: string[] }>('/api/skills?' + params);
+    return request<{ skills: import('../types').Skill[]; categories: string[] }>('/api/skills?' + params);
   },
 
   getAgentSkills: (agentName: string) =>
-    request<{ skills: any[]; agent: string }>('/api/skills/agent/' + encodeURIComponent(agentName)),
+    request<{ skills: import('../types').Skill[]; agent: string }>('/api/skills/agent/' + encodeURIComponent(agentName)),
 
   toggleAgentSkill: (agentName: string, skillId: string, enabled: boolean) =>
     request('/api/skills/agent/' + encodeURIComponent(agentName) + '/toggle', {
@@ -243,7 +243,7 @@ export const api = {
 
   // Session snapshots
   exportSnapshot: () =>
-    request<{ version: string; settings: any; agents: any[]; channels: string[]; messages: any[]; jobs: any[]; rules: any[] }>('/api/snapshot'),
+    request<{ version: string; settings: Record<string, unknown>; agents: import('../types').Agent[]; channels: string[]; messages: import('../types').Message[]; jobs: import('../types').Job[]; rules: import('../types').Rule[] }>('/api/snapshot'),
 
   importSnapshot: (snapshot: Record<string, unknown>) =>
     request<{ ok: boolean; imported_messages: number; channels: string[] }>('/api/snapshot/import', {
@@ -284,7 +284,7 @@ export const api = {
 
   // Schedules
   getSchedules: () =>
-    request<{ schedules: any[] }>('/api/schedules'),
+    request<{ schedules: import('../types').Schedule[] }>('/api/schedules'),
 
   createSchedule: (cronExpr: string, agent: string, command: string, channel?: string) =>
     request('/api/schedules', {
@@ -296,7 +296,7 @@ export const api = {
     request<{ ok: boolean }>('/api/schedules/' + id, { method: 'DELETE' }),
 
   // Agent config
-  setAgentConfig: (name: string, config: Record<string, any>) =>
+  setAgentConfig: (name: string, config: Record<string, unknown>) =>
     request('/api/agents/' + encodeURIComponent(name) + '/config', {
       method: 'POST',
       body: JSON.stringify(config),
@@ -330,13 +330,14 @@ export const api = {
 
   // Sessions
   getSessionTemplates: () =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- session templates vary by backend config
     request<{ templates: any[] }>('/api/session-templates'),
 
   getSession: (channel: string) =>
     request<{ session: any }>(`/api/sessions/${encodeURIComponent(channel)}`),
 
   startSession: (channel: string, templateId: string, cast: Record<string, string>, topic?: string) =>
-    request<any>(`/api/sessions/${encodeURIComponent(channel)}/start`, {
+    request<{ session: any }>(`/api/sessions/${encodeURIComponent(channel)}/start`, {
       method: 'POST',
       body: JSON.stringify({ template_id: templateId, cast, topic }),
     }),
@@ -364,7 +365,7 @@ export const api = {
     request<{
       providers: { id: string; name: string; available: boolean; free_tier: boolean; local: boolean; capabilities: string[]; models: Record<string, { label: string; tier: string }>; configured: boolean }[];
       capabilities: Record<string, { available: boolean; provider: string | null; provider_name: string | null }>;
-      free_options: any[];
+      free_options: import('../types').FreeOption[];
       total_configured: number;
     }>('/api/providers'),
 
@@ -387,9 +388,9 @@ export const api = {
 
   // Bridges (channel integrations)
   getBridges: () =>
-    request<{ bridges: any[] }>('/api/bridges'),
+    request<{ bridges: import('../types').Bridge[] }>('/api/bridges'),
 
-  configureBridge: (platform: string, config: any) =>
+  configureBridge: (platform: string, config: Record<string, unknown>) =>
     request('/api/bridges/' + platform + '/configure', {
       method: 'POST', body: JSON.stringify(config),
     }),
@@ -405,7 +406,7 @@ export const api = {
     const params = new URLSearchParams();
     if (category) params.set('category', category);
     if (search) params.set('search', search);
-    return request<{ plugins: any[]; categories: string[] }>('/api/marketplace?' + params);
+    return request<{ plugins: import('../types').Plugin[]; categories: string[] }>('/api/marketplace?' + params);
   },
 
   installMarketplacePlugin: (pluginId: string) =>
@@ -416,7 +417,7 @@ export const api = {
 
   // Skill Packs
   getSkillPacks: () =>
-    request<{ packs: any[] }>('/api/skill-packs'),
+    request<{ packs: import('../types').SkillPack[] }>('/api/skill-packs'),
 
   applySkillPack: (packId: string, agent: string) =>
     request('/api/skill-packs/' + packId + '/apply', {
@@ -425,14 +426,14 @@ export const api = {
 
   // Hooks
   getHooks: () =>
-    request<{ hooks: any[]; events: Record<string, string> }>('/api/hooks'),
+    request<{ hooks: import('../types').Hook[]; events: Record<string, string> }>('/api/hooks'),
 
-  createHook: (name: string, event: string, action: string, config?: any) =>
+  createHook: (name: string, event: string, action: string, config?: Record<string, unknown>) =>
     request('/api/hooks', {
       method: 'POST', body: JSON.stringify({ name, event, action, config }),
     }),
 
-  updateHook: (hookId: string, updates: any) =>
+  updateHook: (hookId: string, updates: Partial<import('../types').Hook>) =>
     request('/api/hooks/' + hookId, {
       method: 'PATCH', body: JSON.stringify(updates),
     }),
@@ -453,23 +454,23 @@ export const api = {
     request('/api/security/secrets/' + encodeURIComponent(key), { method: 'DELETE' }),
 
   getExecPolicies: () =>
-    request<{ policies: Record<string, any> }>('/api/security/exec-policies'),
+    request<{ policies: Record<string, import('../types').ExecutionPolicy> }>('/api/security/exec-policies'),
 
   getExecPolicy: (agent: string) =>
-    request<{ policy: any }>('/api/security/exec-policy/' + encodeURIComponent(agent)),
+    request<{ policy: import('../types').ExecutionPolicy }>('/api/security/exec-policy/' + encodeURIComponent(agent)),
 
-  setExecPolicy: (agent: string, policy: any) =>
+  setExecPolicy: (agent: string, policy: import('../types').ExecutionPolicy) =>
     request('/api/security/exec-policy/' + encodeURIComponent(agent), {
       method: 'POST', body: JSON.stringify(policy),
     }),
 
   getAuditLog: (limit?: number) =>
-    request<{ entries: any[] }>('/api/security/audit-log?limit=' + (limit || 100)),
+    request<{ entries: import('../types').AuditLogEntry[] }>('/api/security/audit-log?limit=' + (limit || 100)),
 
   getRetention: () =>
-    request<{ policy: any }>('/api/security/retention'),
+    request<{ policy: import('../types').RetentionPolicy }>('/api/security/retention'),
 
-  setRetention: (policy: any) =>
+  setRetention: (policy: import('../types').RetentionPolicy) =>
     request('/api/security/retention', {
       method: 'POST', body: JSON.stringify(policy),
     }),
