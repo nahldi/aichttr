@@ -245,23 +245,21 @@ function ScrollArrow() {
 function RightPanel() {
   const panel = useChatStore((s) => s.sidebarPanel);
   const setSidebarPanel = useChatStore((s) => s.setSidebarPanel);
-  const [panelWidth, setPanelWidth] = useState(panel === 'cockpit' ? 400 : 320);
+  const cockpitWidth = useChatStore((s) => s.cockpitWidth);
+  const setCockpitWidth = useChatStore((s) => s.setCockpitWidth);
+  const panelWidth = panel === 'cockpit' ? cockpitWidth : 320;
   const isDragging = useRef(false);
 
-  // Update default width when panel type changes
-  useEffect(() => {
-    setPanelWidth(panel === 'cockpit' ? 400 : 320);
-  }, [panel]);
-
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    if (panel !== 'cockpit') return; // Only cockpit is resizable
     e.preventDefault();
     isDragging.current = true;
     const startX = e.clientX;
-    const startWidth = panelWidth;
+    const startWidth = cockpitWidth;
     const handleMove = (e: MouseEvent) => {
       if (!isDragging.current) return;
       const delta = startX - e.clientX;
-      setPanelWidth(Math.max(280, Math.min(startWidth + delta, 600)));
+      setCockpitWidth(startWidth + delta);
     };
     const handleUp = () => {
       isDragging.current = false;

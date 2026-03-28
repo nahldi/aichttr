@@ -99,6 +99,8 @@ interface ChatState {
   // Agent cockpit
   cockpitAgent: string | null;
   setCockpitAgent: (name: string | null) => void;
+  cockpitWidth: number;
+  setCockpitWidth: (w: number) => void;
   agentPresence: Record<string, AgentPresence>;
   setAgentPresence: (presence: AgentPresence) => void;
   browserStates: Record<string, AgentBrowserState>;
@@ -348,6 +350,8 @@ export const useChatStore = create<ChatState>((set) => ({
   // Agent cockpit
   cockpitAgent: null,
   setCockpitAgent: (name) => set({ cockpitAgent: name, sidebarPanel: name ? 'cockpit' : null }),
+  cockpitWidth: 400,
+  setCockpitWidth: (w) => set({ cockpitWidth: Math.max(280, Math.min(w, 600)) }),
   agentPresence: {},
   setAgentPresence: (presence) =>
     set((s) => ({
