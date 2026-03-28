@@ -239,7 +239,7 @@ async function runPythonCheck() {
         $depsStatus.style.display = '';
         $depsProgress.style.display = '';
 
-        const installResult = await api.invoke('wizard:install-deps');
+        const installResult = await api.invoke('wizard:install-deps', settings.platform);
         if (installResult && installResult.success) {
           $depsStatus.innerHTML = '<span style="color:#4ade80;font-size:16px;">&#10003;</span><span>Dependencies installed</span>';
           $depsStatus.className = 'check-status success';
