@@ -52,12 +52,39 @@ const LINE_COLORS = {
 interface DiffViewerProps {
   diff: string;
   path: string;
+  before?: string;
+  after?: string;
+  agentName?: string;
   agentColor?: string;
   onClose?: () => void;
+  onRevert?: () => void;
 }
 
-export function DiffViewer({ diff, path, agentColor, onClose }: DiffViewerProps) {
+export function DiffViewer({ diff, path, before, after: _after, agentName, agentColor, onClose, onRevert }: DiffViewerProps) {
+  void _after; // Reserved for future "apply" action
   const [viewMode, setViewMode] = useState<'unified' | 'split'>('unified');
+  const [reverting, setReverting] = useState(false);
+
+  const handleRevert = async () => {
+    if (!agentName || !before) return;
+    setReverting(true);
+    try {
+      const res = await fetch(`/api/agents/${encodeURIComponent(agentName)}/file`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, content: before }),
+      });
+      if (res.ok) {
+        toast('Reverted to previous version', 'success');
+        onRevert?.();
+      } else {
+        toast('Revert failed', 'error');
+      }
+    } catch {
+      toast('Revert failed', 'error');
+    }
+    setReverting(false);
+  };
   const lines = useMemo(() => parseDiff(diff), [diff]);
 
   const stats = useMemo(() => {
@@ -89,6 +116,16 @@ export function DiffViewer({ diff, path, agentColor, onClose }: DiffViewerProps)
           >
             {viewMode === 'unified' ? 'Split' : 'Unified'}
           </button>
+          {agentName && before && (
+            <button
+              onClick={handleRevert}
+              disabled={reverting}
+              className="text-[9px] px-2 py-0.5 rounded-md bg-red-500/10 text-red-400/70 hover:bg-red-500/20 transition-colors disabled:opacity-30"
+              title="Revert to previous version"
+            >
+              {reverting ? 'Reverting...' : 'Revert'}
+            </button>
+          )}
           <button
             onClick={() => navigator.clipboard?.writeText(diff).then(() => toast('Diff copied', 'success'))}
             className="p-1 rounded hover:bg-surface-container-high"

@@ -3,7 +3,7 @@
  * Tabs: Terminal | Files | Activity
  * Shows live terminal output, workspace file tree, and agent activity timeline.
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { AgentIcon } from './AgentIcon';
@@ -463,9 +463,42 @@ function CockpitActivity({ agent }: { agent: Agent }) {
 
 function CockpitBrowser({ agent }: { agent: Agent }) {
   const liveBrowser = useChatStore((s) => s.browserStates[agent.name]);
+  const liveReplay = useChatStore((s) => s.agentReplay[agent.name] || []);
   const [browser, setBrowser] = useState<AgentBrowserState | null>(null);
   const [loading, setLoading] = useState(true);
   const [artifactErrored, setArtifactErrored] = useState(false);
+
+  const browserHistory = useMemo(() => {
+    return liveReplay
+      .filter((event) =>
+        event.surface === 'browser' ||
+        ['web_fetch', 'web_search', 'browser_snapshot'].includes(event.tool || '')
+      )
+      .map((event) => {
+        const metadata = (event.metadata || {}) as Record<string, unknown>;
+        const artifactUrl = typeof metadata.artifact_url === 'string' ? metadata.artifact_url : '';
+        const status = typeof metadata.status === 'string' ? metadata.status : event.title;
+        return {
+          id: event.id,
+          title: event.title || event.url || event.query || event.tool || 'Browser event',
+          detail: event.detail,
+          url: event.url || '',
+          query: event.query || '',
+          tool: event.tool || '',
+          status,
+          artifactUrl,
+          timestamp: event.timestamp,
+        };
+      })
+      .filter((entry, index, all) => all.findIndex((candidate) => candidate.id === entry.id) === index)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 8);
+  }, [liveReplay]);
+
+  const snapshotGallery = useMemo(
+    () => browserHistory.filter((entry) => entry.artifactUrl),
+    [browserHistory],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -577,6 +610,45 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
           )}
         </div>
       )}
+      {browserHistory.length > 0 && (
+        <div className="px-3 pt-3 shrink-0 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-on-surface-variant/25">Recent Browser Steps</span>
+            <span className="text-[9px] text-on-surface-variant/20">{browserHistory.length} items</span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {browserHistory.map((entry) => (
+              <div
+                key={entry.id}
+                className="min-w-[180px] max-w-[220px] rounded-lg border border-outline-variant/10 bg-surface-container-high/20 p-2"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[12px] text-primary/60">
+                    {entry.tool === 'web_search' ? 'search' : entry.tool === 'browser_snapshot' ? 'photo_camera' : 'language'}
+                  </span>
+                  <span className="text-[10px] text-on-surface/70 truncate font-medium">{entry.status}</span>
+                </div>
+                <div className="mt-1 text-[10px] text-on-surface-variant/45 truncate">
+                  {entry.query ? `"${entry.query}"` : entry.url || entry.title}
+                </div>
+                <div className="mt-1 text-[9px] text-on-surface-variant/20">
+                  {new Date(entry.timestamp * 1000).toLocaleTimeString()}
+                </div>
+                {entry.url && (
+                  <a
+                    href={entry.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex text-[9px] text-primary/60 hover:text-primary transition-colors"
+                  >
+                    Open link
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {browser.artifact_url && !artifactErrored && (
         <div className="px-3 pt-3 shrink-0">
           <img
@@ -585,6 +657,31 @@ function CockpitBrowser({ agent }: { agent: Agent }) {
             className="w-full max-h-48 object-contain rounded-lg border border-outline-variant/10 bg-black/20"
             onError={() => setArtifactErrored(true)}
           />
+        </div>
+      )}
+      {snapshotGallery.length > 0 && (
+        <div className="px-3 pt-3 shrink-0 space-y-2">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-on-surface-variant/25">Snapshot Gallery</div>
+          <div className="grid grid-cols-2 gap-2">
+            {snapshotGallery.slice(0, 4).map((entry) => (
+              <a
+                key={entry.id}
+                href={`${entry.artifactUrl}${entry.timestamp ? `?t=${entry.timestamp}` : ''}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg overflow-hidden border border-outline-variant/10 bg-surface-container-high/10 hover:border-primary/30 transition-colors"
+              >
+                <img
+                  src={`${entry.artifactUrl}${entry.timestamp ? `?t=${entry.timestamp}` : ''}`}
+                  alt={`${agent.label || agent.name} snapshot`}
+                  className="w-full h-24 object-cover bg-black/20"
+                />
+                <div className="px-2 py-1.5 text-[9px] text-on-surface-variant/35 truncate">
+                  {entry.query ? `"${entry.query}"` : entry.url || entry.title}
+                </div>
+              </a>
+            ))}
+          </div>
         </div>
       )}
       {/* Preview content */}
@@ -698,7 +795,7 @@ function CockpitReplay({ agent }: { agent: Agent }) {
               {/* Inline diff for file events */}
               {selectedEvent.path && diffData && (
                 <div className="mt-3 rounded-lg overflow-hidden border border-outline-variant/10" style={{ maxHeight: '300px' }}>
-                  <DiffViewer diff={diffData.diff} path={diffData.path} agentColor={agent.color} />
+                  <DiffViewer diff={diffData.diff} path={diffData.path} before={diffData.before} after={diffData.after} agentName={agent.name} agentColor={agent.color} />
                 </div>
               )}
               {selectedEvent.path && !diffData && (
