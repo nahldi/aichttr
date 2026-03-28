@@ -4,6 +4,7 @@
  * Shows live terminal output, workspace file tree, and agent activity timeline.
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { AgentIcon } from './AgentIcon';
@@ -950,12 +951,22 @@ export function AgentCockpit() {
       <div className="flex flex-col h-full">
         <div className="px-4 py-3 border-b border-outline-variant/10">
           <h2 className="text-sm font-semibold text-on-surface/80">Agent Cockpit</h2>
+          <p className="text-[10px] text-on-surface-variant/30 mt-0.5">Live workspace viewer</p>
         </div>
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4">
-          <span className="material-symbols-outlined text-3xl text-on-surface-variant/20">monitor</span>
-          <p className="text-xs text-on-surface-variant/40 text-center">
-            Click an agent in the bar above, then open Cockpit to see their live workspace
-          </p>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+            <span className="material-symbols-outlined text-2xl text-primary/30">monitor</span>
+          </div>
+          <div className="text-center space-y-1.5">
+            <p className="text-xs font-medium text-on-surface-variant/50">No agent selected</p>
+            <p className="text-[10px] text-on-surface-variant/30 leading-relaxed max-w-[200px]">
+              Hover over an agent chip and click the monitor icon to open their live workspace
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-[9px] text-on-surface-variant/20">
+            <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest/30 font-mono">Ctrl+K</kbd>
+            <span>to search agents</span>
+          </div>
         </div>
       </div>
     );
@@ -1016,13 +1027,24 @@ export function AgentCockpit() {
         ))}
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === 'terminal' && <CockpitTerminal agent={agent} />}
-        {tab === 'files' && <CockpitFiles key={filesKey} agent={agent} />}
-        {tab === 'browser' && <CockpitBrowser agent={agent} />}
-        {tab === 'replay' && <CockpitReplay agent={agent} onFileReverted={() => setFilesKey(k => k + 1)} />}
-        {tab === 'activity' && <CockpitActivity agent={agent} />}
+      {/* Tab content with smooth transitions */}
+      <div className="flex-1 min-h-0 overflow-hidden relative">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`${agent.name}-${tab}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+            className="absolute inset-0 flex flex-col"
+          >
+            {tab === 'terminal' && <CockpitTerminal agent={agent} />}
+            {tab === 'files' && <CockpitFiles key={filesKey} agent={agent} />}
+            {tab === 'browser' && <CockpitBrowser agent={agent} />}
+            {tab === 'replay' && <CockpitReplay agent={agent} onFileReverted={() => setFilesKey(k => k + 1)} />}
+            {tab === 'activity' && <CockpitActivity agent={agent} />}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
