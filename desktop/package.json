@@ -19,8 +19,8 @@
   "license": "MIT",
   "homepage": "https://github.com/nahldi/ghostlink",
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.0.0",
+    "electron": "^35.7.5",
+    "electron-builder": "^26.8.1",
     "typescript": "~5.9.0",
     "rimraf": "^6.0.0"
   },
