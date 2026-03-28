@@ -80,6 +80,7 @@ interface ChatState {
 
   // Agent thinking streams
   thinkingStreams: Record<string, { text: string; active: boolean }>;
+  _thinkingTimestamps: Record<string, number>;
   setThinkingStream: (agent: string, text: string, active: boolean) => void;
 
   // Multi-select deletion
@@ -170,8 +171,18 @@ export const useChatStore = create<ChatState>((set) => ({
   typingAgents: {},
   setTyping: (sender, channel) =>
     set((s) => {
-      const channelTyping = { ...(s.typingAgents[channel] || {}), [sender]: Date.now() };
-      return { typingAgents: { ...s.typingAgents, [channel]: channelTyping } };
+      const now = Date.now();
+      const channelTyping = { ...(s.typingAgents[channel] || {}), [sender]: now };
+      // Expire stale typing entries (>5s old) to prevent unbounded growth
+      const cleaned: Record<string, Record<string, number>> = {};
+      for (const [ch, agents] of Object.entries({ ...s.typingAgents, [channel]: channelTyping })) {
+        const live: Record<string, number> = {};
+        for (const [name, ts] of Object.entries(agents)) {
+          if (now - ts < 5000) live[name] = ts;
+        }
+        if (Object.keys(live).length > 0) cleaned[ch] = live;
+      }
+      return { typingAgents: cleaned };
     }),
 
   jobs: [],
@@ -264,14 +275,24 @@ export const useChatStore = create<ChatState>((set) => ({
 
   // Agent thinking streams
   thinkingStreams: {},
+  _thinkingTimestamps: {} as Record<string, number>,
   setThinkingStream: (agent, text, active) =>
     set((s) => {
+      const now = Date.now();
+      const timestamps = { ...s._thinkingTimestamps, [agent]: now };
       const updated = { ...s.thinkingStreams, [agent]: { text, active } };
-      // Remove inactive entries older than 30s to prevent unbounded growth
       if (!active) {
         delete updated[agent];
+        delete timestamps[agent];
       }
-      return { thinkingStreams: updated };
+      // Expire stale thinking entries (>60s without update) to handle crashed agents
+      for (const [name, ts] of Object.entries(timestamps) as [string, number][]) {
+        if (now - ts > 60000 && name !== agent) {
+          delete updated[name];
+          delete timestamps[name];
+        }
+      }
+      return { thinkingStreams: updated, _thinkingTimestamps: timestamps };
     }),
 
   // Multi-select deletion

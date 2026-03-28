@@ -78,6 +78,7 @@ def _is_valid_emoji(value: str) -> bool:
 
 @router.get("/api/messages")
 async def get_messages(channel: str = "general", since_id: int = 0, limit: int = 50):
+    limit = max(1, min(limit, 500))  # Clamp to 1-500, prevent negative/unbounded
     if since_id:
         msgs = await deps.store.get_since(since_id, channel)
     else:
