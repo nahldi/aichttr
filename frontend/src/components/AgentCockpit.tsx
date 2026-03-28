@@ -570,6 +570,8 @@ function CockpitReplay({ agent }: { agent: Agent }) {
 
   useEffect(() => {
     let cancelled = false;
+    setEvents([]);
+    setSelectedEvent(null);
     api.getAgentReplay(agent.name)
       .then((data) => { if (!cancelled) setEvents((data.events || []).slice(-100)); })
       .catch(() => {});
