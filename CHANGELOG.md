@@ -1,5 +1,26 @@
 # GhostLink Changelog
 
+## v4.11.0 — 2026-03-28
+### Premium Upgrade — Agent Cockpit & Command Palette
+- **Agent Cockpit** — in-app workspace viewer with Terminal, Files, Browser, Activity tabs
+- **In-app file editor** — edit + save files with Ctrl+S, line numbers, file type icons
+- **Browser visibility** — see agent web activity (URLs, search queries, page previews)
+- **Command Palette** — Ctrl+K quick actions for agents, channels, themes, settings
+- **Live data** — WebSocket events for terminal streams, browser state, presence, workspace changes
+- **Replay + diff APIs** — step-by-step agent action history with unified diffs
+- **Agent presence** — real-time status tracking (reading, running, editing)
+- **File search** — filter workspace files by name
+- **Agent-colored theming** — cockpit tabs, status dots, file icons use agent brand colors
+- **Thinking preview** — agent thinking stream shown in cockpit header
+
+### Security (v4.9.0)
+- **Tunnel auth** — capability-URL based access tokens for remote sessions
+- **Admin bootstrap** — first-user localhost-only guard
+- **SSH injection fix** — validated + shell-quoted remote values
+- **Plugin traversal fix** — regex + resolve containment
+- **Reaction race** — serialized message reaction writes
+- **Cursor lifecycle** — all hot-path SQLite cursors properly closed
+
 ## v4.8.7 — 2026-03-28
 ### Maintenance & Polish
 - **Desktop toolchain** — upgraded to Electron 35.7.5, electron-builder 26.8.1

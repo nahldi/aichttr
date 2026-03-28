@@ -107,8 +107,10 @@ interface ChatState {
   setTerminalStream: (stream: { agent: string; output: string; active: boolean; updated_at: number }) => void;
   workspaceChanges: Record<string, WorkspaceChange[]>;
   addWorkspaceChange: (change: WorkspaceChange) => void;
+  setWorkspaceChanges: (agent: string, changes: WorkspaceChange[]) => void;
   agentReplay: Record<string, AgentReplayEvent[]>;
   addAgentReplayEvent: (event: AgentReplayEvent) => void;
+  setAgentReplayEvents: (agent: string, events: AgentReplayEvent[]) => void;
   fileDiffs: Record<string, Record<string, FileDiffPayload>>;
   setFileDiff: (diff: FileDiffPayload) => void;
 
@@ -350,12 +352,26 @@ export const useChatStore = create<ChatState>((set) => ({
         [change.agent]: [...(s.workspaceChanges[change.agent] || []), change].slice(-100),
       },
     })),
+  setWorkspaceChanges: (agent, changes) =>
+    set((s) => ({
+      workspaceChanges: {
+        ...s.workspaceChanges,
+        [agent]: changes.slice(-100),
+      },
+    })),
   agentReplay: {},
   addAgentReplayEvent: (event) =>
     set((s) => ({
       agentReplay: {
         ...s.agentReplay,
         [event.agent]: [...(s.agentReplay[event.agent] || []), event].slice(-200),
+      },
+    })),
+  setAgentReplayEvents: (agent, events) =>
+    set((s) => ({
+      agentReplay: {
+        ...s.agentReplay,
+        [agent]: events.slice(-200),
       },
     })),
   fileDiffs: {},

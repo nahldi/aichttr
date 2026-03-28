@@ -8,7 +8,7 @@ import { useChatStore } from '../stores/chatStore';
 import { api } from '../lib/api';
 import { AgentIcon } from './AgentIcon';
 import { toast } from './Toast';
-import type { Agent, ActivityEvent, AgentBrowserState, WorkspaceChange } from '../types';
+import type { Agent, ActivityEvent, AgentBrowserState, AgentReplayEvent, WorkspaceChange } from '../types';
 
 // ── Terminal Tab ──────────────────────────────────────────────────────
 
@@ -106,6 +106,7 @@ function getFileIcon(name: string): string {
 }
 
 function CockpitFiles({ agent }: { agent: Agent }) {
+  const setFileDiff = useChatStore((s) => s.setFileDiff);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [currentPath, setCurrentPath] = useState('.');
   const [fileContent, setFileContent] = useState<string | null>(null);
@@ -142,19 +143,23 @@ function CockpitFiles({ agent }: { agent: Agent }) {
   const openFile = useCallback(async (name: string) => {
     const path = currentPath === '.' ? name : `${currentPath}/${name}`;
     try {
-      const res = await fetch(`/api/agents/${encodeURIComponent(agent.name)}/file?path=${encodeURIComponent(path)}`);
-      if (res.ok) {
-        const data = await res.json();
+      const [fileRes, diffData] = await Promise.all([
+        fetch(`/api/agents/${encodeURIComponent(agent.name)}/file?path=${encodeURIComponent(path)}`),
+        api.getAgentDiff(agent.name, path).catch(() => null),
+      ]);
+      if (fileRes.ok) {
+        const data = await fileRes.json();
         const content = data.content || '';
         setFileContent(content);
         setEditContent(content);
         setViewingFile(path);
         setEditing(false);
       }
+      if (diffData) setFileDiff(diffData);
     } catch {
       toast('Failed to read file', 'error');
     }
-  }, [agent.name, currentPath]);
+  }, [agent.name, currentPath, setFileDiff]);
 
   const saveFile = useCallback(async () => {
     if (!viewingFile || editContent === null) return;
@@ -574,6 +579,8 @@ export function AgentCockpit() {
   const thinkingStreams = useChatStore((s) => s.thinkingStreams);
   const agentPresence = useChatStore((s) => s.agentPresence);
   const setAgentPresence = useChatStore((s) => s.setAgentPresence);
+  const setWorkspaceChanges = useChatStore((s) => s.setWorkspaceChanges);
+  const setAgentReplayEvents = useChatStore((s) => s.setAgentReplayEvents);
   const [tab, setTab] = useState<CockpitTab>('terminal');
 
   const agent = agents.find((a) => a.name === cockpitAgent) || null;
@@ -590,6 +597,20 @@ export function AgentCockpit() {
       .catch(() => { /* ignored */ });
     return () => { cancelled = true; };
   }, [agent, presence?.updated_at, setAgentPresence]);
+
+  useEffect(() => {
+    if (!agent) return;
+    let cancelled = false;
+    Promise.all([
+      api.getAgentWorkspaceChanges(agent.name).catch(() => ({ changes: [] as WorkspaceChange[] })),
+      api.getAgentReplay(agent.name).catch(() => ({ events: [] as AgentReplayEvent[] })),
+    ]).then(([changeData, replayData]) => {
+      if (cancelled) return;
+      setWorkspaceChanges(agent.name, changeData.changes || []);
+      setAgentReplayEvents(agent.name, replayData.events || []);
+    });
+    return () => { cancelled = true; };
+  }, [agent, setWorkspaceChanges, setAgentReplayEvents]);
 
   if (!agent) {
     return (
