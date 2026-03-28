@@ -31,6 +31,11 @@ const SessionLauncher = lazy(() => import('./components/SessionLauncher').then(m
 const FirstRunWizard = lazy(() => import('./components/FirstRunWizard').then(m => ({ default: m.FirstRunWizard })));
 const AgentCockpit = lazy(() => import('./components/AgentCockpit').then(m => ({ default: m.AgentCockpit })));
 const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })));
+const WorkflowBuilder = lazy(() => import('./components/WorkflowBuilder').then(m => ({ default: m.WorkflowBuilder })));
+const PersonaMarketplace = lazy(() => import('./components/PersonaMarketplace').then(m => ({ default: m.PersonaMarketplace })));
+const CustomizationPanel = lazy(() => import('./components/CustomizationPanel').then(m => ({ default: m.CustomizationPanel })));
+const CollaborativeWorkspace = lazy(() => import('./components/CollaborativeWorkspace').then(m => ({ default: m.CollaborativeWorkspace })));
+const BranchList = lazy(() => import('./components/ConversationBranch').then(m => ({ default: m.BranchList })));
 
 const CONVERSATION_STARTERS = [
   { text: 'Ask @claude to review your code', icon: 'code' },
@@ -389,6 +394,11 @@ function AppInner() {
   const [showHelp, setShowHelp] = useState(false);
   const [showSessionLauncher, setShowSessionLauncher] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showWorkflows, setShowWorkflows] = useState(false);
+  const [showBranches, setShowBranches] = useState(false);
+  const [showPersonas, setShowPersonas] = useState(false);
+  const [showCustomization, setShowCustomization] = useState(false);
+  const [showWorkspace, setShowWorkspace] = useState(false);
 
   useWebSocket();
 
@@ -471,13 +481,18 @@ function AppInner() {
         if (showCommandPalette) { setShowCommandPalette(false); return; }
         if (showSearch) { setShowSearch(false); return; }
         if (showShortcuts) { setShowShortcuts(false); return; }
+        if (showWorkflows) { setShowWorkflows(false); return; }
+        if (showBranches) { setShowBranches(false); return; }
+        if (showPersonas) { setShowPersonas(false); return; }
+        if (showCustomization) { setShowCustomization(false); return; }
+        if (showWorkspace) { setShowWorkspace(false); return; }
         const panel = useChatStore.getState().sidebarPanel;
         if (panel) { useChatStore.getState().setSidebarPanel(null); return; }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [showSearch, showShortcuts, showCommandPalette]);
+  }, [showSearch, showShortcuts, showCommandPalette, showWorkflows, showBranches, showPersonas, showCustomization, showWorkspace]);
 
   // Apply font size to root
   useEffect(() => {
@@ -501,6 +516,26 @@ function AppInner() {
     const handler = () => setShowSessionLauncher(prev => !prev);
     window.addEventListener('ghostlink:open-session-launcher', handler);
     return () => window.removeEventListener('ghostlink:open-session-launcher', handler);
+  }, []);
+
+  useEffect(() => {
+    const openWorkflows = () => setShowWorkflows(true);
+    const openBranches = () => setShowBranches(true);
+    const openPersonas = () => setShowPersonas(true);
+    const openCustomization = () => setShowCustomization(true);
+    const openWorkspace = () => setShowWorkspace(true);
+    window.addEventListener('ghostlink:open-workflows', openWorkflows);
+    window.addEventListener('ghostlink:open-branches', openBranches);
+    window.addEventListener('ghostlink:open-personas', openPersonas);
+    window.addEventListener('ghostlink:open-customization', openCustomization);
+    window.addEventListener('ghostlink:open-workspace', openWorkspace);
+    return () => {
+      window.removeEventListener('ghostlink:open-workflows', openWorkflows);
+      window.removeEventListener('ghostlink:open-branches', openBranches);
+      window.removeEventListener('ghostlink:open-personas', openPersonas);
+      window.removeEventListener('ghostlink:open-customization', openCustomization);
+      window.removeEventListener('ghostlink:open-workspace', openWorkspace);
+    };
   }, []);
 
   // Apply theme
@@ -634,6 +669,53 @@ function AppInner() {
         {showSessionLauncher && (
           <motion.div key="session-launcher" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.15 }}>
             <Suspense fallback={<div className="flex items-center justify-center p-8"><span className="material-symbols-outlined animate-spin text-primary/40">progress_activity</span></div>}><SessionLauncher onClose={() => setShowSessionLauncher(false)} /></Suspense>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showWorkflows && (
+          <motion.div key="workflows-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center" onClick={() => setShowWorkflows(false)}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-[560px] max-w-[92vw] max-h-[80vh] rounded-2xl border border-outline-variant/15 overflow-hidden" style={{ background: 'rgba(10, 10, 18, 0.98)', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }} onClick={(e) => e.stopPropagation()}>
+              <Suspense fallback={<div className="flex items-center justify-center p-8"><span className="material-symbols-outlined animate-spin text-primary/40">progress_activity</span></div>}><WorkflowBuilder /></Suspense>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showPersonas && (
+          <motion.div key="personas-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center" onClick={() => setShowPersonas(false)}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-[560px] max-w-[92vw] max-h-[80vh] rounded-2xl border border-outline-variant/15 overflow-hidden" style={{ background: 'rgba(10, 10, 18, 0.98)', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }} onClick={(e) => e.stopPropagation()}>
+              <Suspense fallback={<div className="flex items-center justify-center p-8"><span className="material-symbols-outlined animate-spin text-primary/40">progress_activity</span></div>}><PersonaMarketplace /></Suspense>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showCustomization && (
+          <motion.div key="customization-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center" onClick={() => setShowCustomization(false)}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-[560px] max-w-[92vw] max-h-[80vh] rounded-2xl border border-outline-variant/15 overflow-hidden" style={{ background: 'rgba(10, 10, 18, 0.98)', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }} onClick={(e) => e.stopPropagation()}>
+              <Suspense fallback={<div className="flex items-center justify-center p-8"><span className="material-symbols-outlined animate-spin text-primary/40">progress_activity</span></div>}><CustomizationPanel /></Suspense>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showWorkspace && (
+          <motion.div key="workspace-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center" onClick={() => setShowWorkspace(false)}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-[560px] max-w-[92vw] max-h-[80vh] rounded-2xl border border-outline-variant/15 overflow-hidden" style={{ background: 'rgba(10, 10, 18, 0.98)', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }} onClick={(e) => e.stopPropagation()}>
+              <Suspense fallback={<div className="flex items-center justify-center p-8"><span className="material-symbols-outlined animate-spin text-primary/40">progress_activity</span></div>}><CollaborativeWorkspace /></Suspense>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showBranches && (
+          <motion.div key="branches-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <Suspense fallback={<div className="flex items-center justify-center p-8"><span className="material-symbols-outlined animate-spin text-primary/40">progress_activity</span></div>}><BranchList channel={activeChannel} onClose={() => setShowBranches(false)} /></Suspense>
           </motion.div>
         )}
       </AnimatePresence>

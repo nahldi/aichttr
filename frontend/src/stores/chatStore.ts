@@ -12,6 +12,8 @@ import type {
   WorkspaceChange,
   AgentReplayEvent,
   FileDiffPayload,
+  Collaborator,
+  WorkspaceInvite,
 } from '../types';
 
 interface FailedMessage {
@@ -115,6 +117,12 @@ interface ChatState {
   setAgentReplayEvents: (agent: string, events: AgentReplayEvent[]) => void;
   fileDiffs: Record<string, Record<string, FileDiffPayload>>;
   setFileDiff: (diff: FileDiffPayload) => void;
+
+  // Collaborative workspace
+  collaborators: Collaborator[];
+  setCollaborators: (collaborators: Collaborator[]) => void;
+  workspaceInvites: WorkspaceInvite[];
+  setWorkspaceInvites: (invites: WorkspaceInvite[]) => void;
 
   // Multi-select deletion
   selectMode: boolean;
@@ -410,6 +418,10 @@ export const useChatStore = create<ChatState>((set) => ({
       }
       return { fileDiffs: { ...s.fileDiffs, [diff.agent]: agentDiffs } };
     }),
+  collaborators: [],
+  setCollaborators: (collaborators) => set({ collaborators }),
+  workspaceInvites: [],
+  setWorkspaceInvites: (workspaceInvites) => set({ workspaceInvites }),
 
   // Multi-select deletion
   selectMode: false,

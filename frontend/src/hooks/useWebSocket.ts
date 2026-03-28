@@ -70,7 +70,14 @@ export function useWebSocket() {
     addAgentReplayEvent,
     setAgentReplayEvents,
     setFileDiff,
+    setCollaborators,
+    setWorkspaceInvites,
   } = useChatStore();
+  const activeChannel = useChatStore((s) => s.activeChannel);
+  const sidebarPanel = useChatStore((s) => s.sidebarPanel);
+  const cockpitAgent = useChatStore((s) => s.cockpitAgent);
+  const replyTo = useChatStore((s) => s.replyTo);
+  const username = useChatStore((s) => s.settings.username);
 
   useEffect(() => {
     let client: WebSocketClient | null = null;
@@ -96,8 +103,28 @@ export function useWebSocket() {
       client = new WebSocketClient(wsUrl);
       wsRef.current = client;
 
+      const sendWorkspacePresence = () => {
+        if (!client) return;
+        const state = useChatStore.getState();
+        const viewing = state.sidebarPanel === 'cockpit' && state.cockpitAgent
+          ? `Cockpit: ${state.cockpitAgent}`
+          : `Channel: ${state.activeChannel}`;
+        client.send({
+          type: 'workspace_presence',
+          username: state.settings.username || 'You',
+          viewing,
+          status: 'active',
+          cursor: { channel: state.activeChannel, ...(state.replyTo?.id ? { messageId: state.replyTo.id } : {}) },
+        });
+      };
+
       // Track connection state
-      unsubState = client.onStateChange((s) => setWsState(s));
+      unsubState = client.onStateChange((s) => {
+        setWsState(s);
+        if (s === 'connected') {
+          sendWorkspacePresence();
+        }
+      });
 
       // Fetch missed messages on reconnect
       unsubReconnect = client.onReconnect(async () => {
@@ -140,6 +167,12 @@ export function useWebSocket() {
             if (workspace?.changes) setWorkspaceChanges(agentName, workspace.changes);
             if (replay?.events) setAgentReplayEvents(agentName, replay.events);
           }));
+          const [collaborators, invites] = await Promise.all([
+            fetch('/api/workspace/collaborators').then((r) => r.ok ? r.json() : { collaborators: [] }).catch(() => ({ collaborators: [] })),
+            fetch('/api/workspace/invites').then((r) => r.ok ? r.json() : { invites: [] }).catch(() => ({ invites: [] })),
+          ]);
+          setCollaborators(collaborators.collaborators || []);
+          setWorkspaceInvites(invites.invites || []);
         } catch (e) {
           console.warn('Failed to fetch missed messages on reconnect:', e instanceof Error ? e.message : String(e));
         }
@@ -226,6 +259,12 @@ export function useWebSocket() {
           case 'workspace_change':
             addWorkspaceChange(parsed.data);
             break;
+          case 'workspace_presence':
+            setCollaborators(parsed.data.collaborators || []);
+            break;
+          case 'workspace_invites':
+            setWorkspaceInvites(parsed.data.invites || []);
+            break;
           case 'agent_replay':
             addAgentReplayEvent(parsed.data);
             break;
@@ -297,6 +336,41 @@ export function useWebSocket() {
       } catch { /* ignored */ }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps — Safe: runs once on mount, all store reads use getState() at handler time (not capture time)
+
+  useEffect(() => {
+    const client = wsRef.current;
+    if (!client || client.state !== 'connected') return;
+    const viewing = sidebarPanel === 'cockpit' && cockpitAgent
+      ? `Cockpit: ${cockpitAgent}`
+      : `Channel: ${activeChannel}`;
+    client.send({
+      type: 'workspace_presence',
+      username: username || 'You',
+      viewing,
+      status: document.hidden ? 'away' : 'active',
+      cursor: { channel: activeChannel, ...(replyTo?.id ? { messageId: replyTo.id } : {}) },
+    });
+  }, [activeChannel, cockpitAgent, replyTo?.id, sidebarPanel, username]);
+
+  useEffect(() => {
+    const updateVisibility = () => {
+      const client = wsRef.current;
+      if (!client || client.state !== 'connected') return;
+      const state = useChatStore.getState();
+      const viewing = state.sidebarPanel === 'cockpit' && state.cockpitAgent
+        ? `Cockpit: ${state.cockpitAgent}`
+        : `Channel: ${state.activeChannel}`;
+      client.send({
+        type: 'workspace_presence',
+        username: state.settings.username || 'You',
+        viewing,
+        status: document.hidden ? 'away' : 'active',
+        cursor: { channel: state.activeChannel, ...(state.replyTo?.id ? { messageId: state.replyTo.id } : {}) },
+      });
+    };
+    document.addEventListener('visibilitychange', updateVisibility);
+    return () => document.removeEventListener('visibilitychange', updateVisibility);
+  }, []);
 
   return wsRef;
 }

@@ -157,6 +157,28 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         },
       },
       {
+        id: 'action-customization',
+        label: 'Customization Rules',
+        description: 'Manage project, user, and agent rules',
+        icon: 'tune',
+        category: 'navigation',
+        action: () => {
+          window.dispatchEvent(new CustomEvent('ghostlink:open-customization'));
+          onClose();
+        },
+      },
+      {
+        id: 'action-workspace',
+        label: 'Collaborative Workspace',
+        description: 'View collaborators and invite others',
+        icon: 'groups',
+        category: 'navigation',
+        action: () => {
+          window.dispatchEvent(new CustomEvent('ghostlink:open-workspace'));
+          onClose();
+        },
+      },
+      {
         id: 'action-settings',
         label: 'Settings',
         description: 'Open settings panel',

@@ -136,6 +136,8 @@ _workspace_changes: collections.deque[dict] = collections.deque(maxlen=500)
 _agent_replay_log: collections.deque[dict] = collections.deque(maxlen=2000)
 _file_diff_cache: dict[str, dict[str, dict]] = {}
 _agent_state_lock = threading.Lock()
+_workspace_collaborators: dict[str, dict] = {}
+_workspace_ws_users: dict[int, str] = {}
 
 # ── Agent name validation ────────────────────────────────────────────
 

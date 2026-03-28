@@ -950,11 +950,19 @@ async def ws_endpoint(ws: WebSocket):
                         "sender": parsed.get("sender", ""),
                         "channel": parsed.get("channel", "general"),
                     })
+                elif msg_type == "workspace_presence":
+                    from routes import phase4_7 as _workspace_routes
+                    await _workspace_routes.update_workspace_presence(id(ws), parsed)
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
         pass
     finally:
+        try:
+            from routes import phase4_7 as _workspace_routes
+            await _workspace_routes.remove_workspace_presence(id(ws))
+        except Exception:
+            pass
         async with deps._ws_clients_lock:
             deps._ws_clients.discard(ws)
 

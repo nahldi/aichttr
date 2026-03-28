@@ -247,6 +247,28 @@ export interface Schedule {
   next_run?: number;
 }
 
+export interface Collaborator {
+  id: string;
+  username: string;
+  color: string;
+  avatar?: string;
+  status: 'active' | 'idle' | 'away';
+  viewing?: string | null;
+  cursor?: { channel: string; messageId?: number } | null;
+  joined_at: number;
+  last_seen?: number;
+  connections?: number;
+}
+
+export interface WorkspaceInvite {
+  id: string;
+  code: string;
+  expires_at: number;
+  uses: number;
+  max_uses: number;
+  created_at?: number;
+}
+
 export interface Webhook {
   id: string;
   url: string;
@@ -372,6 +394,8 @@ export type WSEvent =
   | { type: 'browser_state'; data: AgentBrowserState }
   | { type: 'terminal_stream'; data: { agent: string; output: string; active: boolean; updated_at: number } }
   | { type: 'workspace_change'; data: WorkspaceChange }
+  | { type: 'workspace_presence'; data: { collaborators: Collaborator[] } }
+  | { type: 'workspace_invites'; data: { invites: WorkspaceInvite[] } }
   | { type: 'agent_replay'; data: AgentReplayEvent }
   | { type: 'file_diff'; data: { agent: string; path: string; action: string; diff: string; timestamp: number } }
   | { type: 'token_stream'; data: { message_id: number; token: string; done: boolean } }

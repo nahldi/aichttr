@@ -65,6 +65,21 @@ def _username_color(username: str) -> str:
     return palette[sum(ord(ch) for ch in username) % len(palette)]
 
 
+def list_live_workspace_collaborators() -> list[dict]:
+    collaborators = list(deps._workspace_collaborators.values())
+    collaborators.sort(key=lambda item: ((item.get("status") != "active"), item.get("username", "").lower()))
+    return collaborators
+
+
+async def broadcast_workspace_collaborators() -> None:
+    await deps.broadcast("workspace_presence", {"collaborators": list_live_workspace_collaborators()})
+
+
+async def broadcast_workspace_invites() -> None:
+    invites = (await list_workspace_invites())["invites"]
+    await deps.broadcast("workspace_invites", {"invites": invites})
+
+
 def _is_local_request(request: Request) -> bool:
     host = request.client.host if request.client else "127.0.0.1"
     return host in ("127.0.0.1", "::1", "localhost")
@@ -565,6 +580,9 @@ async def delete_custom_rule(rule_id: str):
 
 @router.get("/api/workspace/collaborators")
 async def list_workspace_collaborators():
+    if deps._workspace_collaborators:
+        return {"collaborators": list_live_workspace_collaborators()}
+
     if not deps.user_manager or not deps.user_manager.is_enabled():
         return {"collaborators": []}
 
@@ -581,7 +599,10 @@ async def list_workspace_collaborators():
             "color": _username_color(username),
             "status": "active",
             "viewing": None,
+            "cursor": None,
             "joined_at": session.get("created_at", time.time()),
+            "last_seen": session.get("last_seen", session.get("created_at", time.time())),
+            "connections": 1,
         })
     return {"collaborators": collaborators}
 
@@ -629,7 +650,37 @@ async def create_workspace_invite(request: Request):
         invites = []
     invites.append(invite)
     _save_json_file("workspace_invites.json", {"invites": invites})
+    await broadcast_workspace_invites()
     return {"ok": True, "invite": invite}
+
+
+@router.post("/api/workspace/invites/redeem")
+async def redeem_workspace_invite(request: Request):
+    body = await request.json()
+    code = (body.get("code", "") or "").strip()
+    if not code:
+        return JSONResponse({"error": "invite code required"}, 400)
+
+    data = _load_json_file("workspace_invites.json", {"invites": []})
+    invites = data.get("invites", [])
+    if not isinstance(invites, list):
+        invites = []
+
+    now = time.time()
+    for invite in invites:
+        if invite.get("code") != code:
+            continue
+        if float(invite.get("expires_at", 0) or 0) <= now:
+            return JSONResponse({"error": "invite expired"}, 400)
+        if int(invite.get("uses", 0) or 0) >= int(invite.get("max_uses", 0) or 0):
+            return JSONResponse({"error": "invite exhausted"}, 400)
+        invite["uses"] = int(invite.get("uses", 0) or 0) + 1
+        invite["redeemed_at"] = now
+        _save_json_file("workspace_invites.json", {"invites": invites})
+        await broadcast_workspace_invites()
+        return {"ok": True, "invite": invite}
+
+    return JSONResponse({"error": "invite not found"}, 404)
 
 
 @router.delete("/api/workspace/invites/{invite_id}")
@@ -646,4 +697,63 @@ async def delete_workspace_invite(invite_id: str):
     if len(kept) == len(invites):
         return JSONResponse({"error": "invite not found"}, 404)
     _save_json_file("workspace_invites.json", {"invites": kept})
+    await broadcast_workspace_invites()
     return {"ok": True}
+
+
+async def update_workspace_presence(connection_id: int, payload: dict) -> None:
+    username = (payload.get("username", "") or "").strip()
+    if not username:
+        return
+
+    current_user = deps._workspace_ws_users.get(connection_id)
+    now = time.time()
+    next_presence = {
+        "id": username,
+        "username": username[:80],
+        "color": (payload.get("color") or _username_color(username)).strip()[:20],
+        "status": (payload.get("status") or "active").strip() if payload.get("status") in {"active", "idle", "away"} else "active",
+        "viewing": (payload.get("viewing") or "").strip()[:160] or None,
+        "cursor": payload.get("cursor") if isinstance(payload.get("cursor"), dict) else None,
+        "joined_at": float(payload.get("joined_at") or now),
+        "last_seen": now,
+        "connections": 1,
+    }
+
+    if current_user and current_user != username:
+        existing = deps._workspace_collaborators.get(current_user)
+        if existing:
+            remaining = max(0, int(existing.get("connections", 1)) - 1)
+            if remaining <= 0:
+                deps._workspace_collaborators.pop(current_user, None)
+            else:
+                existing["connections"] = remaining
+
+    deps._workspace_ws_users[connection_id] = username
+    existing = deps._workspace_collaborators.get(username)
+    if existing:
+        existing_connections = max(1, int(existing.get("connections", 1)))
+        next_presence["connections"] = existing_connections if current_user == username else existing_connections + 1
+        next_presence["joined_at"] = float(existing.get("joined_at", next_presence["joined_at"]))
+        if next_presence["cursor"] is None:
+            next_presence["cursor"] = existing.get("cursor")
+        if next_presence["viewing"] is None:
+            next_presence["viewing"] = existing.get("viewing")
+    deps._workspace_collaborators[username] = next_presence
+    await broadcast_workspace_collaborators()
+
+
+async def remove_workspace_presence(connection_id: int) -> None:
+    username = deps._workspace_ws_users.pop(connection_id, None)
+    if not username:
+        return
+    existing = deps._workspace_collaborators.get(username)
+    if not existing:
+        return
+    remaining = max(0, int(existing.get("connections", 1)) - 1)
+    if remaining <= 0:
+        deps._workspace_collaborators.pop(username, None)
+    else:
+        existing["connections"] = remaining
+        existing["last_seen"] = time.time()
+    await broadcast_workspace_collaborators()

@@ -4,26 +4,8 @@
  */
 import { useState, useEffect } from 'react';
 // framer-motion available for future animations
+import { useChatStore } from '../stores/chatStore';
 import { toast } from './Toast';
-
-interface Collaborator {
-  id: string;
-  username: string;
-  color: string;
-  avatar?: string;
-  status: 'active' | 'idle' | 'away';
-  viewing?: string; // channel or cockpit agent
-  cursor?: { channel: string; messageId?: number };
-  joined_at: number;
-}
-
-interface WorkspaceInvite {
-  id: string;
-  code: string;
-  expires_at: number;
-  uses: number;
-  max_uses: number;
-}
 
 const STATUS_COLORS = {
   active: '#22c55e',
@@ -39,10 +21,14 @@ function timeAgo(ts: number): string {
 }
 
 export function CollaborativeWorkspace() {
-  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
-  const [invites, setInvites] = useState<WorkspaceInvite[]>([]);
+  const collaborators = useChatStore((s) => s.collaborators);
+  const setCollaborators = useChatStore((s) => s.setCollaborators);
+  const invites = useChatStore((s) => s.workspaceInvites);
+  const setWorkspaceInvites = useChatStore((s) => s.setWorkspaceInvites);
   const [loading, setLoading] = useState(true);
   const [creatingInvite, setCreatingInvite] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [joiningInvite, setJoiningInvite] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,11 +38,11 @@ export function CollaborativeWorkspace() {
     ]).then(([collabData, inviteData]) => {
       if (cancelled) return;
       setCollaborators(collabData.collaborators || []);
-      setInvites(inviteData.invites || []);
+      setWorkspaceInvites(inviteData.invites || []);
       setLoading(false);
     }).catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [setCollaborators, setWorkspaceInvites]);
 
   const createInvite = async () => {
     setCreatingInvite(true);
@@ -69,7 +55,7 @@ export function CollaborativeWorkspace() {
       if (res.ok) {
         const data = await res.json();
         if (data.invite) {
-          setInvites(prev => [...prev, data.invite]);
+          setWorkspaceInvites([...invites, data.invite]);
           navigator.clipboard?.writeText(data.invite.code).then(() => toast('Invite code copied!', 'success'));
         }
       }
@@ -80,9 +66,30 @@ export function CollaborativeWorkspace() {
   const revokeInvite = async (id: string) => {
     try {
       await fetch(`/api/workspace/invites/${id}`, { method: 'DELETE' });
-      setInvites(prev => prev.filter(i => i.id !== id));
+      setWorkspaceInvites(invites.filter(i => i.id !== id));
       toast('Invite revoked', 'info');
     } catch { /* ignored */ }
+  };
+
+  const joinWithInvite = async () => {
+    if (!inviteCode.trim() || joiningInvite) return;
+    setJoiningInvite(true);
+    try {
+      const res = await fetch('/api/workspace/invites/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: inviteCode.trim() }),
+      });
+      if (res.ok) {
+        toast('Invite accepted', 'success');
+        setInviteCode('');
+      } else {
+        toast('Invalid or expired invite', 'error');
+      }
+    } catch {
+      toast('Failed to redeem invite', 'error');
+    }
+    setJoiningInvite(false);
   };
 
   const activeCount = collaborators.filter(c => c.status === 'active').length;
@@ -120,6 +127,27 @@ export function CollaborativeWorkspace() {
           </div>
         ) : (
           <>
+            <div className="px-4 py-3 border-b border-outline-variant/5 space-y-2">
+              <p className="text-[9px] font-semibold text-on-surface-variant/25 uppercase tracking-wider">Join Workspace</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && joinWithInvite()}
+                  placeholder="Paste invite code..."
+                  className="flex-1 bg-surface-container rounded-lg px-3 py-2 text-[10px] font-mono text-on-surface outline-none border border-outline-variant/10 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+                <button
+                  onClick={joinWithInvite}
+                  disabled={!inviteCode.trim() || joiningInvite}
+                  className="px-3 py-2 rounded-lg text-[10px] font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                >
+                  {joiningInvite ? 'Joining...' : 'Join'}
+                </button>
+              </div>
+            </div>
+
             {/* Collaborators */}
             {collaborators.length > 0 && (
               <div className="py-2">

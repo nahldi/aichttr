@@ -24,6 +24,13 @@ def phase5_7_env(tmp_data_dir: Path):
     deps.DATA_DIR = tmp_data_dir
     deps._settings["username"] = "You"
     deps.user_manager = UserManager(tmp_data_dir)
+    deps._workspace_collaborators.clear()
+    deps._workspace_ws_users.clear()
+
+    async def _broadcast(*_args, **_kwargs):
+        return None
+
+    deps.broadcast = _broadcast
     return {"data_dir": tmp_data_dir}
 
 
@@ -112,6 +119,37 @@ async def test_workspace_invites_and_collaborators(phase5_7_env):
     listing = await phase4_7.list_workspace_invites()
     assert [item["id"] for item in listing["invites"]] == [invite["id"]]
 
+    redeemed = await phase4_7.redeem_workspace_invite(_DummyRequest({"code": invite["code"]}))
+    assert redeemed["ok"] is True
+    assert redeemed["invite"]["uses"] == 1
+
     deleted = await phase4_7.delete_workspace_invite(invite["id"])
     assert deleted["ok"] is True
     assert (await phase4_7.list_workspace_invites())["invites"] == []
+
+
+@pytest.mark.asyncio
+async def test_workspace_presence_lifecycle_updates_live_collaborators(phase5_7_env):
+    from routes import phase4_7
+
+    await phase4_7.update_workspace_presence(101, {
+        "username": "alice",
+        "viewing": "Channel: general",
+        "status": "active",
+        "cursor": {"channel": "general", "messageId": 42},
+    })
+    listing = await phase4_7.list_workspace_collaborators()
+    assert listing["collaborators"][0]["username"] == "alice"
+    assert listing["collaborators"][0]["viewing"] == "Channel: general"
+    assert listing["collaborators"][0]["cursor"]["messageId"] == 42
+
+    await phase4_7.update_workspace_presence(101, {
+        "username": "alice",
+        "viewing": "Cockpit: codex",
+        "status": "active",
+    })
+    listing = await phase4_7.list_workspace_collaborators()
+    assert listing["collaborators"][0]["viewing"] == "Cockpit: codex"
+
+    await phase4_7.remove_workspace_presence(101)
+    assert (await phase4_7.list_workspace_collaborators())["collaborators"] == []
