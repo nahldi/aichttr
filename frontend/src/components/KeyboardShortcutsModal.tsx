@@ -3,7 +3,8 @@ interface KeyboardShortcutsModalProps {
 }
 
 const SHORTCUTS = [
-  { keys: ['Ctrl', 'K'], description: 'Open search / command palette' },
+  { keys: ['Ctrl', 'K'], description: 'Open command palette' },
+  { keys: ['Ctrl', 'F'], description: 'Search messages' },
   { keys: ['Ctrl', '/'], description: 'Show keyboard shortcuts' },
   { keys: ['Ctrl', 'N'], description: 'New channel' },
   { keys: ['Ctrl', '1-9'], description: 'Switch channel by number' },

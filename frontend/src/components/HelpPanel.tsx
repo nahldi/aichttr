@@ -135,7 +135,7 @@ export function HelpPanel({ onClose }: { onClose: () => void }) {
         {/* Footer */}
         <div className="px-5 py-3 border-t border-outline-variant/8 text-center shrink-0">
           <p className="text-[10px] text-on-surface-variant/30">
-            Keyboard shortcuts: <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high text-[9px]">Ctrl+K</kbd> search &middot; <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high text-[9px]">Ctrl+/</kbd> shortcuts &middot; <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high text-[9px]">/help</kbd> commands
+            Keyboard shortcuts: <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high text-[9px]">Ctrl+K</kbd> command palette &middot; <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high text-[9px]">Ctrl+F</kbd> search &middot; <kbd className="px-1.5 py-0.5 rounded bg-surface-container-high text-[9px]">Ctrl+/</kbd> shortcuts
           </p>
         </div>
       </div>

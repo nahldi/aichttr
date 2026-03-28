@@ -152,7 +152,7 @@ export function Sidebar() {
         <div className="flex-1" />
 
         {/* Search */}
-        <button title="Search (Ctrl+K)"
+        <button title="Command Palette (Ctrl+K)"
           onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))}
           className="w-10 h-10 rounded-xl flex items-center justify-center text-white/45 hover:text-white/60 hover:bg-white/5 transition-all"
         >
