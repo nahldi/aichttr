@@ -335,14 +335,10 @@ function setUpdateUpToDate() {
 
 function setUpdateError(info) {
   const message = (typeof info === 'string') ? info : (info && info.message) || '';
-  // If it's a "no releases" type error, show as up-to-date instead
-  if (message.includes('no published releases') || message.includes('404') || message.includes('Cannot find')) {
-    setUpdateUpToDate();
-    return;
-  }
-  $updateStatus.textContent = 'No updates available';
-  $updateStatus.className = '';
+  $updateStatus.textContent = message ? ('Update error: ' + message) : 'Update check failed';
+  $updateStatus.className = 'error';
   $btnUpdate.style.display = 'none';
+  $btnRestart.style.display = 'none';
   $updateProgress.style.display = 'none';
 }
 

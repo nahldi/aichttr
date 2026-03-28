@@ -9,7 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import type { AuthStatus } from './index';
-import { execCmd, hasCommand, isCommandNotFound, isWsl, spawnInTerminal, execAsync } from './index';
+import { execCmd, hasCommand, isCommandNotFound, isWsl, spawnInTerminal, execAsync, terminalCommand, terminalShell } from './index';
 
 const PROVIDER = 'google';
 const NAME     = 'Gemini';
@@ -33,7 +33,8 @@ export async function checkGoogle(): Promise<AuthStatus> {
   try {
     if (isWsl()) {
       const envCheck = await execAsync(
-        'wsl bash -lc "test -n \\"$GOOGLE_API_KEY\\" -o -n \\"$GEMINI_API_KEY\\" && echo set"',
+        'wsl',
+        ['bash', '-lc', 'test -n "$GOOGLE_API_KEY" -o -n "$GEMINI_API_KEY" && echo set'],
         { encoding: 'utf-8', timeout: 5_000, stdio: ['pipe', 'pipe', 'pipe'] }
       );
       hasApiKey = String(envCheck).includes('set');
@@ -54,7 +55,7 @@ export async function checkGoogle(): Promise<AuthStatus> {
   // Check gemini auth
   if (geminiInstalled) {
     try {
-      const output = await execCmd('gemini auth status');
+      const output = await execCmd('gemini', ['auth', 'status']);
       if ((/\b(logged in|authenticated|active)\b/i.test(output) && !/not (logged in|authenticated|active)/i.test(output)) || output.length > 0) {
         const userMatch = output.match(/(?:as|user|email|account)\s+(\S+)/i);
         return { ...base, authenticated: true, user: userMatch ? userMatch[1] : undefined };
@@ -69,13 +70,9 @@ export async function checkGoogle(): Promise<AuthStatus> {
   // Check token files
   if (isWsl()) {
     try {
-      const wslHome = await execAsync('wsl bash -c "echo $HOME"', {
+      const checkDirs = await execAsync('wsl', ['bash', '-lc', '(test -d ~/.config/gemini || test -d ~/.gemini) && echo found'], {
         encoding: 'utf-8', timeout: 5_000, stdio: ['pipe', 'pipe', 'pipe'],
       });
-      const checkDirs = await execAsync(
-        `wsl bash -c "(test -d '${wslHome}/.config/gemini' || test -d '${wslHome}/.gemini') && echo found"`,
-        { encoding: 'utf-8', timeout: 5_000, stdio: ['pipe', 'pipe', 'pipe'] }
-      );
       if (String(checkDirs).includes('found')) {
         return { ...base, authenticated: true, user: 'token-file' };
       }
@@ -101,7 +98,7 @@ export async function checkGoogle(): Promise<AuthStatus> {
   // Check gcloud
   if (gcloudInstalled) {
     try {
-      const output = await execCmd('gcloud auth list --filter=status:ACTIVE --format=value(account)');
+      const output = await execCmd('gcloud', ['auth', 'list', '--filter=status:ACTIVE', '--format=value(account)']);
       if (output.length > 0) {
         return { ...base, authenticated: true, user: output.split('\n')[0] };
       }
@@ -117,23 +114,28 @@ export async function loginGoogle(): Promise<void> {
   const hasGcloud = await hasCommand('gcloud');
 
   if (hasGemini) {
-    spawnInTerminal('gemini auth login');
+    spawnInTerminal(terminalCommand('gemini', ['auth', 'login']));
   } else if (hasGcloud) {
-    spawnInTerminal('gcloud auth login');
+    spawnInTerminal(terminalCommand('gcloud', ['auth', 'login']));
   } else {
     // Neither CLI available — guide user to set API key
-    spawnInTerminal(
+    spawnInTerminal(terminalShell(
       isWsl()
-        ? 'echo "=== Gemini Setup ===" && echo "" && echo "Option 1: Set API key (recommended)" && echo "  Get a free key at: https://aistudio.google.com/app/apikey" && echo "  Then set it: export GEMINI_API_KEY=your_key_here" && echo "  Add to ~/.bashrc to persist" && echo "" && echo "Option 2: Install Gemini CLI" && echo "  pip install google-genai" && echo "  gemini auth login" && echo "" && read -p "Press Enter to close..."'
-        : 'echo === Gemini Setup === && echo. && echo Option 1: Set API key (recommended) && echo   Get a free key at: https://aistudio.google.com/app/apikey && echo   Set it in GhostLink Settings ^> AI tab && echo. && echo Option 2: Install Gemini CLI && echo   pip install google-genai && echo   gemini auth login && echo. && pause'
-    );
+        ? 'echo "=== Gemini Setup ===" && echo "" && echo "Option 1: Set API key (recommended)" && echo "  Get a free key at: https://aistudio.google.com/app/apikey" && echo "  Then set it: export GEMINI_API_KEY=your_key_here" && echo "  Add to ~/.bashrc to persist" && echo "" && echo "Option 2: Install Gemini CLI" && echo "  pip install google-genai" && echo "  gemini auth login"'
+        : 'echo === Gemini Setup === && echo. && echo Option 1: Set API key (recommended) && echo   Get a free key at: https://aistudio.google.com/app/apikey && echo   Set it in GhostLink Settings ^> AI tab && echo. && echo Option 2: Install Gemini CLI && echo   pip install google-genai && echo   gemini auth login'
+    ));
   }
 }
 
 export async function installGoogle(): Promise<void> {
   if (isWsl()) {
-    spawnInTerminal('pip install google-genai && echo "" && echo "Done! Now run: gemini auth login" && echo "Or set GEMINI_API_KEY in Settings > AI tab" && read -p "Press Enter to close..."');
+    spawnInTerminal(terminalShell(
+      'pip install google-genai && echo "" && echo "Done! Now run: gemini auth login" && echo "Or set GEMINI_API_KEY in Settings > AI tab"'
+    ));
   } else {
-    spawnInTerminal('pip install google-genai && echo Done! Now run: gemini auth login && echo Or set GEMINI_API_KEY in GhostLink Settings AI tab && pause');
+    spawnInTerminal(terminalShell(
+      'pip install google-genai && echo "Done! Now run: gemini auth login" && echo "Or set GEMINI_API_KEY in Settings > AI tab"',
+      'pip install google-genai && echo Done! Now run: gemini auth login && echo Or set GEMINI_API_KEY in GhostLink Settings AI tab'
+    ));
   }
 }

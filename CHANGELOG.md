@@ -1,5 +1,16 @@
 # GhostLink Changelog
 
+## v4.8.1 — 2026-03-28
+### Regression Fixes & Auth Hardening
+- **Auth terminal launch** — spawnInTerminal() now uses typed TerminalLaunchSpec with wrapper scripts instead of string interpolation
+- **Updater error handling** — real update failures no longer masked as "up to date"
+- **CSP tightened** — removed unsafe-eval from launcher/wizard HTML
+- **Frontend regressions fixed** — sessionStart no longer resets on channel switch, AddAgentModal stabilized to prevent excessive API calls, SearchModal spinner clears on abort
+- **AbortController wired** — search requests now properly cancelled via fetch signal
+- **WebSocket type guards** — malformed messages rejected before switch dispatch
+- **Export validation** — format whitelist now matches actual implementation (markdown, json, html)
+- **URL preview** — memoized extraction, removed stale eslint comment
+
 ## v4.8.0 — 2026-03-28
 ### Security Hardening & Full Audit
 - **Electron security** — removed shell-string path handling, all exec calls use argument arrays, symlink rejection in WSL copy, path traversal prevention

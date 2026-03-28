@@ -196,7 +196,11 @@ class ServerManager {
 
     // Ensure Python deps are installed (first-run auto-install)
     try {
-      this.exec(pythonPath, ['-c', 'import fastapi'], { stdio: 'ignore', timeout: 5_000 });
+      this.exec(
+        pythonPath,
+        ['-c', 'import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 1)', 'fastapi'],
+        { stdio: 'ignore', timeout: 5_000 }
+      );
     } catch {
       log.info('Python deps not installed — running pip install...');
       const reqFile = path.join(backendPath, 'requirements.txt');

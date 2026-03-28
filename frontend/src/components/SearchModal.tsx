@@ -67,10 +67,10 @@ export function SearchModal({ onClose }: SearchModalProps) {
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const r = await api.searchMessages(query);
+        const r = await api.searchMessages(query, undefined, undefined, controller.signal);
         if (!controller.signal.aborted) setResults(r.results);
       } catch { /* ignored */ }
-      if (!controller.signal.aborted) setSearching(false);
+      setSearching(false);
     }, 300);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query, mode]);

@@ -140,11 +140,12 @@ export const api = {
       body: JSON.stringify({ bookmarked }),
     }),
 
-  searchMessages: (q: string, channel?: string, sender?: string) =>
+  searchMessages: (q: string, channel?: string, sender?: string, signal?: AbortSignal) =>
     request<{ results: import('../types').Message[]; query: string }>(
       '/api/search?q=' + encodeURIComponent(q) +
       (channel ? '&channel=' + encodeURIComponent(channel) : '') +
-      (sender ? '&sender=' + encodeURIComponent(sender) : '')
+      (sender ? '&sender=' + encodeURIComponent(sender) : ''),
+      signal ? { signal } : undefined,
     ),
 
   getActivity: () =>

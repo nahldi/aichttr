@@ -125,29 +125,6 @@ export function setupUpdater(launcherWindow: BrowserWindow): void {
 
   autoUpdater.on('error', (err: Error) => {
     log.error('Auto-updater error:', err.message);
-
-    // When there are no GitHub releases yet, treat it as "up to date"
-    // rather than showing a scary error to the user.
-    const msg = err.message ?? '';
-    if (
-      msg.includes('no published releases') ||
-      msg.includes('HttpError: 404') ||
-      msg.includes('HttpError: 403') ||
-      msg.includes('Cannot find latest.yml') ||
-      msg.includes('Cannot find channel') ||
-      msg.includes('net::ERR_') ||
-      msg.includes('ENOTFOUND') ||
-      msg.includes('ECONNREFUSED') ||
-      msg.includes('ETIMEDOUT') ||
-      msg.includes('getaddrinfo')
-    ) {
-      log.info('No releases found — treating as up to date');
-      sendToLauncher('update:not-available', {
-        version: app.getVersion(),
-      });
-      return;
-    }
-
     sendToLauncher('update:error', {
       message: err.message,
     });

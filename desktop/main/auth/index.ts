@@ -3,10 +3,12 @@
  * Exports shared WSL / platform helpers used by every provider module.
  */
 
-import { exec, execFile, execFileSync, spawn } from 'child_process';
+import { execFile, execFileSync, spawn } from 'child_process';
 
 
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import { checkAnthropic, loginAnthropic, installAnthropic } from './anthropic';
 import { checkOpenAI, loginOpenAI, installOpenAI } from './openai';
@@ -30,10 +32,25 @@ export interface AuthStatus {
 }
 
 
-export function execAsync(command: string, options: any = {}): Promise<string> {
+const WSL_PATH_PREFIX = 'export PATH="$PATH:$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin"';
+
+export type TerminalLaunchSpec =
+  | {
+      kind: 'argv';
+      command: string;
+      args?: string[];
+    }
+  | {
+      kind: 'shell';
+      posix: string;
+      windows?: string;
+    };
+
+export function execAsync(command: string, argsOrOptions: string[] | any = [], maybeOptions: any = {}): Promise<string> {
+  const args = Array.isArray(argsOrOptions) ? argsOrOptions : [];
+  const options = Array.isArray(argsOrOptions) ? maybeOptions : argsOrOptions;
   return new Promise((resolve, reject) => {
-    const { exec } = require('child_process');
-    exec(command, options, (error: any, stdout: any, stderr: any) => {
+    execFile(command, args, options, (error: any, stdout: any, stderr: any) => {
       if (error) {
         const err: any = new Error(error.message);
         err.stdout = stdout;
@@ -76,13 +93,24 @@ async function execWslBash(args: string[], options: any = {}): Promise<string> {
   });
 }
 
+export async function execWslCommand(command: string, args: string[] = [], options: any = {}): Promise<string> {
+  return execWslBash(
+    ['-lc', `${WSL_PATH_PREFIX}; "$@"`, 'bash', command, ...args],
+    {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      ...options,
+    }
+  );
+}
+
 async function commandExists(commandName: string): Promise<boolean> {
   assertSafeCommandName(commandName);
   try {
     if (isWsl()) {
       await execWslBash([
         '-lc',
-        'export PATH="$PATH:$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin"; command -v "$1" >/dev/null 2>&1',
+        `${WSL_PATH_PREFIX}; command -v "$1" >/dev/null 2>&1`,
         'bash',
         commandName,
       ], { stdio: 'pipe', timeout: 5_000 });
@@ -117,13 +145,6 @@ export function isWsl(): boolean {
   return settings?.platform === 'wsl';
 }
 
-export function cmd(command: string): string {
-  if (!isWsl()) return command;
-  // Include common npm global bin paths in WSL PATH
-  const escapedCmd = command.replace(/"/g, '\\"');
-  return `wsl bash -lc "export PATH=\\$PATH:\\$HOME/.npm-global/bin:\\$HOME/.local/bin:/usr/local/bin; ${escapedCmd}"`;
-}
-
 export function winToWsl(windowsPath: string): string {
   let p = windowsPath.replace(/\\/g, '/');
   const driveMatch = p.match(/^([A-Za-z]):\//);
@@ -133,13 +154,15 @@ export function winToWsl(windowsPath: string): string {
   return p;
 }
 
-export async function execCmd(command: string, timeoutMs: number = 10_000): Promise<string> {
-  const result = await execAsync(cmd(command), {
-    encoding: 'utf-8',
-    timeout: timeoutMs,
-    windowsHide: true,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+export async function execCmd(command: string, args: string[] = [], timeoutMs: number = 10_000): Promise<string> {
+  const result = isWsl()
+    ? await execWslCommand(command, args, { timeout: timeoutMs })
+    : await execAsync(command, args, {
+        encoding: 'utf-8',
+        timeout: timeoutMs,
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
   return String(result).trim();
 }
 
@@ -177,7 +200,7 @@ export async function hasCommand(name: string): Promise<boolean> {
       const result = await execWslBash(
         [
           '-ic',
-          'export PATH="$PATH:$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin"; "$1" --version 2>/dev/null',
+          `${WSL_PATH_PREFIX}; "$1" --version 2>/dev/null`,
           'bash',
           name,
         ],
@@ -192,7 +215,7 @@ export async function hasCommand(name: string): Promise<boolean> {
     if (isWsl()) {
       assertSafeCommandName(name);
       await execWslBash(
-        ['-lc', 'export PATH="$PATH:$HOME/.npm-global/bin:$HOME/.local/bin:/usr/local/bin"; npx "$1" --version 2>/dev/null', 'bash', name],
+        ['-lc', `${WSL_PATH_PREFIX}; npx "$1" --version 2>/dev/null`, 'bash', name],
         { stdio: 'pipe', timeout: 15_000 }
       );
     } else {
@@ -210,18 +233,20 @@ export async function hasCommand(name: string): Promise<boolean> {
  * More thorough check specifically for Claude Code which installs via npx
  */
 export async function hasClaudeCli(): Promise<boolean> {
-  // Check direct binary first
   try {
     if (isWsl()) {
-      const result = await execAsync('wsl bash -lc "claude --version 2>/dev/null || npx @anthropic-ai/claude-code --version 2>/dev/null"', {
-        encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 15_000,
-      });
-      return String(result).includes('Claude Code') || String(result).length > 0;
+      try {
+        const result = await execWslCommand('claude', ['--version'], { timeout: 15_000 });
+        if (String(result).trim().length > 0) return true;
+      } catch {}
+
+      const result = await execWslCommand('npx', ['@anthropic-ai/claude-code', '--version'], { timeout: 15_000 });
+      return String(result).trim().length > 0;
     } else {
-      const result = await execAsync('npx @anthropic-ai/claude-code --version', {
+      const result = await execAsync('npx', ['@anthropic-ai/claude-code', '--version'], {
         encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 15_000,
       });
-      return String(result).includes('Claude Code') || String(result).length > 0;
+      return String(result).trim().length > 0;
     }
   } catch {
     return false;
@@ -238,38 +263,113 @@ export function isCommandNotFound(err: any): boolean {
   );
 }
 
-export function spawnInTerminal(command: string): void {
+function writeTempLauncher(prefix: string, ext: string, content: string): string {
+  const filePath = path.join(
+    os.tmpdir(),
+    `${prefix}-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`
+  );
+  fs.writeFileSync(filePath, content, { encoding: 'utf-8', mode: 0o700 });
+  return filePath;
+}
+
+function buildPosixWrapper(spec: TerminalLaunchSpec, useWsl: boolean): string {
+  const shellBootstrap = [
+    '#!/usr/bin/env bash',
+    'set +e',
+    WSL_PATH_PREFIX,
+  ];
+
+  const body = spec.kind === 'argv'
+    ? ['"$@"']
+    : [spec.posix];
+
+  const shellName = useWsl ? 'bash' : '${SHELL:-bash}';
+  return [
+    ...shellBootstrap,
+    ...body,
+    'status=$?',
+    "printf '\\n'",
+    `if [ "$status" -ne 0 ]; then printf 'Command failed with exit code %s\\n' "$status"; fi`,
+    `exec ${shellName} ${useWsl ? '-i' : '-l'}`,
+    '',
+  ].join('\n');
+}
+
+function buildWindowsWrapper(spec: TerminalLaunchSpec): string {
+  const body = spec.kind === 'argv'
+    ? [
+        'set "TARGET=%~1"',
+        'shift',
+        'call "%TARGET%" %*',
+      ]
+    : [spec.windows ?? 'echo This action is only supported in a POSIX shell.'];
+
+  return [
+    '@echo off',
+    'setlocal',
+    ...body,
+    'set "STATUS=%ERRORLEVEL%"',
+    'echo(',
+    'if not "%STATUS%"=="0" echo Command failed with exit code %STATUS%',
+    'pause',
+    '',
+  ].join('\r\n');
+}
+
+export function terminalCommand(command: string, args: string[] = []): TerminalLaunchSpec {
+  assertSafeCommandName(command);
+  return { kind: 'argv', command, args };
+}
+
+export function terminalShell(posix: string, windows?: string): TerminalLaunchSpec {
+  return { kind: 'shell', posix, windows };
+}
+
+export function spawnInTerminal(spec: TerminalLaunchSpec): void {
   const useWsl = isWsl();
   const platform = process.platform;
+  const detachedOptions = { detached: true, stdio: 'ignore' as const, shell: false };
 
   if (platform === 'win32') {
     if (useWsl) {
-      const parts = command.split(/\s+/);
-      try {
-        spawn('wt.exe', ['wsl', ...parts], {
-          shell: true, detached: true, stdio: 'ignore',
-        }).unref();
-      } catch {
-        spawn('cmd.exe', ['/c', 'start', 'wsl', ...parts], {
-          shell: true, detached: true, stdio: 'ignore',
-        }).unref();
-      }
+      const wrapperPath = writeTempLauncher('ghostlink-auth', '.sh', buildPosixWrapper(spec, true));
+      const wslWrapperPath = winToWsl(wrapperPath);
+      const args = spec.kind === 'argv' ? [spec.command, ...(spec.args ?? [])] : [];
+      spawn('wsl.exe', ['bash', wslWrapperPath, ...args], detachedOptions).unref();
     } else {
-      spawn('cmd.exe', ['/c', 'start', 'cmd.exe', '/k', command], {
-        shell: true, detached: true, stdio: 'ignore',
-      }).unref();
+      const wrapperPath = writeTempLauncher('ghostlink-auth', '.cmd', buildWindowsWrapper(spec));
+      const args = spec.kind === 'argv' ? [spec.command, ...(spec.args ?? [])] : [];
+      spawn('cmd.exe', ['/k', wrapperPath, ...args], detachedOptions).unref();
     }
   } else if (platform === 'darwin') {
-    spawn('osascript', [
-      '-e', `tell application "Terminal" to do script "${command}"`,
-    ], { detached: true, stdio: 'ignore' }).unref();
+    const wrapperPath = writeTempLauncher('ghostlink-auth', '.sh', buildPosixWrapper(spec, false));
+    const args = spec.kind === 'argv' ? [spec.command, ...(spec.args ?? [])] : [];
+    const script = [
+      'on run argv',
+      'set shellCommand to "/bin/bash"',
+      'repeat with argValue in argv',
+      'set shellCommand to shellCommand & " " & quoted form of (argValue as text)',
+      'end repeat',
+      'tell application "Terminal"',
+      'activate',
+      'do script shellCommand',
+      'end tell',
+      'end run',
+    ].join('\n');
+    spawn('osascript', ['-e', script, wrapperPath, ...args], detachedOptions).unref();
   } else {
     // Linux
     const terminals = ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm'];
+    const wrapperPath = writeTempLauncher('ghostlink-auth', '.sh', buildPosixWrapper(spec, false));
+    const args = spec.kind === 'argv' ? [spec.command, ...(spec.args ?? [])] : [];
     for (const term of terminals) {
       try {
         execFileSync('which', [term], { stdio: 'ignore' });
-        spawn(term, ['-e', command], { detached: true, stdio: 'ignore' }).unref();
+        if (term === 'gnome-terminal' || term === 'konsole') {
+          spawn(term, ['--', 'bash', wrapperPath, ...args], detachedOptions).unref();
+        } else {
+          spawn(term, ['-e', 'bash', wrapperPath, ...args], detachedOptions).unref();
+        }
         return;
       } catch { /* next */ }
     }

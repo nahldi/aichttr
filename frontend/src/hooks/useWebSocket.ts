@@ -114,6 +114,7 @@ export function useWebSocket() {
       unsub = client.subscribe((event) => {
         try {
           const parsed: WSEvent = JSON.parse(event.data);
+          if (!parsed.type || !parsed.data) return;
         switch (parsed.type) {
           case 'message':
             addMessage(parsed.data);

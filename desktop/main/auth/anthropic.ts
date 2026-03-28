@@ -7,7 +7,7 @@
  */
 
 import type { AuthStatus } from './index';
-import { execCmd, isWsl, isCommandNotFound, spawnInTerminal, hasClaudeCli, execAsync } from './index';
+import { execCmd, isWsl, isCommandNotFound, spawnInTerminal, hasClaudeCli, execAsync, terminalCommand, terminalShell } from './index';
 
 const PROVIDER = 'anthropic';
 const NAME     = 'Claude';
@@ -29,7 +29,7 @@ export async function checkAnthropic(): Promise<AuthStatus> {
   let hasApiKey = false;
   try {
     if (isWsl()) {
-      const envCheck = await execAsync('wsl bash -lc "test -n \\"$ANTHROPIC_API_KEY\\" && echo set"', {
+      const envCheck = await execAsync('wsl', ['bash', '-lc', 'test -n "$ANTHROPIC_API_KEY" && echo set'], {
         encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5_000,
       });
       hasApiKey = String(envCheck).includes('set');
@@ -49,7 +49,7 @@ export async function checkAnthropic(): Promise<AuthStatus> {
 
   // Check auth status via CLI
   try {
-    const output = await execCmd('claude auth status');
+    const output = await execCmd('claude', ['auth', 'status']);
     // Accept any non-empty output that doesn't explicitly say "not authenticated"
     if (output.length > 0 && !/not (logged in|authenticated|connected)/i.test(output)) {
       const userMatch = output.match(/(?:as|user|email|account|@)\s*(\S+)/i);
@@ -68,7 +68,7 @@ export async function checkAnthropic(): Promise<AuthStatus> {
   // Check ~/.claude/ directory (indicates prior auth session)
   try {
     if (isWsl()) {
-      const result = await execAsync('wsl bash -lc "test -d ~/.claude && echo found"', {
+      const result = await execAsync('wsl', ['bash', '-lc', 'test -d ~/.claude && echo found'], {
         encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5_000,
       });
       if (String(result).includes('found')) {
@@ -88,9 +88,12 @@ export async function checkAnthropic(): Promise<AuthStatus> {
 }
 
 export async function loginAnthropic(): Promise<void> {
-  spawnInTerminal('claude auth login');
+  spawnInTerminal(terminalCommand('claude', ['auth', 'login']));
 }
 
 export async function installAnthropic(): Promise<void> {
-  spawnInTerminal('npm install -g @anthropic-ai/claude-code && echo "Done! Now run: claude auth login"');
+  spawnInTerminal(terminalShell(
+    'npm install -g @anthropic-ai/claude-code && echo "Done! Now run: claude auth login"',
+    'npm install -g @anthropic-ai/claude-code && echo Done! Now run: claude auth login'
+  ));
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { api } from '../lib/api';
 
 const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g;
@@ -21,7 +21,7 @@ function _cacheSet(url: string, val: typeof _cache[string]) {
 export function UrlPreviews({ text }: { text: string }) {
   const [previews, setPreviews] = useState<Record<string, { title: string; description: string; image: string; site_name: string }>>({});
 
-  const urls = Array.from(new Set(text.match(URL_REGEX) || [])).slice(0, 3); // max 3
+  const urls = useMemo(() => Array.from(new Set(text.match(URL_REGEX) || [])).slice(0, 3), [text]);
 
   const urlsKey = urls.join('\n');
   useEffect(() => {
@@ -47,7 +47,7 @@ export function UrlPreviews({ text }: { text: string }) {
       }
     });
     return () => { cancelled = true; };
-  }, [urlsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [urlsKey]); // urlsKey memoizes the extracted URLs from text
 
   const entries = Object.entries(previews);
   if (entries.length === 0) return null;

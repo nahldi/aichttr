@@ -73,11 +73,16 @@ async function findSupportedPython(useWsl: boolean): Promise<{ command: string; 
 }
 
 async function isPythonModuleAvailable(command: string, moduleName: string, useWsl: boolean): Promise<boolean> {
+  const probeArgs = [
+    '-c',
+    'import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 1)',
+    moduleName,
+  ];
   try {
     if (useWsl) {
-      await runCommand('wsl', [command, '-c', `import ${moduleName}`]);
+      await runCommand('wsl', [command, ...probeArgs]);
     } else {
-      await runCommand(command, ['-c', `import ${moduleName}`]);
+      await runCommand(command, probeArgs);
     }
     return true;
   } catch {

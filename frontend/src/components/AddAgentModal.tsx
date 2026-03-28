@@ -110,11 +110,12 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
   const updateSettings = useChatStore((s) => s.updateSettings);
   const settings = useChatStore((s) => s.settings);
 
+  const agentBases = agents.map(a => a.base).sort().join(',');
+  const persistentBases = (settings.persistentAgents || []).map((a: { base: string }) => a.base).sort().join(',');
   useEffect(() => {
-    // Pass all known agent base names: running + persistent + stored connected
     const connectedBases = [...new Set([
-      ...agents.map(a => a.base),
-      ...(settings.persistentAgents || []).map(a => a.base),
+      ...agentBases.split(',').filter(Boolean),
+      ...persistentBases.split(',').filter(Boolean),
     ])];
     api.getAgentTemplates(connectedBases).then((r) => {
       setTemplates(r.templates);
@@ -123,7 +124,7 @@ export function AddAgentModal({ onClose }: AddAgentModalProps) {
         setSelected(available[0].base);
       }
     }).catch((e) => console.warn('Agent templates fetch:', e.message || e));
-  }, [agents, settings.persistentAgents]);
+  }, [agentBases, persistentBases]);
 
   const template = templates.find(t => t.base === selected);
   const presets = PERMISSION_PRESETS[selected] || [{ label: 'Default', args: [], desc: 'Standard mode' }];

@@ -7,7 +7,7 @@
  */
 
 import type { AuthStatus } from './index';
-import { execCmd, execAsync, hasCommand, isCommandNotFound, spawnInTerminal, isWsl } from './index';
+import { execCmd, hasCommand, isCommandNotFound, spawnInTerminal, isWsl, terminalCommand, terminalShell } from './index';
 
 const PROVIDER = 'github';
 const NAME     = 'GitHub Copilot';
@@ -28,7 +28,7 @@ export async function checkGitHub(): Promise<AuthStatus> {
   base.installed = true;
 
   try {
-    const output = await execCmd('gh auth status');
+    const output = await execCmd('gh', ['auth', 'status']);
 
     const match = output.match(/Logged in to github\.com\s+(?:as\s+)?(\S+)/i);
     if (match) return { ...base, authenticated: true, user: match[1] };
@@ -52,12 +52,11 @@ export async function checkGitHub(): Promise<AuthStatus> {
 }
 
 export async function loginGitHub(): Promise<void> {
-  spawnInTerminal('gh auth login --web');
+  spawnInTerminal(terminalCommand('gh', ['auth', 'login', '--web']));
 }
 
 export async function installGitHub(): Promise<void> {
-  const cmd = isWsl()
-    ? 'sudo apt install gh -y && echo "Done! Now run: gh auth login --web"'
-    : 'winget install GitHub.cli';
-  spawnInTerminal(cmd);
+  spawnInTerminal(isWsl()
+    ? terminalShell('sudo apt install gh -y && echo "Done! Now run: gh auth login --web"')
+    : terminalCommand('winget', ['install', 'GitHub.cli']));
 }
