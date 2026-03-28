@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from rules import RuleStore
     from schedules import ScheduleStore
     from sessions import SessionManager
+    from branches import BranchManager
     from skills import SkillsRegistry
     from providers import ProviderRegistry
     from bridges import BridgeManager
@@ -37,6 +38,7 @@ job_store: "JobStore | None" = None
 rule_store: "RuleStore | None" = None
 schedule_store: "ScheduleStore | None" = None
 session_manager: "SessionManager | None" = None
+branch_manager: "BranchManager | None" = None
 skills_registry: "SkillsRegistry | None" = None
 provider_registry: "ProviderRegistry | None" = None
 bridge_manager: "BridgeManager | None" = None

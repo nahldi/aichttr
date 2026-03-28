@@ -1,7 +1,10 @@
 """Channel management routes."""
 from __future__ import annotations
 
+import json
 import re
+import secrets
+import time
 
 import deps
 from fastapi import APIRouter, Request
@@ -133,3 +136,167 @@ async def channel_summary(name: str):
 def _save_settings():
     from app_helpers import save_settings
     save_settings()
+
+
+async def _clone_branch_messages(parent_channel: str, branch_channel: str, fork_message_id: int) -> tuple[int, float]:
+    if deps.store is None or deps.store._db is None:
+        raise RuntimeError("Message store not initialized")
+
+    cursor = await deps.store._db.execute(
+        "SELECT * FROM messages WHERE channel = ? AND id <= ? ORDER BY id",
+        (parent_channel, fork_message_id),
+    )
+    try:
+        rows = await cursor.fetchall()
+    finally:
+        await cursor.close()
+
+    reply_map: dict[int, int] = {}
+    message_count = 0
+    last_activity = 0.0
+
+    for row in rows:
+        source = deps.store._row_to_dict(row)
+        reply_to = source.get("reply_to")
+        if reply_to is not None:
+            reply_to = reply_map.get(int(reply_to))
+
+        metadata_payload: dict = {}
+        try:
+            metadata_payload = json.loads(source.get("metadata", "{}") or "{}")
+        except (json.JSONDecodeError, TypeError, ValueError):
+            metadata_payload = {}
+        metadata_payload.update({
+            "branch_source": {
+                "channel": parent_channel,
+                "message_id": source["id"],
+                "uid": source.get("uid", ""),
+            }
+        })
+
+        copied = await deps.store.add(
+            sender=source["sender"],
+            text=source["text"],
+            msg_type=source["type"],
+            channel=branch_channel,
+            attachments=source.get("attachments", "[]"),
+            reply_to=reply_to,
+            metadata=json.dumps(metadata_payload),
+        )
+        await deps.store.update_metadata(copied["id"], json.dumps(metadata_payload))
+        if source.get("pinned"):
+            await deps.store.pin(copied["id"], True)
+        try:
+            await deps.store._db.execute(
+                "UPDATE messages SET reactions = ? WHERE id = ?",
+                (source.get("reactions", "{}"), copied["id"]),
+            )
+            await deps.store._db.commit()
+        except Exception:
+            pass
+
+        reply_map[int(source["id"])] = copied["id"]
+        message_count += 1
+        last_activity = max(last_activity, float(source.get("timestamp", 0) or 0))
+
+    return message_count, last_activity
+
+
+@router.get("/api/branches")
+async def list_branches(channel: str = ""):
+    if not channel:
+        return JSONResponse({"error": "channel required"}, 400)
+    if not deps.branch_manager:
+        return {"branches": []}
+    return {"branches": deps.branch_manager.list_branches(channel)}
+
+
+@router.post("/api/branches")
+async def create_branch(request: Request):
+    if not deps.branch_manager:
+        return JSONResponse({"error": "Branch manager not initialized"}, 500)
+    if deps.store is None:
+        return JSONResponse({"error": "Message store not initialized"}, 500)
+
+    body = await request.json()
+    name = deps.branch_manager.normalize_name(body.get("name", ""))
+    parent_channel = str(body.get("parent_channel", "") or "").strip().lower()
+    fork_message_id = body.get("fork_message_id")
+
+    if not name:
+        return JSONResponse({"error": "name required"}, 400)
+    if parent_channel not in deps._settings.get("channels", ["general"]):
+        return JSONResponse({"error": "parent channel not found"}, 404)
+    try:
+        fork_message_id = int(fork_message_id)
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "fork_message_id required"}, 400)
+
+    fork_message = await deps.store.get_by_id(fork_message_id)
+    if not fork_message or fork_message.get("channel") != parent_channel:
+        return JSONResponse({"error": "fork message not found in parent channel"}, 404)
+
+    base_channel = deps.branch_manager.make_channel_id(name)
+    branch_channel = base_channel
+    suffix = 2
+    existing_channels = set(deps._settings.get("channels", ["general"]))
+    while branch_channel in existing_channels or deps.branch_manager.channel_exists(branch_channel):
+        candidate = f"{base_channel[: max(1, 20 - len(str(suffix)) - 1)]}-{suffix}"
+        branch_channel = candidate[:20]
+        suffix += 1
+    if not deps.branch_manager.is_valid_channel(branch_channel):
+        return JSONResponse({"error": "unable to allocate branch channel"}, 400)
+
+    async with deps._settings_lock:
+        channels = list(deps._settings.get("channels", ["general"]))
+        channels.append(branch_channel)
+        deps._settings["channels"] = channels
+        _save_settings()
+
+    branch = deps.branch_manager.create_branch(
+        branch_id=branch_channel,
+        name=name,
+        parent_channel=parent_channel,
+        fork_message_id=fork_message_id,
+        fork_message_text=str(fork_message.get("text", "")),
+    )
+    message_count, last_activity = await _clone_branch_messages(parent_channel, branch_channel, fork_message_id)
+    branch = deps.branch_manager.update_branch_stats(
+        branch_channel,
+        message_count=message_count,
+        last_activity=last_activity or time.time(),
+    ) or branch
+
+    await deps.broadcast("channel_update", {"channels": [{"name": c, "unread": 0} for c in deps._settings["channels"]]})
+    await deps.broadcast("branch_update", {"action": "created", "branch": branch})
+    return {"ok": True, "branch": branch, "channel": branch_channel}
+
+
+@router.delete("/api/branches/{branch_id}")
+async def delete_branch(branch_id: str):
+    if not deps.branch_manager or deps.store is None or deps.store._db is None:
+        return JSONResponse({"error": "Branch manager not initialized"}, 500)
+
+    branch = deps.branch_manager.delete_branch(branch_id)
+    if not branch:
+        return JSONResponse({"error": "branch not found"}, 404)
+
+    async with deps._settings_lock:
+        channels = list(deps._settings.get("channels", ["general"]))
+        if branch_id in channels:
+            channels.remove(branch_id)
+            deps._settings["channels"] = channels
+            _save_settings()
+
+    if deps.session_manager and deps.session_manager.get_session(branch_id):
+        deps.session_manager.end_session(branch_id)
+    if deps.store._db is not None:
+        await deps.store._db.execute("DELETE FROM messages WHERE channel = ?", (branch_id,))
+        await deps.store._db.commit()
+    if getattr(deps, "job_store", None) and getattr(deps.job_store, "_db", None) is not None:
+        await deps.job_store._db.execute("DELETE FROM jobs WHERE channel = ?", (branch_id,))
+        await deps.job_store._db.commit()
+
+    await deps.broadcast("channel_update", {"channels": [{"name": c, "unread": 0} for c in deps._settings["channels"]]})
+    await deps.broadcast("branch_update", {"action": "deleted", "branch": branch})
+    return {"ok": True}

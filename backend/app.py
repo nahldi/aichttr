@@ -50,6 +50,7 @@ from rules import RuleStore
 from skills import SkillsRegistry
 from schedules import ScheduleStore, cron_matches
 from sessions import SessionManager
+from branches import BranchManager
 from providers import ProviderRegistry
 from bridges import BridgeManager
 from plugin_sdk import Marketplace, HookManager, event_bus, EVENTS, SKILL_PACKS, SafetyScanner
@@ -295,6 +296,7 @@ async def lifespan(_app: FastAPI):
     await schedule_store.init()
     skills_registry = SkillsRegistry(DATA_DIR)
     session_manager = SessionManager(DATA_DIR)
+    branch_manager = BranchManager(DATA_DIR)
     secrets_manager = SecretsManager(DATA_DIR)
     provider_registry = ProviderRegistry(DATA_DIR)
     bridge_manager = BridgeManager(DATA_DIR, store=store, registry=registry, server_port=PORT)
@@ -318,6 +320,7 @@ async def lifespan(_app: FastAPI):
     deps.schedule_store = schedule_store
     deps.skills_registry = skills_registry
     deps.session_manager = session_manager
+    deps.branch_manager = branch_manager
     deps.provider_registry = provider_registry
     deps.bridge_manager = bridge_manager
     deps.marketplace = marketplace
