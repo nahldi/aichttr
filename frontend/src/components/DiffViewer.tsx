@@ -62,7 +62,6 @@ interface DiffViewerProps {
 
 export function DiffViewer({ diff, path, before, after: _after, agentName, agentColor, onClose, onRevert }: DiffViewerProps) {
   void _after; // Reserved for future "apply" action
-  const [viewMode, setViewMode] = useState<'unified' | 'split'>('unified');
   const [reverting, setReverting] = useState(false);
 
   const handleRevert = async () => {
@@ -110,12 +109,6 @@ export function DiffViewer({ diff, path, before, after: _after, agentName, agent
         <div className="flex items-center gap-2">
           <span className="text-[9px] text-green-400/60">+{stats.added}</span>
           <span className="text-[9px] text-red-400/60">-{stats.removed}</span>
-          <button
-            onClick={() => setViewMode(viewMode === 'unified' ? 'split' : 'unified')}
-            className="text-[9px] px-1.5 py-0.5 rounded bg-surface-container-highest/30 text-on-surface-variant/30 hover:text-on-surface-variant/50 transition-colors"
-          >
-            {viewMode === 'unified' ? 'Split' : 'Unified'}
-          </button>
           {agentName && before && (
             <button
               onClick={handleRevert}

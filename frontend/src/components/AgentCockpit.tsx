@@ -795,7 +795,7 @@ function CockpitReplay({ agent }: { agent: Agent }) {
               {/* Inline diff for file events */}
               {selectedEvent.path && diffData && (
                 <div className="mt-3 rounded-lg overflow-hidden border border-outline-variant/10" style={{ maxHeight: '300px' }}>
-                  <DiffViewer diff={diffData.diff} path={diffData.path} before={diffData.before} after={diffData.after} agentName={agent.name} agentColor={agent.color} />
+                  <DiffViewer diff={diffData.diff} path={diffData.path} before={diffData.before} after={diffData.after} agentName={agent.name} agentColor={agent.color} onRevert={() => setSelectedEvent(null)} />
                 </div>
               )}
               {selectedEvent.path && !diffData && (
