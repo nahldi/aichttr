@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time
 from pathlib import Path
 
 import deps
@@ -66,6 +68,30 @@ def get_full_agent_list() -> list[dict]:
     return live
 
 
+def _append_jsonl_locked(queue_file: Path, payload: dict) -> None:
+    lock_path = queue_file.with_suffix(queue_file.suffix + ".lock")
+    deadline = time.time() + 2.0
+
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            break
+        except FileExistsError:
+            if time.time() >= deadline:
+                raise TimeoutError(f"timed out waiting for queue lock: {lock_path.name}")
+            time.sleep(0.05)
+
+    try:
+        with open(queue_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+    finally:
+        os.close(fd)
+        try:
+            os.unlink(lock_path)
+        except FileNotFoundError:
+            pass
+
+
 def route_mentions(sender: str, text: str, channel: str):
     """Parse @mentions and route based on responseMode."""
     import re
@@ -106,16 +132,6 @@ def route_mentions(sender: str, text: str, channel: str):
 
         queue_file = deps.DATA_DIR / f"{target}_queue.jsonl"
         try:
-            with open(queue_file, "a", encoding="utf-8") as f:
-                try:
-                    import fcntl
-                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-                    try:
-                        f.write(json.dumps({"channel": channel}) + "\n")
-                    finally:
-                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-                except ImportError:
-                    # Windows: fcntl not available, write without locking
-                    f.write(json.dumps({"channel": channel}) + "\n")
+            _append_jsonl_locked(queue_file, {"channel": channel})
         except Exception as e:
             log.warning("Queue write failed for %s: %s", target, e)

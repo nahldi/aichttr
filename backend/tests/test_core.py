@@ -80,6 +80,48 @@ def test_agent_detection_cache_exists():
     assert _AGENT_DETECTION_CACHE_TTL == 60.0
 
 
+def test_private_url_blocks_loopback_variants():
+    """Loopback and local-only URL variants are rejected."""
+    from deps import _is_private_url
+
+    assert _is_private_url("http://localhost:8300")
+    assert _is_private_url("http://localhost./status")
+    assert _is_private_url("http://127.0.0.1/api")
+    assert _is_private_url("http://[::1]/health")
+
+
+def test_private_url_blocks_private_dns_resolution(monkeypatch: pytest.MonkeyPatch):
+    """Any private address returned by DNS should block the URL."""
+    import socket
+    from deps import _is_private_url
+
+    def fake_getaddrinfo(*_args, **_kwargs):
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 0)),
+            (socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("fd00::5", 0, 0, 0)),
+        ]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+
+    assert _is_private_url("https://example.test/resource")
+
+
+def test_private_url_allows_public_dns_resolution(monkeypatch: pytest.MonkeyPatch):
+    """Public DNS-only results should remain allowed."""
+    import socket
+    from deps import _is_private_url
+
+    def fake_getaddrinfo(*_args, **_kwargs):
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 0)),
+            (socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("2606:2800:220:1:248:1893:25c8:1946", 0, 0, 0)),
+        ]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+
+    assert not _is_private_url("https://example.test/resource")
+
+
 # ── Cron UTC fix (Tier 7.6 / schedules.py) ───────────────────────────
 
 def test_cron_matches_utc():

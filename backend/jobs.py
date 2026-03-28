@@ -42,7 +42,7 @@ class JobStore:
         job_type: str = "",
     ) -> dict:
         now = time.time()
-        uid = str(_uuid.uuid4())[:8]
+        uid = _uuid.uuid4().hex
         cursor = await self._db.execute(
             """INSERT INTO jobs (uid, type, title, body, status, channel, created_by, assignee, created_at, updated_at)
                VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)""",

@@ -39,7 +39,7 @@ class ScheduleStore:
         enabled: bool = True,
     ) -> dict:
         now = time.time()
-        uid = str(_uuid.uuid4())[:8]
+        uid = _uuid.uuid4().hex
         cursor = await self._db.execute(
             """INSERT INTO schedules (uid, cron_expr, agent, command, channel, enabled, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",

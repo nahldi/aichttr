@@ -5,17 +5,17 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
-
 jobs:
   build-windows:
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
+          package-manager-cache: false
 
       - name: Build frontend
         working-directory: frontend
@@ -33,7 +33,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-installer
           path: |
@@ -43,11 +43,14 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
+          package-manager-cache: false
 
       - name: Build frontend
         working-directory: frontend
@@ -65,7 +68,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux-installer
           path: |
@@ -75,11 +78,14 @@ jobs:
 
   build-mac:
     runs-on: macos-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
+          package-manager-cache: false
 
       - name: Build frontend
         working-directory: frontend
@@ -97,7 +103,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mac-installer
           path: |
@@ -107,16 +113,26 @@ jobs:
   release:
     needs: [build-windows, build-linux, build-mac]
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
-          path: artifacts
+      - name: Download artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download ${{ github.run_id }} --dir artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**/*
-          generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mapfile -d '' files < <(find artifacts -type f -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No artifacts downloaded for release"
+            exit 1
+          fi
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${files[@]}" --generate-notes --verify-tag
+          fi

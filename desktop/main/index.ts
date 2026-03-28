@@ -12,9 +12,8 @@ import log from 'electron-log';
 import path from 'path';
 import fs from 'fs';
 import { execFile, execFileSync } from 'child_process';
-
-import util from 'util';
-const execFileAsync = util.promisify(execFile);
+import { promisify } from 'util';
+const execFileAsync = promisify(execFile);
 
 import { serverManager } from './server';
 import { createLauncherWindow, getLauncherWindow } from './launcher';
@@ -103,6 +102,62 @@ async function findExecutable(command: string, useWsl: boolean): Promise<boolean
   } catch {
     return false;
   }
+}
+
+type WizardPlatform = 'windows' | 'wsl' | 'macos' | 'linux';
+
+function detectHostPlatform(): { platform: WizardPlatform; platformLabel: string; wslAvailable: boolean } {
+  switch (process.platform) {
+    case 'win32':
+      try {
+        execFileSync('wsl', ['--status'], { timeout: 5000, stdio: 'pipe', windowsHide: true });
+        return { platform: 'wsl', platformLabel: 'Windows (WSL)', wslAvailable: true };
+      } catch {
+        return { platform: 'windows', platformLabel: 'Windows (Native)', wslAvailable: false };
+      }
+    case 'darwin':
+      return { platform: 'macos', platformLabel: 'macOS', wslAvailable: false };
+    case 'linux':
+      return { platform: 'linux', platformLabel: 'Linux', wslAvailable: false };
+    default:
+      log.warn('Unknown process.platform value: %s; falling back to Linux defaults', process.platform);
+      return { platform: 'linux', platformLabel: 'Linux', wslAvailable: false };
+  }
+}
+
+function parseWizardPlatform(raw: unknown): WizardPlatform | null {
+  return raw === 'windows' || raw === 'wsl' || raw === 'macos' || raw === 'linux'
+    ? raw
+    : null;
+}
+
+function getResourceRootCandidates(): string[] {
+  if (!app.isPackaged) {
+    return [path.join(__dirname, '..', '..')];
+  }
+
+  return [
+    process.resourcesPath,
+    path.join(process.resourcesPath, 'app.asar.unpacked'),
+    path.join(process.resourcesPath, 'app'),
+  ];
+}
+
+function resolveRequirementsPath(): string | null {
+  const candidates: string[] = [];
+
+  for (const root of getResourceRootCandidates()) {
+    candidates.push(path.join(root, 'requirements.txt'));
+    candidates.push(path.join(root, 'backend', 'requirements.txt'));
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 function settingsExist(): boolean {
@@ -259,30 +314,7 @@ function createChatWindow(port: number): void {
 function setupWizardIPC(): void {
   // ── Platform detection ────────────────────────────────────────────────
   ipcMain.handle('wizard:detect-platform', async () => {
-    const platform = process.platform;
-    let detectedPlatform = 'linux';
-    let platformLabel = 'Linux';
-    let wslAvailable = false;
-
-    if (platform === 'win32') {
-      detectedPlatform = 'windows';
-      platformLabel = 'Windows (Native)';
-
-      // Check if WSL is available
-      try {
-        execFileSync('wsl', ['--status'], { timeout: 5000, stdio: 'pipe', windowsHide: true });
-        wslAvailable = true;
-        detectedPlatform = 'wsl';
-        platformLabel = 'Windows (WSL)';
-      } catch {
-        wslAvailable = false;
-      }
-    } else if (platform === 'darwin') {
-      detectedPlatform = 'macos';
-      platformLabel = 'macOS';
-    }
-
-    return { platform: detectedPlatform, platformLabel, wslAvailable };
+    return detectHostPlatform();
   });
 
   // ── Python detection ──────────────────────────────────────────────────
@@ -295,7 +327,8 @@ function setupWizardIPC(): void {
     // Determine if we should use WSL: check wizard-provided platform,
     // or fall back to saved settings
     const settings = loadSettings();
-    const useWsl = wizardPlatform === 'wsl' || settings?.platform === 'wsl';
+    const requestedPlatform = parseWizardPlatform(wizardPlatform);
+    const useWsl = requestedPlatform === 'wsl' || settings?.platform === 'wsl';
 
     if (useWsl) {
       const supportedPython = await findSupportedPython(true);
@@ -328,34 +361,17 @@ function setupWizardIPC(): void {
   ipcMain.handle('wizard:install-deps', async (_event, wizardPlatform?: string) => {
     try {
       const settings = loadSettings();
-      const useWsl = wizardPlatform === 'wsl' || settings?.platform === 'wsl';
+      const requestedPlatform = parseWizardPlatform(wizardPlatform);
+      const useWsl = requestedPlatform === 'wsl' || settings?.platform === 'wsl';
       const supportedPython = await findSupportedPython(useWsl);
       if (!supportedPython) {
         return { success: false, error: 'Python 3.10+ not found' };
       }
 
-      // Find requirements.txt relative to the app
-      const appDir = app.isPackaged
-        ? path.join(process.resourcesPath, 'app')
-        : path.join(__dirname, '..', '..');
-
-      const reqPath = path.join(appDir, 'requirements.txt');
-
-      if (!fs.existsSync(reqPath)) {
-        // Also try backend/requirements.txt
-        const backendReq = path.join(appDir, 'backend', 'requirements.txt');
-        if (!fs.existsSync(backendReq)) {
-          log.warn('requirements.txt not found at', reqPath, 'or', backendReq);
-          return { success: false, error: 'requirements.txt not found' };
-        }
-        // Use the backend one
-        if (useWsl) {
-          const wslReqPath = winToWsl(backendReq);
-          await runCommand('wsl', [supportedPython.command, '-m', 'pip', 'install', '-r', wslReqPath], 120_000);
-        } else {
-          await runCommand(supportedPython.command, ['-m', 'pip', 'install', '-r', backendReq], 120_000);
-        }
-        return { success: true };
+      const reqPath = resolveRequirementsPath();
+      if (!reqPath) {
+        log.warn('requirements.txt not found in known resource locations');
+        return { success: false, error: 'requirements.txt not found' };
       }
 
       if (useWsl) {

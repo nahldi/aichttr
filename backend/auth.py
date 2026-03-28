@@ -5,7 +5,7 @@ Roles:
   - member: Chat + spawn agents
   - viewer: Read-only (view messages and agents)
 
-Uses bcrypt for password hashing and JWT-like session tokens.
+Uses PBKDF2-SHA256 for password hashing and opaque random session tokens.
 """
 
 from __future__ import annotations

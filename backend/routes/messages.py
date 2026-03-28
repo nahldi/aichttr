@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 
 import deps
 from fastapi import APIRouter, Request
@@ -9,6 +10,70 @@ from fastapi.responses import JSONResponse
 from plugin_sdk import event_bus
 
 router = APIRouter()
+
+_ALLOWED_MESSAGE_TYPES = {"chat", "system", "decision", "job_proposal", "rule_proposal", "progress", "approval_request"}
+_EMOJI_BASE_RANGES = (
+    (0x2600, 0x27BF),
+    (0x1F000, 0x1FAFF),
+)
+_EMOJI_ALLOWED_CODEPOINTS = {
+    0x200D,  # zero-width joiner
+    0x20E3,  # keycap
+    0xFE0E,  # text presentation selector
+    0xFE0F,  # emoji presentation selector
+}
+_EMOJI_ALLOWED_SINGLETONS = {
+    0x00A9,  # copyright
+    0x00AE,  # registered
+    0x203C,
+    0x2049,
+    0x2122,
+    0x2139,
+    0x3030,
+    0x303D,
+    0x3297,
+    0x3299,
+}
+_KEYCAP_BASES = set("0123456789#*")
+
+
+async def _message_exists(message_id: int) -> bool:
+    if deps.store is None or deps.store._db is None:
+        raise RuntimeError("Message store not initialized")
+    cursor = await deps.store._db.execute("SELECT 1 FROM messages WHERE id = ? LIMIT 1", (message_id,))
+    row = await cursor.fetchone()
+    return row is not None
+
+
+def _is_valid_emoji(value: str) -> bool:
+    if not value or len(value) > 16:
+        return False
+
+    keycap_candidate = True
+    saw_base = False
+
+    for char in value:
+        codepoint = ord(char)
+        if char.isspace() or unicodedata.category(char).startswith("C"):
+            return False
+
+        if char not in _KEYCAP_BASES and codepoint not in _EMOJI_ALLOWED_CODEPOINTS:
+            keycap_candidate = False
+
+        if 0x1F1E6 <= codepoint <= 0x1F1FF or 0x1F3FB <= codepoint <= 0x1F3FF:
+            saw_base = True
+            continue
+
+        if codepoint in _EMOJI_ALLOWED_CODEPOINTS:
+            continue
+
+        if codepoint in _EMOJI_ALLOWED_SINGLETONS or any(start <= codepoint <= end for start, end in _EMOJI_BASE_RANGES):
+            saw_base = True
+            continue
+
+        return False
+
+    return saw_base or (keycap_candidate and "\u20E3" in value)
 
 
 @router.get("/api/messages")
@@ -37,13 +102,16 @@ async def send_message(request: Request):
             reply_to = int(reply_to)
         except (ValueError, TypeError):
             return JSONResponse({"error": "reply_to must be an integer"}, 400)
+        if reply_to <= 0:
+            return JSONResponse({"error": "reply_to must be a positive integer"}, 400)
+        if not await _message_exists(reply_to):
+            return JSONResponse({"error": "reply_to message not found"}, 400)
     attachments = body.get("attachments", [])
     msg_type = (body.get("type", "chat") or "chat").strip()
     raw_metadata = body.get("metadata", "{}")
 
     # Validate msg_type — whitelist allowed values
-    _ALLOWED_TYPES = {"chat", "system", "decision", "job_proposal", "rule_proposal", "progress", "approval_request"}
-    if msg_type not in _ALLOWED_TYPES:
+    if msg_type not in _ALLOWED_MESSAGE_TYPES:
         msg_type = "chat"
 
     # Normalize metadata to JSON string
@@ -110,9 +178,7 @@ async def react_message(msg_id: int, request: Request):
     sender = body.get("sender", "You")
     if not emoji:
         return JSONResponse({"error": "emoji required"}, 400)
-    # Validate emoji is an actual emoji character (not plain ASCII text)
-    import unicodedata
-    if len(emoji) > 10 or all(ord(c) < 256 and unicodedata.category(c) not in ('So',) for c in emoji):
+    if not _is_valid_emoji(emoji):
         return JSONResponse({"error": "invalid emoji"}, 400)
     reactions = await deps.store.react(msg_id, emoji, sender)
     if reactions is None:

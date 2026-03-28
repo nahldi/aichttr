@@ -100,15 +100,17 @@ class SafetyScanner:
 
     # Dangerous module imports
     BLOCKED_IMPORTS = {
-        "subprocess", "shutil", "ctypes", "socket",
-        "multiprocessing", "signal",
+        "ctypes", "importlib", "multiprocessing", "os", "shutil",
+        "signal", "socket", "subprocess", "sys",
     }
 
-    # Allowed imports (whitelist for safe plugins)
+    # Exact import allowlist for marketplace/community plugins.
+    # First-party built-in plugins are trusted code and are not gated by this policy.
     ALLOWED_IMPORTS = {
-        "json", "re", "time", "datetime", "math", "hashlib", "hmac",
-        "base64", "urllib.parse", "collections", "functools", "itertools",
-        "typing", "pathlib", "logging", "dataclasses", "enum",
+        "asyncio", "base64", "collections", "dataclasses", "datetime",
+        "enum", "fastapi", "fastapi.responses", "functools", "hashlib",
+        "hmac", "itertools", "json", "logging", "math", "pathlib",
+        "plugin_sdk", "re", "time", "typing", "urllib.parse",
     }
 
     @classmethod
@@ -134,21 +136,31 @@ class SafetyScanner:
             # Check imports
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    root = alias.name.split(".")[0]
-                    if root in cls.BLOCKED_IMPORTS:
+                    if cls._is_blocked_import(alias.name):
                         issues.append({
                             "severity": "critical",
                             "message": f"Blocked import: {alias.name}",
                             "line": node.lineno,
                         })
+                    elif not cls._is_allowed_import(alias.name):
+                        issues.append({
+                            "severity": "critical",
+                            "message": f"Import not allowed in plugins: {alias.name}",
+                            "line": node.lineno,
+                        })
 
             if isinstance(node, ast.ImportFrom):
                 if node.module:
-                    root = node.module.split(".")[0]
-                    if root in cls.BLOCKED_IMPORTS:
+                    if cls._is_blocked_import(node.module):
                         issues.append({
                             "severity": "critical",
                             "message": f"Blocked import: from {node.module}",
+                            "line": node.lineno,
+                        })
+                    elif not cls._is_allowed_import(node.module):
+                        issues.append({
+                            "severity": "critical",
+                            "message": f"Import not allowed in plugins: from {node.module}",
                             "line": node.lineno,
                         })
 
@@ -171,6 +183,15 @@ class SafetyScanner:
         if isinstance(node.func, ast.Attribute):
             return node.func.attr
         return ""
+
+    @classmethod
+    def _is_blocked_import(cls, module: str) -> bool:
+        root = module.split(".")[0]
+        return root in cls.BLOCKED_IMPORTS
+
+    @classmethod
+    def _is_allowed_import(cls, module: str) -> bool:
+        return module in cls.ALLOWED_IMPORTS
 
 
 # ── GhostHub Marketplace ────────────────────────────────────────────

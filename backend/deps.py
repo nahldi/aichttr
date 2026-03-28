@@ -160,24 +160,57 @@ def _is_private_url(url: str) -> bool:
     """Block requests to private/internal IP ranges to prevent SSRF."""
     from urllib.parse import urlparse
     import ipaddress
+    import socket
+
+    def _is_blocked_address(host_or_ip: str) -> bool:
+        candidate = host_or_ip.strip().rstrip(".")
+        if not candidate:
+            return True
+
+        if "%" in candidate:
+            candidate = candidate.split("%", 1)[0]
+
+        try:
+            addr = ipaddress.ip_address(candidate)
+            return (
+                addr.is_private
+                or addr.is_loopback
+                or addr.is_link_local
+                or addr.is_reserved
+                or addr.is_multicast
+                or addr.is_unspecified
+            )
+        except ValueError:
+            pass
+
+        try:
+            infos = socket.getaddrinfo(candidate, None, proto=socket.IPPROTO_TCP)
+        except socket.gaierror:
+            return False
+
+        for info in infos:
+            sockaddr = info[4]
+            if not sockaddr:
+                continue
+            resolved_ip = sockaddr[0]
+            if _is_blocked_address(resolved_ip):
+                return True
+        return False
+
     try:
         parsed = urlparse(url)
-        host = parsed.hostname or ""
-        if host in ("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"):
+        if parsed.scheme not in ("http", "https"):
+            return True
+        host = (parsed.hostname or "").strip().rstrip(".").lower()
+        if not host:
+            return True
+        if host == "localhost":
             return True
         if host.endswith(".local") or host.endswith(".internal"):
             return True
-        try:
-            import socket
-            ip = socket.gethostbyname(host)
-            addr = ipaddress.ip_address(ip)
-            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
-                return True
-        except (socket.gaierror, ValueError):
-            pass
+        return _is_blocked_address(host)
     except Exception:
         return True
-    return False
 
 
 def _deliver_webhooks(event_type: str, data: dict):

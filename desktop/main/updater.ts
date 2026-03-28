@@ -15,6 +15,23 @@ import os from 'os';
 import { execFileSync } from 'child_process';
 
 let launcherRef: BrowserWindow | null = null;
+type LauncherPayload = Record<string, unknown>;
+
+function isGitHubToken(value: string): boolean {
+  return value.startsWith('ghp_') || value.startsWith('github_pat_') || value.startsWith('gho_');
+}
+
+function tryReadWslOutput(args: string[]): string {
+  try {
+    return execFileSync('wsl', args, {
+      encoding: 'utf-8',
+      timeout: 8000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim().replace(/\r/g, '');
+  } catch {
+    return '';
+  }
+}
 
 /**
  * Read a GitHub token for private repo update checks.
@@ -42,22 +59,18 @@ function getGitHubToken(): string {
     } catch {}
   }
 
-  // Try reading from WSL — gh auth token first, then GITHUB_TOKEN env
-  const wslCommands = [
-    'gh auth token',
-    'echo $GITHUB_TOKEN',
-    'echo $GH_TOKEN',
+  // Try reading from WSL without shell interpolation.
+  const wslCommands: Array<{ label: string; args: string[] }> = [
+    { label: 'gh', args: ['gh', 'auth', 'token'] },
+    { label: 'printenv GITHUB_TOKEN', args: ['printenv', 'GITHUB_TOKEN'] },
+    { label: 'printenv GH_TOKEN', args: ['printenv', 'GH_TOKEN'] },
   ];
-  for (const cmd of wslCommands) {
-    try {
-      const result = execFileSync('wsl', ['bash', '-lc', cmd], {
-        encoding: 'utf-8', timeout: 8000, stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim().replace(/\r/g, '');
-      if (result && (result.startsWith('ghp_') || result.startsWith('github_pat_') || result.startsWith('gho_'))) {
-        log.info('Found GitHub token from WSL (%s)', cmd.split(' ')[0]);
-        return result;
-      }
-    } catch {}
+  for (const command of wslCommands) {
+    const result = tryReadWslOutput(command.args);
+    if (result && isGitHubToken(result)) {
+      log.info('Found GitHub token from WSL (%s)', command.label);
+      return result;
+    }
   }
 
   return '';
@@ -164,7 +177,7 @@ export function installUpdate(): void {
 /**
  * Safely send an event to the launcher renderer.
  */
-function sendToLauncher(channel: string, data: Record<string, any>): void {
+function sendToLauncher(channel: string, data: LauncherPayload): void {
   if (launcherRef && !launcherRef.isDestroyed()) {
     launcherRef.webContents.send(channel, data);
   }

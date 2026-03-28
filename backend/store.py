@@ -156,7 +156,7 @@ class MessageStore:
     ) -> dict:
         import uuid as _uuid
         if not uid:
-            uid = str(_uuid.uuid4())[:8]
+            uid = _uuid.uuid4().hex
         now = time.time()
         time_str = time.strftime("%H:%M:%S", time.localtime(now))
 

@@ -56,6 +56,14 @@ function isPathInsideRoot(rootPath, targetPath) {
 function joinWslPath(...segments) {
     return path_1.default.posix.join(...segments);
 }
+function existingPath(paths) {
+    for (const candidate of paths) {
+        if (fs_1.default.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
 class ServerManager {
     process = null;
     port = 8300;
@@ -532,11 +540,16 @@ class ServerManager {
     /**
      * Resolve the absolute path to the backend directory (Windows path).
      * In dev mode it lives at ../backend relative to the desktop folder.
-     * In a packaged build it is in process.resourcesPath/backend.
+     * In a packaged build it is usually in process.resourcesPath/backend,
+     * with fallbacks for unpacked/asar-adjacent layouts.
      */
     getBackendPath() {
         if (this.isPackaged()) {
-            return path_1.default.join(process.resourcesPath, 'backend');
+            return existingPath([
+                path_1.default.join(process.resourcesPath, 'backend'),
+                path_1.default.join(process.resourcesPath, 'app.asar.unpacked', 'backend'),
+                path_1.default.join(process.resourcesPath, 'app', 'backend'),
+            ]) ?? path_1.default.join(process.resourcesPath, 'backend');
         }
         // Dev: desktop/ sits next to backend/
         return path_1.default.resolve(__dirname, '..', '..', 'backend');

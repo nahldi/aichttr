@@ -83,6 +83,14 @@ async def test_store_delete_message(db):
     assert len(msgs2) == 0
 
 
+@pytest.mark.asyncio
+async def test_store_generated_uid_is_full_uuid_hex(db):
+    """Generated message UIDs use the full UUID hex to avoid short-ID collisions."""
+    msg = await db.add("alice", "hello world", channel="general")
+    assert len(msg["uid"]) == 32
+    int(msg["uid"], 16)
+
+
 # ── AgentRegistry ─────────────────────────────────────────────────────
 
 def test_registry_register_unique_names():
@@ -125,6 +133,64 @@ def test_registry_kill_one_doesnt_affect_others():
     a2 = reg.register("claude")
     reg.deregister(a1.name)
     assert reg.get(a2.name) is not None, "claude-2 should still be alive after killing claude-1"
+
+
+def test_registry_keeps_first_agent_name_stable():
+    """A second instance must not rename the first registered agent."""
+    from registry import AgentRegistry
+    reg = AgentRegistry()
+    a1 = reg.register("claude")
+    a2 = reg.register("claude")
+    assert a1.name == "claude"
+    assert a2.name == "claude-2"
+    assert reg.get("claude") is a1
+
+
+def test_registry_reuses_base_name_when_primary_slot_reopens():
+    """If the bare base name is free again, the next registration should reuse it."""
+    from registry import AgentRegistry
+    reg = AgentRegistry()
+    a1 = reg.register("claude")
+    a2 = reg.register("claude")
+    reg.deregister(a1.name)
+    a3 = reg.register("claude")
+    assert a2.name == "claude-2"
+    assert a3.name == "claude"
+
+
+def test_plugin_safety_scanner_allows_supported_plugin_imports():
+    """Community plugins may use the documented safe import set."""
+    from plugin_sdk import SafetyScanner
+
+    code = """
+import asyncio
+import json
+from pathlib import Path
+from plugin_sdk import event_bus
+from fastapi.responses import JSONResponse
+"""
+
+    issues = SafetyScanner.scan(code)
+    assert not [issue for issue in issues if issue["severity"] == "critical"]
+
+
+def test_plugin_safety_scanner_blocks_os_import():
+    """Community plugins must not import os."""
+    from plugin_sdk import SafetyScanner
+
+    issues = SafetyScanner.scan("import os")
+    assert any("Blocked import: os" == issue["message"] for issue in issues)
+
+
+def test_plugin_safety_scanner_blocks_non_allowlisted_imports():
+    """Imports outside the safe set are rejected even if not on the hard denylist."""
+    from plugin_sdk import SafetyScanner
+
+    issues = SafetyScanner.scan("import urllib.request")
+    assert any(
+        "Import not allowed in plugins: urllib.request" == issue["message"]
+        for issue in issues
+    )
 
 
 # ── MessageRouter ─────────────────────────────────────────────────────
@@ -281,6 +347,14 @@ async def test_jobs_update_status(jobs_store):
     assert updated["assignee"] == "bob"
 
 
+@pytest.mark.asyncio
+async def test_jobs_generated_uid_is_full_uuid_hex(jobs_store):
+    """Generated job UIDs use the full UUID hex to avoid short-ID collisions."""
+    job = await jobs_store.create("Task", channel="general", created_by="alice")
+    assert len(job["uid"]) == 32
+    int(job["uid"], 16)
+
+
 # ── ScheduleStore ─────────────────────────────────────────────────────
 
 @pytest_asyncio.fixture
@@ -316,6 +390,14 @@ async def test_schedule_disable(sched_store):
     await sched_store.update(sched["id"], {"enabled": False})
     enabled = await sched_store.list_enabled()
     assert all(s["id"] != sched["id"] for s in enabled)
+
+
+@pytest.mark.asyncio
+async def test_schedule_generated_uid_is_full_uuid_hex(sched_store):
+    """Generated schedule UIDs use the full UUID hex to avoid short-ID collisions."""
+    sched = await sched_store.create("* * * * *", "agent", "cmd", "general", enabled=True)
+    assert len(sched["uid"]) == 32
+    int(sched["uid"], 16)
 
 
 # ── AgentMemory ───────────────────────────────────────────────────────
