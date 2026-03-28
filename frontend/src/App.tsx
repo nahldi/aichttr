@@ -30,6 +30,7 @@ const HelpPanel = lazy(() => import('./components/HelpPanel').then(m => ({ defau
 const SessionLauncher = lazy(() => import('./components/SessionLauncher').then(m => ({ default: m.SessionLauncher })));
 const FirstRunWizard = lazy(() => import('./components/FirstRunWizard').then(m => ({ default: m.FirstRunWizard })));
 const AgentCockpit = lazy(() => import('./components/AgentCockpit').then(m => ({ default: m.AgentCockpit })));
+const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })));
 
 const CONVERSATION_STARTERS = [
   { text: 'Ask @claude to review your code', icon: 'code' },
@@ -351,6 +352,7 @@ function AppInner() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showSessionLauncher, setShowSessionLauncher] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   useWebSocket();
 
@@ -359,8 +361,14 @@ function AppInner() {
     const handler = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
 
-      // Ctrl+K — command palette / search
+      // Ctrl+K — command palette
       if (ctrl && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette((v) => !v);
+        return;
+      }
+      // Ctrl+F — search messages
+      if (ctrl && e.key === 'f') {
         e.preventDefault();
         setShowSearch(true);
         return;
@@ -413,6 +421,7 @@ function AppInner() {
       // Escape — close panels / exit select mode
       if (e.key === 'Escape') {
         if (useChatStore.getState().selectMode) { useChatStore.getState().clearSelection(); return; }
+        if (showCommandPalette) { setShowCommandPalette(false); return; }
         if (showSearch) { setShowSearch(false); return; }
         if (showShortcuts) { setShowShortcuts(false); return; }
         const panel = useChatStore.getState().sidebarPanel;
@@ -421,7 +430,7 @@ function AppInner() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [showSearch, showShortcuts]);
+  }, [showSearch, showShortcuts, showCommandPalette]);
 
   // Apply font size to root
   useEffect(() => {
@@ -543,6 +552,13 @@ function AppInner() {
 
       <RightPanel />
       <MobilePanel />
+      <AnimatePresence>
+        {showCommandPalette && (
+          <motion.div key="command-palette" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.15 }}>
+            <Suspense fallback={<div className="flex items-center justify-center p-8"><span className="material-symbols-outlined animate-spin text-primary/40">progress_activity</span></div>}><CommandPalette onClose={() => setShowCommandPalette(false)} /></Suspense>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {showSearch && (
           <motion.div key="search-modal" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.15 }}>
