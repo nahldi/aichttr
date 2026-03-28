@@ -118,6 +118,7 @@ function CockpitFiles({ agent }: { agent: Agent }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const hasChanges = editing && editContent !== null && editContent !== fileContent;
@@ -226,6 +227,22 @@ function CockpitFiles({ agent }: { agent: Agent }) {
             ) : (
               <>
                 <button
+                  onClick={() => {
+                    if (showDiff) { setShowDiff(false); return; }
+                    const normPath = viewingFile!.replace(/\/\.\//g, '/').replace(/\/+/g, '/').replace(/^\.\//, '');
+                    const cached = useChatStore.getState().fileDiffs[agent.name]?.[normPath];
+                    if (cached) { setShowDiff(true); return; }
+                    api.getAgentDiff(agent.name, viewingFile!).then((d) => {
+                      if (d?.diff) { useChatStore.getState().setFileDiff(d); setShowDiff(true); }
+                      else toast('No changes recorded', 'info');
+                    }).catch(() => toast('Could not load diff', 'error'));
+                  }}
+                  className={`p-1 rounded hover:bg-surface-container-high ${showDiff ? 'bg-primary/15' : ''}`}
+                  title={showDiff ? 'Show file' : 'Show changes'}
+                >
+                  <span className="material-symbols-outlined text-sm" style={{ color: showDiff ? agent.color : undefined }}>difference</span>
+                </button>
+                <button
                   onClick={() => { setEditing(true); if (textareaRef.current) textareaRef.current.focus(); }}
                   className="p-1 rounded hover:bg-surface-container-high"
                   title="Edit file"
@@ -266,6 +283,16 @@ function CockpitFiles({ agent }: { agent: Agent }) {
               spellCheck={false}
             />
           </div>
+        ) : showDiff ? (
+          (() => {
+            const normPath = viewingFile!.replace(/\/\.\//g, '/').replace(/\/+/g, '/').replace(/^\.\//, '');
+            const diffPayload = useChatStore.getState().fileDiffs[agent.name]?.[normPath];
+            return diffPayload?.diff ? (
+              <DiffViewer diff={diffPayload.diff} path={normPath} before={diffPayload.before} after={diffPayload.after} agentName={agent.name} agentColor={agent.color} onRevert={() => { setShowDiff(false); openFile(viewingFile!.split('/').pop()!); }} />
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-on-surface-variant/30 text-xs">No diff available</div>
+            );
+          })()
         ) : (
           <div className="flex-1 overflow-auto flex" style={{ background: '#06060c' }}>
             <div className="py-2 px-2 text-right select-none shrink-0 border-r border-outline-variant/5" style={{ minWidth: `${lineNumWidth + 2}ch` }}>
